@@ -1,0 +1,9 @@
+template_version: "1"
+description: "Standard Corporate Python Worker Template"
+expected_paths:
+  - "README.md"
+  - "src/worker.py"
+  - "test/test_smoke.py"
+supported_vars:
+  - "service_name"
+  - "owner_team"

@@ -28,3 +28,13 @@ Este documento define las pautas de interacción para agentes de IA que trabajan
 - Dejar código comentado "por si acaso" (usa git para historial).
 - Crear archivos temporales sin borrarlos (o agregarlos a .gitignore).
 - Cambiar la configuración del proyecto (linters, build) sin una buena razón.
+
+### Reglas globales:
+
+- No crear archivos nuevos fuera del árbol ya existente.
+- 1 clase por archivo; no crear “mega archivos”.
+- No meter lógica de negocio en integrations/.
+- No loggear tokens, headers crudos o bodies con secretos.
+- Todo endpoint/URL/paths/config debe salir de Settings o allowlists_config.
+- Todo “write” GitLab debe ser: branch + commit + MR; nunca merge.
+- El renderer no toca filesystem real para escribir; solo produce dict[path]=content.

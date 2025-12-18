@@ -1,3 +1,4 @@
+# ruff.toml
 line-length = 100
 target-version = "py312"
 
@@ -5,13 +6,12 @@ src = ["src", "tests"]
 
 [lint]
 select = ["E", "F", "I", "B", "UP"]
-ignore = [
-  "E501" # line length lo maneja formatter
-]
+ignore = ["E501"]
 
 [format]
 quote-style = "double"
 indent-style = "space"
+line-ending = "auto"
 
 [lint.per-file-ignores]
-"tests/**/*.py" = ["B011"]  # assert False, etc. (tests permisivo)
+"tests/**/*.py" = ["B011"]
