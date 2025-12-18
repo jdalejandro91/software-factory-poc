@@ -1,0 +1,53 @@
+[project]
+name = "software-factory-poc"
+version = "0.1.0"
+description = "PoC 1 sprint: Jira-triggered Scaffold Engineer (Jira -> Template -> GitLab MR -> Jira comment + run_id)"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+authors = [{ name = "Software Factory Team" }]
+
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+  "httpx>=0.27.0",
+  "pydantic>=2.8.0",
+  "pydantic-settings>=2.4.0",
+  "PyYAML>=6.0.2",
+  "jinja2>=3.1.4",
+  "tenacity>=9.0.0",
+  "python-dotenv>=1.0.1"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
+  "pytest-asyncio>=0.24.0",
+  "ruff>=0.6.0",
+  "mypy>=1.11.0",
+  "types-PyYAML>=6.0.12.20240808"
+]
+
+[project.scripts]
+sf-poc-run = "software_factory_poc.main:run"
+sf-poc-dev = "software_factory_poc.main:run_dev"
+sf-poc-test = "software_factory_poc.scripts:test"
+sf-poc-lint = "software_factory_poc.scripts:lint"
+sf-poc-format = "software_factory_poc.scripts:format_code"
+
+[build-system]
+requires = ["setuptools>=70", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.mypy]
+python_version = "3.12"
