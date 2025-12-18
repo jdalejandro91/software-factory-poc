@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
 owner="${1:-}"; shift || true
-
-# Antigravity bug workaround: "1000:1000:" -> "1000:1000"
 if [[ "$owner" =~ ^[0-9]+:[0-9]+:$ ]]; then
   owner="${owner%:}"
 fi
-
 exec /usr/bin/chown "$owner" "$@"

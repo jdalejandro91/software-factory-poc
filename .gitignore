@@ -21,6 +21,7 @@ build/
 .venv/
 venv/
 ENV/
+dev-container.sh
 
 # OS specific
 .DS_Store
@@ -29,3 +30,6 @@ ENV/
 # Ignore JSON stores but keep the directory structure via .keep
 runtime_data/*.json
 !runtime_data/.keep
+
+# Local container shims
+.container-bin/
