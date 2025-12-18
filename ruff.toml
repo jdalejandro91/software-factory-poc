@@ -1,0 +1,17 @@
+line-length = 100
+target-version = "py312"
+
+src = ["src", "tests"]
+
+[lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = [
+  "E501" # line length lo maneja formatter
+]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+
+[lint.per-file-ignores]
+"tests/**/*.py" = ["B011"]  # assert False, etc. (tests permisivo)
