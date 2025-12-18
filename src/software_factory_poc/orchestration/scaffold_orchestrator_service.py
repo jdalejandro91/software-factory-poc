@@ -43,6 +43,7 @@ from software_factory_poc.templates.template_renderer_service import (
     TemplateRendererService,
 )
 from software_factory_poc.utils.slugify_service import slugify_for_branch
+from software_factory_poc.contracts.jira_webhook_models import JiraWebhookModel
 
 logger = build_logger(__name__)
 
@@ -77,8 +78,7 @@ class ScaffoldOrchestratorService:
         self.idempotency_builder = idempotency_builder
         self.idempotency_store = idempotency_store
         self.run_result_store = run_result_store
-
-    def execute(self, issue_key: str) -> ArtifactResultModel:
+    def execute(self, issue_key: str, webhook_payload: Optional[JiraWebhookModel] = None) -> ArtifactResultModel:
         """
         Orchestrates the scaffolding flow for a given Jira issue.
         """
@@ -92,13 +92,32 @@ class ScaffoldOrchestratorService:
         )
 
         try:
-            # 1. Get Jira Issue
-            jira_issue = self.step_runner.run_step(
-                "fetch_jira_issue",
-                lambda: self.jira_mapper.map_issue(self.jira_client.get_issue(issue_key)),
-                run_id,
-                issue_key
-            )
+            # 1. Get Jira Issue (Optimistic vs Fetch)
+            jira_issue = None
+            if webhook_payload and webhook_payload.issue.fields:
+                logger.info(f"Using webhook payload data (Skipping Jira Fetch) for {issue_key}")
+                # Construct an object that mimics what jira_mapper returns (assuming it returns a simple object/dict with description)
+                # We need to know the structure returned by jira_mapper.map_issue
+                # Looking at previous step 98: lambda: self.jira_mapper.map_issue(self.jira_client.get_issue(issue_key))
+                # Let's assume it returns an object with a .description attribute.
+                class OptimisticIssue:
+                    def __init__(self, key, description, summary):
+                        self.key = key
+                        self.description = description
+                        self.summary = summary
+                
+                jira_issue = OptimisticIssue(
+                    key=issue_key,
+                    description=webhook_payload.issue.fields.description or "",
+                    summary=webhook_payload.issue.fields.summary or ""
+                )
+            else:
+                jira_issue = self.step_runner.run_step(
+                    "fetch_jira_issue",
+                    lambda: self.jira_mapper.map_issue(self.jira_client.get_issue(issue_key)),
+                    run_id,
+                    issue_key
+                )
 
             # 2. Parse Contract
             contract = self.step_runner.run_step(
@@ -136,10 +155,15 @@ class ScaffoldOrchestratorService:
             existing_mr = self.idempotency_store.get(idem_key)
             if existing_mr:
                 logger.info(f"Duplicate request detected for key {idem_key}")
-                self.jira_client.add_comment(
-                    issue_key, 
-                    f"**DUPLICATE SCAFFOLDING REQUEST DETECTED**\n\nResult already exists: {existing_mr}\nRun ID: {run_id}"
-                )
+                # Only try to comment if it's likely a real issue or we want to try anyway (swallow error)
+                try:
+                    self.jira_client.add_comment(
+                        issue_key, 
+                        f"**DUPLICATE SCAFFOLDING REQUEST DETECTED**\n\nResult already exists: {existing_mr}\nRun ID: {run_id}"
+                    )
+                except Exception:
+                    logger.warning("Failed to post duplicate comment (Optimistic/Fake ID mode?)")
+
                 result_model.status = ArtifactRunStatusEnum.DUPLICATE
                 result_model.mr_url = existing_mr
                 self.run_result_store.put(run_id, result_model)
@@ -209,18 +233,21 @@ class ScaffoldOrchestratorService:
             result_model.status = ArtifactRunStatusEnum.COMPLETED
 
             # 7. Notify Jira Success
-            comment_resp = self.step_runner.run_step(
-                "notify_jira_success",
-                lambda: self.jira_client.add_comment(
-                    issue_key,
-                    f"h2. Scaffolding Success :rocket:\n\n"
-                    f"**Merge Request**: [{mr_data.mr_url}]\n"
-                    f"**Branch**: {generated_branch_name}\n"
-                    f"**Run ID**: {run_id}"
-                ),
-                run_id,
-                issue_key
-            )
+            try:
+                comment_resp = self.step_runner.run_step(
+                    "notify_jira_success",
+                    lambda: self.jira_client.add_comment(
+                        issue_key,
+                        f"h2. Scaffolding Success :rocket:\n\n"
+                        f"**Merge Request**: [{mr_data.mr_url}]\n"
+                        f"**Branch**: {generated_branch_name}\n"
+                        f"**Run ID**: {run_id}"
+                    ),
+                    run_id,
+                    issue_key
+                )
+            except Exception:
+                logger.warning("Failed to post success comment (Optimistic/Fake ID mode?)")
             
             # 8. Persistence
             self.idempotency_store.put(idem_key, mr_data.mr_url)

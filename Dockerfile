@@ -12,7 +12,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y git curl && rm -rf /var/lib/apt/lists/*
 
 # Copiamos solo los archivos de dependencias primero (para aprovechar caché de Docker)
-COPY pyproject.toml .
+COPY pyproject.toml README.md .
 
 # Instalamos las dependencias del proyecto
 # Nota: Al no usar venv dentro del docker, se instalan en el python del sistema (ok para contenedores)

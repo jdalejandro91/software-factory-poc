@@ -1,10 +1,10 @@
 from functools import lru_cache
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
 
 from software_factory_poc.config.settings_pydantic import Settings
 from software_factory_poc.contracts.artifact_result_model import ArtifactResultModel
+from software_factory_poc.contracts.jira_webhook_models import JiraWebhookModel
 from software_factory_poc.contracts.scaffolding_contract_parser_service import (
     ScaffoldingContractParserService,
 )
@@ -45,10 +45,6 @@ logger = build_logger(__name__)
 router = APIRouter()
 
 
-class JiraTriggerRequest(BaseModel):
-    issue_key: str
-
-
 @lru_cache()
 def get_settings() -> Settings:
     return Settings()
@@ -56,7 +52,6 @@ def get_settings() -> Settings:
 
 def get_orchestrator(settings: Settings = Depends(get_settings)) -> ScaffoldOrchestratorService:
     # Instantiate all services
-    # In a real app, use a proper DI framework or structured providers
     
     # Observability
     step_runner = StepRunnerService()
@@ -97,17 +92,24 @@ def get_orchestrator(settings: Settings = Depends(get_settings)) -> ScaffoldOrch
     )
 
 
-@router.post("/jira/scaffold-trigger", response_model=ArtifactResultModel)
+@router.post("/jira-webhook", response_model=ArtifactResultModel)
 def trigger_scaffold(
-    request: JiraTriggerRequest,
+    payload: JiraWebhookModel,
     orchestrator: ScaffoldOrchestratorService = Depends(get_orchestrator)
 ):
-    logger.info(f"Received trigger for issue: {request.issue_key}")
+    issue_key = payload.issue.key
+    event_type = payload.webhookEvent or "unknown"
+    user_display = payload.user.displayName if payload.user else "unknown"
+
+    logger.info(
+        f"Recibido evento '{event_type}' por usuario '{user_display}' para issue '{issue_key}'"
+    )
+
     try:
-        result = orchestrator.execute(request.issue_key)
+        result = orchestrator.execute(issue_key, payload)
         return result
     except Exception as e:
-        logger.exception(f"Unhandled error processing trigger for {request.issue_key}")
+        logger.exception(f"Unhandled error processing trigger for {issue_key}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error during scaffolding execution."
