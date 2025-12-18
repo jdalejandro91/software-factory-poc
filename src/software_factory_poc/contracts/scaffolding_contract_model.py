@@ -1,17 +1,24 @@
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class GitLabTargetModel(BaseModel):
-    project_id: int = Field(..., description="Target GitLab project ID")
+    project_id: Optional[int] = Field(None, description="Target GitLab project ID")
+    project_path: Optional[str] = Field(None, description="Target GitLab project path (e.g. group/project)")
     target_base_branch: Optional[str] = Field(None, description="Base branch to branch off from (e.g. main)")
 
     @field_validator("project_id")
-    def validate_project_id(cls, v: int) -> int:
-        if v <= 0:
+    def validate_project_id(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and v <= 0:
             raise ValueError("project_id must be positive")
         return v
+    
+    @model_validator(mode="after")
+    def validate_project_identifier(self) -> "GitLabTargetModel":
+        if not self.project_id and not self.project_path:
+            raise ValueError("Must provide either 'project_id' or 'project_path'.")
+        return self
 
 
 class JiraTargetModel(BaseModel):

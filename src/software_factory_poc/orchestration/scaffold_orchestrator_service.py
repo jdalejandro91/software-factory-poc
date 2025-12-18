@@ -108,6 +108,21 @@ class ScaffoldOrchestratorService:
                 issue_key
             )
 
+            # 2.5 Resolve GitLab Project ID if needed
+            if not contract.gitlab.project_id and contract.gitlab.project_path:
+                resolved_id = self.step_runner.run_step(
+                    "resolve_project_id",
+                    lambda: self.gitlab_client.resolve_project_id(contract.gitlab.project_path),
+                    run_id,
+                    issue_key
+                )
+                contract.gitlab.project_id = resolved_id
+            
+            # Ensure we have an ID now (model validation ensures one of them was present, 
+            # and if it was path, we resolved it. If resolution failed, it raised exception).
+            if not contract.gitlab.project_id:
+                raise ValueError("Could not resolve a valid GitLab Project ID.")
+
             # 3. Load Manifest & Render
             # We need manifest first for idempotency and policy
             template_dir = self.template_registry.resolve_template_dir(contract.template_id)

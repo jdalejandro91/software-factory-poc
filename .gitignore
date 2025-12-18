@@ -17,6 +17,7 @@ build/
 
 # Environment settings
 .env
+*.env
 .venv/
 venv/
 ENV/

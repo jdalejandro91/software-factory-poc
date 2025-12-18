@@ -1,5 +1,5 @@
 from typing import Any, Dict
-
+import urllib.parse
 import httpx
 from pydantic import SecretStr
 
@@ -38,6 +38,22 @@ class GitLabClient:
         # we'll use PRIVATE-TOKEN by default as it's the standard for PATs.
         headers["PRIVATE-TOKEN"] = token
         return headers
+
+    def resolve_project_id(self, project_path: str) -> int:
+        """
+        Resolves a project path (group/project) to an numeric ID.
+        """
+        encoded_path = urllib.parse.quote(project_path, safe="")
+        url = f"{self.base_url}/api/v4/projects/{encoded_path}"
+        logger.info(f"Resolving project ID for path: {project_path}")
+        
+        with httpx.Client() as client:
+            response = client.get(url, headers=self._get_headers(), timeout=10.0)
+            if response.status_code == 404:
+                raise ValueError(f"GitLab project path not found: {project_path}")
+            response.raise_for_status()
+            data = response.json()
+            return data["id"]
 
     def create_branch(self, project_id: int, branch_name: str, ref: str) -> Dict[str, Any]:
         """
