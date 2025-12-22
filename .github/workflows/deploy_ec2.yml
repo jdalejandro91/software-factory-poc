@@ -22,8 +22,8 @@ jobs:
 
       - name: Create .env file from Secret
         run: |
-          # Creamos el archivo .env en el runner de GitHub usando el secreto
-          echo "${{ secrets.PROD_ENV_FILE }}" > .env.production
+          # AHORA: Decodificamos el Base64 para recuperar el archivo original intacto
+          echo "${{ secrets.PROD_ENV_FILE }}" | base64 -d > .env.production
 
       - name: Deploy to EC2
         run: |
