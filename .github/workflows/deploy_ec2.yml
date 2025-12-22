@@ -58,4 +58,26 @@ jobs:
             
             # Health check rápido (opcional)
             docker compose ps
+
+            # Smoke Test / Health Check
+            echo "🧪 Ejecutando Smoke Test..."
+            echo "⏳ Esperando 10s para arranque de servicios..."
+            sleep 10
+            
+            # Usamos curl para obtener el código HTTP. Si falla la conexión, curl sale con error.
+            if HTTP_CODE=$(curl --write-out "%{http_code}" --silent --output /dev/null --fail http://localhost:8000/health); then
+                if [ "$HTTP_CODE" -eq 200 ]; then
+                    echo "✅ Smoke Test Passed: API is up and running (HTTP 200)."
+                else
+                    echo "❌ Smoke Test Failed: API returned HTTP $HTTP_CODE"
+                    echo "🔍 Mostrando últimos logs de la aplicación:"
+                    docker compose logs --tail=50
+                    exit 1
+                fi
+            else
+                echo "❌ Smoke Test Failed: No se pudo conectar a http://localhost:8000/health"
+                echo "🔍 Mostrando últimos logs de la aplicación:"
+                docker compose logs --tail=50
+                exit 1
+            fi
           EOF
