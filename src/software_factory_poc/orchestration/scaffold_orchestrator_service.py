@@ -78,10 +78,8 @@ class ScaffoldOrchestratorService:
         self.idempotency_builder = idempotency_builder
         self.idempotency_store = idempotency_store
         self.run_result_store = run_result_store
+
     def execute(self, issue_key: str, webhook_payload: Optional[JiraWebhookModel] = None) -> ArtifactResultModel:
-        """
-        Orchestrates the scaffolding flow for a given Jira issue.
-        """
         run_id = str(uuid.uuid4())
         logger.info(f"Starting orchestration for issue={issue_key}, run_id={run_id}")
 
@@ -92,14 +90,10 @@ class ScaffoldOrchestratorService:
         )
 
         try:
-            # 1. Get Jira Issue (Optimistic vs Fetch)
+            # 1. Get Jira Issue
             jira_issue = None
             if webhook_payload and webhook_payload.issue.fields:
                 logger.info(f"Using webhook payload data (Skipping Jira Fetch) for {issue_key}")
-                # Construct an object that mimics what jira_mapper returns (assuming it returns a simple object/dict with description)
-                # We need to know the structure returned by jira_mapper.map_issue
-                # Looking at previous step 98: lambda: self.jira_mapper.map_issue(self.jira_client.get_issue(issue_key))
-                # Let's assume it returns an object with a .description attribute.
                 class OptimisticIssue:
                     def __init__(self, key, description, summary):
                         self.key = key
@@ -127,7 +121,7 @@ class ScaffoldOrchestratorService:
                 issue_key
             )
 
-            # 2.5 Resolve GitLab Project ID if needed
+            # 2.5 Resolve GitLab Project ID
             if not contract.gitlab.project_id and contract.gitlab.project_path:
                 resolved_id = self.step_runner.run_step(
                     "resolve_project_id",
@@ -137,13 +131,10 @@ class ScaffoldOrchestratorService:
                 )
                 contract.gitlab.project_id = resolved_id
             
-            # Ensure we have an ID now (model validation ensures one of them was present, 
-            # and if it was path, we resolved it. If resolution failed, it raised exception).
             if not contract.gitlab.project_id:
                 raise ValueError("Could not resolve a valid GitLab Project ID.")
 
             # 3. Load Manifest & Render
-            # We need manifest first for idempotency and policy
             template_dir = self.template_registry.resolve_template_dir(contract.template_id)
             manifest = self.template_loader.load_manifest(template_dir)
 
@@ -155,21 +146,24 @@ class ScaffoldOrchestratorService:
             existing_mr = self.idempotency_store.get(idem_key)
             if existing_mr:
                 logger.info(f"Duplicate request detected for key {idem_key}")
-                # Only try to comment if it's likely a real issue or we want to try anyway (swallow error)
                 try:
+                    # Mensaje simple para duplicados
                     self.jira_client.add_comment(
                         issue_key, 
-                        f"**DUPLICATE SCAFFOLDING REQUEST DETECTED**\n\nResult already exists: {existing_mr}\nRun ID: {run_id}"
+                        f"{{panel:title=Duplicate Request|borderColor=#FFAB00|bgColor=#FFFFCE}}\n"
+                        f"*Result already exists:* [{existing_mr}]\n"
+                        f"Run ID: {run_id}\n"
+                        f"{{panel}}"
                     )
                 except Exception:
-                    logger.warning("Failed to post duplicate comment (Optimistic/Fake ID mode?)")
+                    logger.warning("Failed to post duplicate comment")
 
                 result_model.status = ArtifactRunStatusEnum.DUPLICATE
                 result_model.mr_url = existing_mr
                 self.run_result_store.put(run_id, result_model)
                 return result_model
 
-            # Render Template
+            # Render
             files_map = self.step_runner.run_step(
                 "render_template",
                 lambda: self.template_renderer.render(contract.template_id, contract.vars),
@@ -178,7 +172,6 @@ class ScaffoldOrchestratorService:
             )
 
             # 5. Policy Validation
-            # Deterministic Branch: feature/{issue_key}-{service_slug}-scaffold
             branch_slug = slugify_for_branch(f"{issue_key}-{contract.service_slug}")
             generated_branch_name = f"feature/{branch_slug}-scaffold"
 
@@ -189,19 +182,18 @@ class ScaffoldOrchestratorService:
                 issue_key
             )
 
-            # 6. GitLab Operations (Branch, Commit, MR)
+            # 6. GitLab Operations
             def gitlab_ops():
-                # Get base branch from contract or default
                 target_base = contract.gitlab.target_base_branch or self.settings.default_target_base_branch
                 
-                # Create Branch
-                self.gitlab_client.create_branch(
+                # Create Branch y capturar respuesta para obtener la URL
+                branch_resp = self.gitlab_client.create_branch(
                     contract.gitlab.project_id, 
                     generated_branch_name, 
                     target_base
                 )
+                branch_url = branch_resp.get("web_url") # GitLab API devuelve 'web_url'
                 
-                # Commit Files
                 self.gitlab_client.commit_files(
                     contract.gitlab.project_id,
                     generated_branch_name,
@@ -209,46 +201,114 @@ class ScaffoldOrchestratorService:
                     f"Scaffold {contract.service_slug} from {contract.template_id} (Jira: {issue_key})"
                 )
                 
-                # Create MR
-                mr_payload = self.gitlab_client.create_merge_request(
+                mr_data_raw = self.gitlab_client.create_merge_request(
                     contract.gitlab.project_id,
                     generated_branch_name,
                     target_base,
                     f"Scaffold: {contract.service_slug}",
                     f"Scaffolding generated from Jira Issue {issue_key}\nTemplate: {contract.template_id}\nRun ID: {run_id}"
                 )
-                # We can use the result mapper here if we want strict typing
+                
                 from software_factory_poc.integrations.gitlab.gitlab_result_mapper_service import GitLabResultMapperService
                 mapper = GitLabResultMapperService()
-                return mapper.map_mr(mr_payload)
+                
+                # Devolvemos un dict con ambos datos
+                return {
+                    "mr": mapper.map_mr(mr_data_raw),
+                    "branch_url": branch_url
+                }
 
-            mr_data = self.step_runner.run_step(
+            # Ejecutamos el step y extraemos los datos
+            ops_result = self.step_runner.run_step(
                 "gitlab_operations",
                 gitlab_ops,
                 run_id,
                 issue_key
             )
+            
+            mr_data = ops_result["mr"]
+            branch_url = ops_result["branch_url"]
 
             result_model.mr_url = mr_data.mr_url
             result_model.branch_name = generated_branch_name
             result_model.status = ArtifactRunStatusEnum.COMPLETED
 
-            # 7. Notify Jira Success
+            # 7. Notify Jira Success (ADF Estructurado con Links)
             try:
-                comment_resp = self.step_runner.run_step(
+                # Construimos el documento ADF manualmente para garantizar el formato v3
+                adf_success_body = {
+                    "type": "doc",
+                    "version": 1,
+                    "content": [
+                        {
+                            "type": "heading",
+                            "attrs": {"level": 2},
+                            "content": [{"type": "text", "text": "Scaffolding Success 🚀"}]
+                        },
+                        {
+                            "type": "bulletList",
+                            "content": [
+                                {
+                                    "type": "listItem",
+                                    "content": [
+                                        {
+                                            "type": "paragraph",
+                                            "content": [
+                                                {"type": "text", "text": "Merge Request: ", "marks": [{"type": "strong"}]},
+                                                {
+                                                    "type": "text", 
+                                                    "text": mr_data.mr_url, 
+                                                    "marks": [{"type": "link", "attrs": {"href": mr_data.mr_url}}]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "listItem",
+                                    "content": [
+                                        {
+                                            "type": "paragraph",
+                                            "content": [
+                                                {"type": "text", "text": "Branch: ", "marks": [{"type": "strong"}]},
+                                                {
+                                                    "type": "text", 
+                                                    "text": generated_branch_name, 
+                                                    # Aplicamos estilo de Código y Link simultáneamente
+                                                    "marks": [
+                                                        {"type": "code"},
+                                                        {"type": "link", "attrs": {"href": branch_url or ""}}
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "listItem",
+                                    "content": [
+                                        {
+                                            "type": "paragraph",
+                                            "content": [
+                                                {"type": "text", "text": "Run ID: ", "marks": [{"type": "strong"}]},
+                                                {"type": "text", "text": run_id, "marks": [{"type": "code"}]}
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+
+                self.step_runner.run_step(
                     "notify_jira_success",
-                    lambda: self.jira_client.add_comment(
-                        issue_key,
-                        f"h2. Scaffolding Success :rocket:\n\n"
-                        f"**Merge Request**: [{mr_data.mr_url}]\n"
-                        f"**Branch**: {generated_branch_name}\n"
-                        f"**Run ID**: {run_id}"
-                    ),
+                    lambda: self.jira_client.add_comment(issue_key, adf_success_body),
                     run_id,
                     issue_key
                 )
             except Exception:
-                logger.warning("Failed to post success comment (Optimistic/Fake ID mode?)")
+                logger.warning("Failed to post success comment")
             
             # 8. Persistence
             self.idempotency_store.put(idem_key, mr_data.mr_url)
@@ -257,11 +317,19 @@ class ScaffoldOrchestratorService:
             return result_model
 
         except StepExecutionError as e:
-            # Unwrap the original exception for specific handling
             cause = e.original_error
             
+            # Usamos Wiki Markup simple para errores por robustez (ya que usamos la v3 para todo, 
+            # si quisiéramos ADF bonito para error tendríamos que construirlo, 
+            # pero para PoC el fallback a string simple en jira_client maneja esto aceptablemente o se ve plano).
+            # Para mantener consistencia con el éxito, podríamos hacer ADF de error, 
+            # pero por ahora dejemos el string formateado tipo panel que ya tenías, 
+            # el jira_client lo envolverá en un párrafo simple.
+            
+            error_header = "🛑 *Scaffolding Failed*"
+
             if isinstance(cause, ContractParseError):
-                msg = f"**SCAFFOLDING FAILED (Validation Error)**\n\n{str(cause)}"
+                msg = f"{error_header}\n\n*Validation Error:*\n{str(cause)}"
                 self._handle_failure(run_id, issue_key, msg, cause)
                 result_model.status = ArtifactRunStatusEnum.FAILED
                 result_model.error_summary = str(cause)
@@ -269,7 +337,7 @@ class ScaffoldOrchestratorService:
                 return result_model
 
             elif isinstance(cause, PolicyViolationError):
-                msg = f"**SCAFFOLDING FAILED (Policy Violation)**\n\n{str(cause)}"
+                msg = f"{error_header}\n\n*Policy Violation:*\n{str(cause)}"
                 self._handle_failure(run_id, issue_key, msg, cause)
                 result_model.status = ArtifactRunStatusEnum.FAILED
                 result_model.error_summary = str(cause)
@@ -277,9 +345,8 @@ class ScaffoldOrchestratorService:
                 return result_model
                 
             else:
-                # Unexpected inner error
                 logger.exception("Unexpected error in orchestration step")
-                msg = f"**SCAFFOLDING FAILED (System Error)**\n\nAn unexpected error occurred during processing.\nRun ID: {run_id}"
+                msg = f"{error_header}\n\n*System Error:*\nAn unexpected error occurred.\nRun ID: {run_id}"
                 self._handle_failure(run_id, issue_key, msg, cause)
                 result_model.status = ArtifactRunStatusEnum.FAILED
                 result_model.error_summary = f"Internal System Error: {str(cause)}" 
@@ -287,9 +354,8 @@ class ScaffoldOrchestratorService:
                 return result_model
 
         except Exception as e:
-            # Catch-all for errors outside of steps (should be rare)
             logger.exception("Unexpected error in orchestration")
-            msg = f"**SCAFFOLDING FAILED (System Error)**\n\nAn unexpected error occurred during processing.\nRun ID: {run_id}"
+            msg = f"🛑 *Critical Error*\nSystem Error. Run ID: {run_id}"
             self._handle_failure(run_id, issue_key, msg, e)
             result_model.status = ArtifactRunStatusEnum.FAILED
             result_model.error_summary = "Internal System Error" 
@@ -297,10 +363,6 @@ class ScaffoldOrchestratorService:
             return result_model
 
     def _handle_failure(self, run_id: str, issue_key: str, user_message: str, exc: Exception):
-        """
-        Notification of failure to Jira.
-        Swallows errors during notification to avoid losing the original error.
-        """
         try:
             self.jira_client.add_comment(issue_key, user_message)
         except Exception as notify_err:

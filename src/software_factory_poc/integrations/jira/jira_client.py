@@ -1,5 +1,5 @@
 import base64
-from typing import Any, Dict
+from typing import Any, Dict, Union
 
 import httpx
 
@@ -16,7 +16,6 @@ class JiraClient:
         self._validate_config()
 
     def _validate_config(self):
-        # Ensure we have credentials for the chosen mode
         self.settings.validate_jira_credentials()
 
     def _get_headers(self) -> Dict[str, str]:
@@ -35,12 +34,6 @@ class JiraClient:
             headers["Authorization"] = f"Basic {encoded}"
 
         elif mode == JiraAuthMode.BASIC:
-             # Assuming Basic uses api_token as password logic if user_email is not present
-             # Or if user provided explicit basic auth string?
-             # For PoC, let's treat Basic similar to Cloud but maybe just token?
-             # Standard Basic Auth is user:pass.
-             # Let's reuse email:token logic for Basic as fallback or handle purely token.
-             # If user_email is present, use it.
              email = self.settings.jira_user_email or ""
              token = self.settings.jira_api_token.get_secret_value() if self.settings.jira_api_token else ""
              creds = f"{email}:{token}"
@@ -54,9 +47,6 @@ class JiraClient:
         return headers
 
     def get_issue(self, issue_key: str) -> Dict[str, Any]:
-        """
-        Fetches an issue by key.
-        """
         url = f"{self.base_url}/rest/api/3/issue/{issue_key}"
         logger.info(f"Fetching Jira issue: {url}")
         
@@ -65,37 +55,34 @@ class JiraClient:
             response.raise_for_status()
             return response.json()
 
-    def add_comment(self, issue_key: str, body: str) -> Dict[str, Any]:
+    def add_comment(self, issue_key: str, content: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Adds a comment to an issue.
-        Attempts to use ADF (Atlassian Document Format) first if needed, 
-        or simple string if API supports 'body'.
-        Jira Cloud v3 API often requires ADF for comments.
-        We will construct a minimal ADF paragraph.
+        Agrega un comentario. Soporta ADF nativo (Dict) o texto simple (str).
         """
         url = f"{self.base_url}/rest/api/3/issue/{issue_key}/comment"
         logger.info(f"Adding comment to Jira issue: {issue_key}")
 
-        # Minimal ADF
-        adf_payload = {
-            "body": {
-                "type": "doc",
-                "version": 1,
-                "content": [
-                    {
-                        "type": "paragraph",
-                        "content": [
-                            {
-                                "text": body,
-                                "type": "text"
-                            }
-                        ]
-                    }
-                ]
+        payload = {}
+        
+        # Si recibimos un Diccionario, asumimos que es un documento ADF bien formado
+        if isinstance(content, dict):
+            payload = {"body": content}
+        else:
+            # Fallback para texto simple (lo envolvemos en un párrafo básico)
+            payload = {
+                "body": {
+                    "type": "doc",
+                    "version": 1,
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "content": [{"type": "text", "text": str(content)}]
+                        }
+                    ]
+                }
             }
-        }
         
         with httpx.Client() as client:
-            response = client.post(url, headers=self._get_headers(), json=adf_payload, timeout=10.0)
+            response = client.post(url, headers=self._get_headers(), json=payload, timeout=10.0)
             response.raise_for_status()
             return response.json()
