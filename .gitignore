@@ -21,6 +21,7 @@ build/
 .venv/
 venv/
 ENV/
+env_production_source
 dev-container.sh
 
 # OS specific

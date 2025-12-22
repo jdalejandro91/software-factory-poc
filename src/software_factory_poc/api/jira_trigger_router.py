@@ -44,11 +44,22 @@ from software_factory_poc.templates.template_renderer_service import (
 logger = build_logger(__name__)
 router = APIRouter()
 
+# Definimos que esperamos un header llamado "X-API-Key"
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 @lru_cache()
 def get_settings() -> Settings:
     return Settings()
 
+async def verify_api_key(
+    api_key: str = Security(api_key_header), 
+    settings: Settings = Depends(get_settings)
+):
+    if not api_key:
+        raise HTTPException(status_code=403, detail="Missing X-API-Key header")
+    if api_key != settings.jira_webhook_secret.get_secret_value():
+        raise HTTPException(status_code=403, detail="Invalid API Key")
+    return api_key
 
 def get_orchestrator(settings: Settings = Depends(get_settings)) -> ScaffoldOrchestratorService:
     # Instantiate all services
@@ -92,7 +103,7 @@ def get_orchestrator(settings: Settings = Depends(get_settings)) -> ScaffoldOrch
     )
 
 
-@router.post("/jira-webhook", response_model=ArtifactResultModel)
+@router.post("/jira-webhook", response_model=ArtifactResultModel, dependencies=[Depends(verify_api_key)])
 def trigger_scaffold(
     payload: JiraWebhookModel,
     orchestrator: ScaffoldOrchestratorService = Depends(get_orchestrator)

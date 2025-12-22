@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     app_name: str = "Software Factory PoC"
     log_level: str = "INFO"
 
+    # Security
+    jira_webhook_secret: SecretStr = Field(..., description="Token to validate incoming Jira webhooks")
+
     # Jira Config
     jira_base_url: str = Field(..., description="Jira Base URL, e.g. https://myorg.atlassian.net")
     jira_auth_mode: JiraAuthMode = Field(default=JiraAuthMode.CLOUD_API_TOKEN)
