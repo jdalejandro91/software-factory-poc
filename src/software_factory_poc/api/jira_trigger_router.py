@@ -1,6 +1,7 @@
 from functools import lru_cache
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Security
+from fastapi.security import APIKeyHeader
 
 from software_factory_poc.config.settings_pydantic import Settings
 from software_factory_poc.contracts.artifact_result_model import ArtifactResultModel
@@ -57,8 +58,11 @@ async def verify_api_key(
 ):
     if not api_key:
         raise HTTPException(status_code=403, detail="Missing X-API-Key header")
+    
+    # Validamos contra el secreto configurado en Settings
     if api_key != settings.jira_webhook_secret.get_secret_value():
         raise HTTPException(status_code=403, detail="Invalid API Key")
+    
     return api_key
 
 def get_orchestrator(settings: Settings = Depends(get_settings)) -> ScaffoldOrchestratorService:
