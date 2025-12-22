@@ -33,9 +33,7 @@ class GitLabClient:
         }
         token = self.settings.gitlab_token.get_secret_value() if self.settings.gitlab_token else ""
         
-        # Simple heuristic: user requested support for Bearer if configured.
-        # Since we don't have a distinct config flag for AuthMode in this PoC iteration,
-        # we'll use PRIVATE-TOKEN by default as it's the standard for PATs.
+        # Usamos PRIVATE-TOKEN por defecto
         headers["PRIVATE-TOKEN"] = token
         return headers
 
@@ -138,7 +136,8 @@ class GitLabClient:
             response.raise_for_status()
             return response.json()
 
-    def create_merge_request(self, project_id: int, source_branch: str, target_branch: str, title: str) -> str:
+    # CORRECCIÓN: Agregado parámetro 'description' para coincidir con la llamada del orquestador
+    def create_merge_request(self, project_id: int, source_branch: str, target_branch: str, title: str, description: str = None) -> str:
         """
         Crea un MR. Si ya existe (409 Conflict), busca el existente y devuelve su URL (Idempotencia).
         """
@@ -147,22 +146,24 @@ class GitLabClient:
             "source_branch": source_branch,
             "target_branch": target_branch,
             "title": title,
+            "description": description,
             "remove_source_branch": True
         }
         
         try:
-            response = httpx.post(url, headers=self.headers, json=payload)
+            # CORRECCIÓN: Usar self._get_headers() en lugar de self.headers (que no existe)
+            response = httpx.post(url, headers=self._get_headers(), json=payload)
             response.raise_for_status()
             return response.json()["web_url"]
 
         except httpx.HTTPStatusError as e:
             # Manejo de conflicto (Ya existe el MR)
             if e.response.status_code == 409:
-                self.logger.warning(f"MR already exists for {source_branch} -> {target_branch}. Fetching existing one.")
+                logger.warning(f"MR already exists for {source_branch} -> {target_branch}. Fetching existing one.")
                 return self._get_existing_mr_url(project_id, source_branch, target_branch)
             
             # Si es otro error, lanzarlo
-            self.logger.error(f"Failed to create MR: {e.response.text}")
+            logger.error(f"Failed to create MR: {e.response.text}")
             raise e
 
     def _get_existing_mr_url(self, project_id: int, source_branch: str, target_branch: str) -> str:
@@ -176,7 +177,8 @@ class GitLabClient:
             "state": "opened" # Solo nos interesan los abiertos
         }
         
-        response = httpx.get(url, headers=self.headers, params=params)
+        # CORRECCIÓN: Usar self._get_headers()
+        response = httpx.get(url, headers=self._get_headers(), params=params)
         response.raise_for_status()
         
         mrs = response.json()
