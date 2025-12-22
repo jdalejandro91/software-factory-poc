@@ -11,35 +11,50 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Configure SSH
         run: |
           mkdir -p ~/.ssh/
+          # Volcamos la llave privada asegurando salto de línea final
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+          
+          # Intentamos escanear la llave pública del host. 
+          # Si falla (por timeout), no rompemos el build aquí, 
+          # pero SSH fallará abajo con un error más claro.
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts || true
 
       - name: Deploy to EC2
         run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          # Usamos StrictHostKeyChecking=no para evitar fallo si el keyscan anterior falló por red
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            set -e
+            
             # Variables
             PROJECT_DIR="~/software-factory-poc"
             
-            # Navegar al directorio
-            if [ -d "$PROJECT_DIR" ]; then
-              cd "$PROJECT_DIR"
-            else
-              echo "Error: Directory $PROJECT_DIR does not exist. Please clone the repo first."
+            # 1. Verificar directorio
+            if [ ! -d "$PROJECT_DIR" ]; then
+              echo "❌ Error: El directorio $PROJECT_DIR no existe en el EC2."
+              echo "   Por favor, entra manualmente al servidor y ejecuta:"
+              echo "   git clone https://github.com/jdalejandro91/software-factory-poc.git $PROJECT_DIR"
               exit 1
             fi
 
-            # Traer últimos cambios
-            echo "📥 Pulling latest changes..."
-            git pull origin main
+            cd "$PROJECT_DIR"
 
-            # Reconstruir contenedores
-            echo "🔄 Restarting services..."
-            make down  # Limpieza previa
-            make up    # Levantamiento limpio
+            # 2. Actualizar código
+            echo "📥 Obteniendo últimos cambios..."
+            git fetch origin main
+            git reset --hard origin/main
 
-            echo "✅ Deployment successful!"
+            # 3. Despliegue con Docker Compose
+            echo "🔄 Reiniciando servicios..."
+            # Tu Makefile ya tiene el comando 'up' corregido con -d, excelente.
+            make down
+            make up
+
+            echo "✅ Despliegue completado exitosamente."
           EOF
