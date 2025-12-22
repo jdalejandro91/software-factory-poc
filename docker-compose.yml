@@ -12,6 +12,10 @@ services:
     env_file:
       - .env
     
+    # Fix ModuleNotFoundError: Add src to libraries path
+    environment:
+      - PYTHONPATH=/app/src:$PYTHONPATH
+    
     # Volúmenes: "Espejo" de tu carpeta local hacia adentro del container
     # Esto permite "Hot Reload": cambias código en VSCode y el server se reinicia
     volumes:
