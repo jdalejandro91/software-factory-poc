@@ -14,22 +14,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure SSH
+      - name: Configure SSH Key
         run: |
           mkdir -p ~/.ssh/
-          # Volcamos la llave privada asegurando salto de línea final
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          
-          # Intentamos escanear la llave pública del host. 
-          # Si falla (por timeout), no rompemos el build aquí, 
-          # pero SSH fallará abajo con un error más claro.
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts || true
 
       - name: Deploy to EC2
         run: |
-          # Usamos StrictHostKeyChecking=no para evitar fallo si el keyscan anterior falló por red
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          # COMENTARIO TÉCNICO:
+          # Usamos StrictHostKeyChecking=no y UserKnownHostsFile=/dev/null
+          # para evitar el error "Unable to negotiate host key" que vimos en los logs.
+          # Esto salta la verificación de identidad del servidor (aceptable para PoC).
+          
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
             set -e
             
             # Variables
@@ -37,9 +35,7 @@ jobs:
             
             # 1. Verificar directorio
             if [ ! -d "$PROJECT_DIR" ]; then
-              echo "❌ Error: El directorio $PROJECT_DIR no existe en el EC2."
-              echo "   Por favor, entra manualmente al servidor y ejecuta:"
-              echo "   git clone https://github.com/jdalejandro91/software-factory-poc.git $PROJECT_DIR"
+              echo "❌ Error: El directorio $PROJECT_DIR no existe."
               exit 1
             fi
 
@@ -50,9 +46,8 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            # 3. Despliegue con Docker Compose
+            # 3. Despliegue
             echo "🔄 Reiniciando servicios..."
-            # Tu Makefile ya tiene el comando 'up' corregido con -d, excelente.
             make down
             make up
 
