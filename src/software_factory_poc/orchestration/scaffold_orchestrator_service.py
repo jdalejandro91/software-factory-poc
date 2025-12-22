@@ -147,7 +147,6 @@ class ScaffoldOrchestratorService:
             if existing_mr:
                 logger.info(f"Duplicate request detected for key {idem_key}")
                 
-                # ADF Para Duplicado (Panel Amarillo)
                 adf_duplicate = {
                     "type": "doc",
                     "version": 1,
@@ -207,7 +206,6 @@ class ScaffoldOrchestratorService:
             def gitlab_ops():
                 target_base = contract.gitlab.target_base_branch or self.settings.default_target_base_branch
                 
-                # Create Branch y capturar respuesta para obtener la URL
                 branch_resp = self.gitlab_client.create_branch(
                     contract.gitlab.project_id, 
                     generated_branch_name, 
@@ -252,7 +250,7 @@ class ScaffoldOrchestratorService:
             result_model.branch_name = generated_branch_name
             result_model.status = ArtifactRunStatusEnum.COMPLETED
 
-            # 7. Notify Jira Success (ADF Estructurado con Links)
+            # 7. Notify Jira Success
             try:
                 adf_success_body = {
                     "type": "doc",
@@ -332,6 +330,31 @@ class ScaffoldOrchestratorService:
                 )
             except Exception:
                 logger.warning("Failed to post success comment")
+
+            # 9. Transition Issue to Review
+            try:
+                # Intentamos con "Review" (inglés) o "Revisión" (español)
+                # Ojo: esto depende del workflow de tu proyecto en Jira.
+                keyword = "review" # Default to try review
+                # Si tu Jira es español "En Revisión" o "Solicitar revisión", 'revisión' funciona.
+                # Si es inglés "In Review" o "Review", 'review' funciona.
+                # Como tu UI es español, vamos a intentar 'revisión' primero, o ambas?
+                # El client busca substrings. Probemos con un try/fallback simple.
+                
+                def do_transition():
+                    # Intento 1: 'revisión' (Español)
+                    if not self.jira_client.transition_issue(issue_key, "revisión"):
+                        # Intento 2: 'review' (Inglés)
+                        self.jira_client.transition_issue(issue_key, "review")
+
+                self.step_runner.run_step(
+                    "transition_issue",
+                    do_transition,
+                    run_id,
+                    issue_key
+                )
+            except Exception:
+                logger.warning("Failed to transition issue state (ignoring as non-critical)")
             
             # 8. Persistence
             self.idempotency_store.put(idem_key, mr_data.mr_url)
@@ -342,7 +365,6 @@ class ScaffoldOrchestratorService:
         except StepExecutionError as e:
             cause = e.original_error
             
-            # ADF para Errores (Panel Rojo)
             error_title = "Scaffolding Failed"
             if isinstance(cause, ContractParseError):
                 error_title = "Validation Error"
@@ -428,4 +450,3 @@ class ScaffoldOrchestratorService:
             self.jira_client.add_comment(issue_key, message_payload)
         except Exception as notify_err:
             logger.error(f"Failed to post failure comment to Jira for run {run_id}: {notify_err}")
-            

@@ -1,5 +1,5 @@
 import base64
-from typing import Any, Dict, Union
+from typing import Any, Dict, Union, Optional
 
 import httpx
 
@@ -64,11 +64,9 @@ class JiraClient:
 
         payload = {}
         
-        # Si recibimos un Diccionario, asumimos que es un documento ADF bien formado
         if isinstance(content, dict):
             payload = {"body": content}
         else:
-            # Fallback para texto simple (lo envolvemos en un párrafo básico)
             payload = {
                 "body": {
                     "type": "doc",
@@ -86,3 +84,51 @@ class JiraClient:
             response = client.post(url, headers=self._get_headers(), json=payload, timeout=10.0)
             response.raise_for_status()
             return response.json()
+
+    def transition_issue(self, issue_key: str, target_status_keyword: str) -> bool:
+        """
+        Busca una transición disponible que contenga la palabra clave (ej: 'Review') y mueve el ticket.
+        """
+        # 1. Obtener transiciones disponibles para el estado actual
+        url_get = f"{self.base_url}/rest/api/3/issue/{issue_key}/transitions"
+        
+        with httpx.Client() as client:
+            resp = client.get(url_get, headers=self._get_headers())
+            resp.raise_for_status()
+            transitions = resp.json().get("transitions", [])
+
+        # 2. Buscar el ID de la transición deseada
+        target_id = None
+        target_name = ""
+        
+        # Normalizamos a minúsculas para búsqueda flexible
+        keyword_lower = target_status_keyword.lower()
+        
+        for t in transitions:
+            t_name = t["name"].lower()
+            t_to = t["to"]["name"].lower()
+            
+            # Buscamos si el nombre de la transición O el estado destino coinciden
+            if keyword_lower in t_name or keyword_lower in t_to:
+                target_id = t["id"]
+                target_name = t["name"]
+                break
+        
+        if not target_id:
+            logger.warning(f"No transition found containing '{target_status_keyword}' for issue {issue_key}. Available: {[t['name'] for t in transitions]}")
+            return False
+
+        # 3. Ejecutar la transición
+        url_post = f"{self.base_url}/rest/api/3/issue/{issue_key}/transitions"
+        payload = {
+            "transition": {
+                "id": target_id
+            }
+        }
+        
+        logger.info(f"Transitioning issue {issue_key} to '{target_name}' (ID: {target_id})")
+        
+        with httpx.Client() as client:
+            resp = client.post(url_post, headers=self._get_headers(), json=payload)
+            resp.raise_for_status()
+            return True
