@@ -22,39 +22,40 @@ jobs:
 
       - name: Deploy to EC2
         run: |
-          # Usamos StrictHostKeyChecking=no y UserKnownHostsFile=/dev/null para evitar error de host key.
+          # SSH con bypass de host key para PoC
           ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
             set -e
             
-            # USO DE $HOME EN LUGAR DE ~ (Corrección del error)
+            # Variables
             REPO_URL="https://github.com/jdalejandro91/software-factory-poc.git"
             PROJECT_DIR="$HOME/software-factory-poc"
             
             echo "📂 Verificando directorio: $PROJECT_DIR"
             
-            # LÓGICA DE AUTO-HEALING (Si no existe, lo clona)
+            # Auto-healing: Clonar si no existe
             if [ ! -d "$PROJECT_DIR" ]; then
-              echo "⚠️ El directorio no existe. Intentando clonar por primera vez..."
-              # Intentamos clonar. Si el repo es privado, esto fallará si no hay credenciales en el EC2.
-              git clone "$REPO_URL" "$PROJECT_DIR" || { 
-                echo "❌ Falló el clonado automático (¿Repo privado?)."
-                echo "   Solución manual: Entra al EC2 y ejecuta: git clone $REPO_URL"
-                exit 1 
-              }
+              echo "⚠️ Directorio no encontrado. Clonando..."
+              git clone "$REPO_URL" "$PROJECT_DIR"
             fi
 
             cd "$PROJECT_DIR"
 
-            # 2. Actualizar código
-            echo "📥 Obteniendo últimos cambios..."
-            # Aseguramos estar en la rama correcta y limpia
+            # Actualizar código
+            echo "📥 Bajando cambios..."
             git fetch origin main
             git reset --hard origin/main
 
-            # 3. Despliegue
-            echo "🔄 Reiniciando servicios con Docker Compose..."
-            make down
-            make up
+            # Despliegue DIRECTO con Docker Compose (Sin make)
+            echo "🔄 Reiniciando contenedores..."
+            
+            # Bajamos servicios (|| true evita que falle si no estaban corriendo)
+            docker compose down || true
+            
+            # Levantamos en modo detached, forzando rebuild
+            docker compose up -d --build --remove-orphans
 
             echo "✅ Despliegue completado exitosamente."
+            
+            # Health check rápido (opcional)
+            docker compose ps
           EOF
