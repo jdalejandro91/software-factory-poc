@@ -136,11 +136,10 @@ class GitLabClient:
             response.raise_for_status()
             return response.json()
 
-    def create_merge_request(self, project_id: int, source_branch: str, target_branch: str, title: str, description: str = None) -> str:
+    def create_merge_request(self, project_id: int, source_branch: str, target_branch: str, title: str, description: str = None) -> Dict[str, Any]:
         """
-        Crea un MR. Si ya existe (409 Conflict), busca el existente y devuelve su URL (Idempotencia).
+        Crea un MR. Si ya existe (409 Conflict), busca el existente y devuelve su objeto completo (Idempotencia).
         """
-        # CORRECCIÓN: Agregado /api/v4
         url = f"{self.base_url}/api/v4/projects/{project_id}/merge_requests"
         payload = {
             "source_branch": source_branch,
@@ -153,23 +152,22 @@ class GitLabClient:
         try:
             response = httpx.post(url, headers=self._get_headers(), json=payload)
             response.raise_for_status()
-            return response.json()["web_url"]
+            return response.json() # Devolvemos el diccionario completo, no solo la URL
 
         except httpx.HTTPStatusError as e:
             # Manejo de conflicto (Ya existe el MR)
             if e.response.status_code == 409:
                 logger.warning(f"MR already exists for {source_branch} -> {target_branch}. Fetching existing one.")
-                return self._get_existing_mr_url(project_id, source_branch, target_branch)
+                return self._get_existing_mr(project_id, source_branch, target_branch)
             
             # Si es otro error, lanzarlo
             logger.error(f"Failed to create MR: {e.response.text}")
             raise e
 
-    def _get_existing_mr_url(self, project_id: int, source_branch: str, target_branch: str) -> str:
+    def _get_existing_mr(self, project_id: int, source_branch: str, target_branch: str) -> Dict[str, Any]:
         """
         Helper para buscar un MR existente cuando falla la creación por duplicado.
         """
-        # CORRECCIÓN: Agregado /api/v4
         url = f"{self.base_url}/api/v4/projects/{project_id}/merge_requests"
         params = {
             "source_branch": source_branch,
@@ -182,7 +180,12 @@ class GitLabClient:
         
         mrs = response.json()
         if mrs:
-            return mrs[0]["web_url"]
+            return mrs[0] # Devolvemos el primer objeto MR encontrado
         
         # Caso raro: Dio 409 pero no lo encontramos (tal vez está cerrado/merged)
-        return "https://gitlab.com/mr-exists-but-cannot-fetch"
+        # Devolvemos un objeto dummy seguro para evitar crashes
+        return {
+            "web_url": "https://gitlab.com/mr-exists-but-cannot-fetch",
+            "id": 0,
+            "iid": 0
+        }
