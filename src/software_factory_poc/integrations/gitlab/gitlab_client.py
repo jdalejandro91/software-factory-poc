@@ -136,12 +136,12 @@ class GitLabClient:
             response.raise_for_status()
             return response.json()
 
-    # CORRECCIÓN: Agregado parámetro 'description' para coincidir con la llamada del orquestador
     def create_merge_request(self, project_id: int, source_branch: str, target_branch: str, title: str, description: str = None) -> str:
         """
         Crea un MR. Si ya existe (409 Conflict), busca el existente y devuelve su URL (Idempotencia).
         """
-        url = f"{self.base_url}/projects/{project_id}/merge_requests"
+        # CORRECCIÓN: Agregado /api/v4
+        url = f"{self.base_url}/api/v4/projects/{project_id}/merge_requests"
         payload = {
             "source_branch": source_branch,
             "target_branch": target_branch,
@@ -151,7 +151,6 @@ class GitLabClient:
         }
         
         try:
-            # CORRECCIÓN: Usar self._get_headers() en lugar de self.headers (que no existe)
             response = httpx.post(url, headers=self._get_headers(), json=payload)
             response.raise_for_status()
             return response.json()["web_url"]
@@ -170,14 +169,14 @@ class GitLabClient:
         """
         Helper para buscar un MR existente cuando falla la creación por duplicado.
         """
-        url = f"{self.base_url}/projects/{project_id}/merge_requests"
+        # CORRECCIÓN: Agregado /api/v4
+        url = f"{self.base_url}/api/v4/projects/{project_id}/merge_requests"
         params = {
             "source_branch": source_branch,
             "target_branch": target_branch,
             "state": "opened" # Solo nos interesan los abiertos
         }
         
-        # CORRECCIÓN: Usar self._get_headers()
         response = httpx.get(url, headers=self._get_headers(), params=params)
         response.raise_for_status()
         
