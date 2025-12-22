@@ -41,7 +41,7 @@ def simulate():
         "key": "POC-REAL-001",
         "fields": {
           "summary": "Scaffolding: Nuevo Servicio de Pagos",
-          "description": "Requerimiento de arquitectura.\n\n```scaffolding\nversion: \"1.0\"\ntemplate: \"corp_nodejs_api\"\ntarget:\n  gitlab_project_path: \"jdalejandro91-group/nodejs-test\"\n  branch_slug: \"feature/billing-v2\"\nparameters:\n  service_name: \"billing-api\"\n  description: \"API core de facturación\"\n```",
+          "description": "Requerimiento de arquitectura.\n\n```scaffolding\nversion: \"1.0\"\ntemplate: \"corp_nodejs_api\"\ntarget:\n  gitlab_project_path: \"jdalejandro91-group/nodejs-test\"\n  branch_slug: \"feature/poc-real-001-billing-api-scaffold\"\nparameters:\n  service_name: \"billing-api\"\n  description: \"API core de facturación\"\n```",
           "issuetype": {
             "name": "Task",
             "subtask": False

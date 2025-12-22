@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     allowlisted_gitlab_project_ids: List[int] = Field(
         default_factory=lambda: DEFAULT_ALLOWLISTED_GITLAB_PROJECT_IDS
     )
+    allowlisted_groups: List[str] = ["jdalejandro91-group"] # Default allowed namespace
     protected_branches: List[str] = Field(
         default_factory=lambda: DEFAULT_PROTECTED_BRANCHES
     )

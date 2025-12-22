@@ -55,10 +55,31 @@ class GitLabClient:
             data = response.json()
             return data["id"]
 
+    def get_branch(self, project_id: int, branch_name: str) -> Dict[str, Any] | None:
+        """
+        Checks if a branch exists. Returns branch info or None.
+        """
+        encoded_branch = urllib.parse.quote(branch_name, safe="")
+        url = f"{self.base_url}/api/v4/projects/{project_id}/repository/branches/{encoded_branch}"
+        
+        with httpx.Client() as client:
+            response = client.get(url, headers=self._get_headers(), timeout=10.0)
+            if response.status_code == 200:
+                return response.json()
+            return None
+
     def create_branch(self, project_id: int, branch_name: str, ref: str) -> Dict[str, Any]:
         """
         Creates a new branch from a reference (e.g. main).
+        Idempotent: If branch exists, returns existing info.
         """
+        # 1. Check existence
+        existing_branch = self.get_branch(project_id, branch_name)
+        if existing_branch:
+            logger.info(f"Branch '{branch_name}' already exists in project {project_id}. Skipping creation.")
+            return existing_branch
+
+        # 2. Create
         url = f"{self.base_url}/api/v4/projects/{project_id}/repository/branches"
         logger.info(f"Creating GitLab branch '{branch_name}' in project {project_id} from '{ref}'")
         
@@ -72,6 +93,17 @@ class GitLabClient:
             response.raise_for_status()
             return response.json()
 
+    def file_exists(self, project_id: int, file_path: str, ref: str) -> bool:
+        """
+        Checks if a file exists in the repository at a given ref using HEAD.
+        """
+        encoded_path = urllib.parse.quote(file_path, safe="")
+        url = f"{self.base_url}/api/v4/projects/{project_id}/repository/files/{encoded_path}?ref={ref}"
+        
+        with httpx.Client() as client:
+            response = client.head(url, headers=self._get_headers(), timeout=5.0)
+            return response.status_code == 200
+
     def commit_files(
         self, 
         project_id: int, 
@@ -81,18 +113,28 @@ class GitLabClient:
     ) -> Dict[str, Any]:
         """
         Commits files to a branch.
+        Smart Upsert: Checks if file exists to determine 'create' or 'update' action.
         """
         url = f"{self.base_url}/api/v4/projects/{project_id}/repository/commits"
         logger.info(f"Committing {len(files_map)} files to branch '{branch_name}' in project {project_id}")
         
+        # Calculate actions
+        files_action_map = {}
+        for file_path in files_map.keys():
+            if self.file_exists(project_id, file_path, branch_name):
+                files_action_map[file_path] = "update"
+            else:
+                files_action_map[file_path] = "create"
+
         payload = self.payload_builder.build_commit_payload(
             files_map=files_map,
             branch_name=branch_name,
-            message=commit_message
+            message=commit_message,
+            files_action_map=files_action_map
         )
         
         with httpx.Client() as client:
-            response = client.post(url, headers=self._get_headers(), json=payload, timeout=20.0) # Larger timeout for commits
+            response = client.post(url, headers=self._get_headers(), json=payload, timeout=20.0)
             response.raise_for_status()
             return response.json()
 

@@ -8,7 +8,7 @@ app.get('/', (req, res) => {
 });
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', owner: '{{ owner_team }}' });
+  res.json({ status: 'ok', owner: '{{ owner_team | default("Sin Asignar") }}' });
 });
 
 app.listen(port, () => {

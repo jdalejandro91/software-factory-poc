@@ -5,24 +5,25 @@ class GitLabPayloadBuilderService:
         self, 
         files_map: Dict[str, str], 
         branch_name: str, 
-        message: str
+        message: str,
+        files_action_map: Dict[str, str] = None
     ) -> Dict[str, Any]:
         """
         Builds the JSON payload for the GitLab Commits API.
         Transforms files_map {path: content} into actions list.
+        :param files_action_map: Optional dict mapping file_path -> "create"|"update"
         """
         actions: List[Dict[str, str]] = []
+        files_action_map = files_action_map or {}
         
         for file_path, content in files_map.items():
             self._validate_path(file_path)
             
-            # For this PoC, we assume all actions are 'create'.
-            # A more robust system might check if file exists to choose 'update'.
-            # But the PoC contract assumes new files for scaffolding mostly.
-            # We'll use 'create'.
+            # Default to 'create' if not specified
+            action_type = files_action_map.get(file_path, "create")
             
             action = {
-                "action": "create",
+                "action": action_type,
                 "file_path": file_path,
                 "content": content,
             }

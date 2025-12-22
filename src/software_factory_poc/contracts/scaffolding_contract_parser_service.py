@@ -33,7 +33,7 @@ class ScaffoldingContractParserService:
         block_content = self._extract_block(text)
         if not block_content:
             raise ContractParseError(
-                f"Could not find contract block. Ensure it starts with '{BLOCK_START}' and ends with '{BLOCK_END}'."
+                f"Could not find contract block. Use ```scaffolding or start with '{BLOCK_START}' and end with '{BLOCK_END}'."
             )
 
         data = self._parse_structure(block_content)
@@ -59,13 +59,23 @@ class ScaffoldingContractParserService:
     def _extract_block(self, text: str) -> Optional[str]:
         """
         Finds the content between start and end delimiters.
-        Uses regex for robust multi-line matching.
+        Prioritizes standard Markdown code blocks: ```scaffolding ... ```
+        Falls back to legacy delimiters.
         """
+        # 1. Try Markdown code blocks (```scaffolding, ```yaml, or just ```)
+        # Matches ```optional_lang\n ...content... ```
+        block_pattern = r"```(?:scaffolding|yaml|json)?\n(.*?)\n?```"
+        match = re.search(block_pattern, text, re.DOTALL)
+        if match:
+             return match.group(1).strip()
+
+        # 2. Legacy delimiters
         # Escape markers just in case they contain regex meta-characters
         pattern = re.escape(BLOCK_START) + r"\s*(.*?)\s*" + re.escape(BLOCK_END)
         match = re.search(pattern, text, re.DOTALL)
         if match:
             return match.group(1).strip()
+            
         return None
 
     def _parse_structure(self, content: str) -> dict:

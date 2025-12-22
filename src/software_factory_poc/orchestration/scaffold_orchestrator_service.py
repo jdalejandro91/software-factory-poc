@@ -178,8 +178,9 @@ class ScaffoldOrchestratorService:
             )
 
             # 5. Policy Validation
+            # Deterministic Branch: feature/{issue_key}-{service_slug}-scaffold
             branch_slug = slugify_for_branch(f"{issue_key}-{contract.service_slug}")
-            generated_branch_name = f"scaffold/{branch_slug}"
+            generated_branch_name = f"feature/{branch_slug}-scaffold"
 
             self.step_runner.run_step(
                 "validate_policy",
