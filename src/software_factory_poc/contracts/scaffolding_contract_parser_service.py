@@ -26,15 +26,15 @@ class ScaffoldingContractParserService:
         if not text:
             raise ContractParseError("Input text is empty.")
 
-        # Normalizar saltos de línea para evitar problemas con \r\n vs \n
+        # Normalizar saltos de línea
         cleaned_text = text.replace("\r\n", "\n")
 
         block_content = self._extract_block(cleaned_text)
         if not block_content:
-            # Log de depuración para ver qué llegó realmente
-            logger.warning(f"Failed to find block in text (len={len(text)}). First 100 chars: {text[:100]!r}")
+            # Log crítico para debug
+            logger.warning(f"Failed to find block. Content preview: {cleaned_text[:200]!r}")
             raise ContractParseError(
-                f"Could not find contract block. Ensure you use ```scaffolding (code block) or delimiters '{BLOCK_START}'."
+                "Could not find contract block. Use Markdown code blocks (```) or Jira Wiki blocks ({code})."
             )
 
         data = self._parse_structure(block_content)
@@ -58,36 +58,34 @@ class ScaffoldingContractParserService:
 
     def _extract_block(self, text: str) -> Optional[str]:
         """
-        Finds the content between start and end delimiters.
-        Prioritizes standard Markdown code blocks with relaxed regex.
+        Finds the content using multiple patterns (Markdown, Jira Wiki, Legacy).
         """
-        # 1. Try Markdown code blocks (```scaffolding, ```yaml, or just ```)
-        # Regex Explanation:
-        # ```                 -> Literal backticks
-        # [ \t]* -> Optional spaces/tabs before language identifier
-        # (?:scaffolding|yaml|json)? -> Optional language identifier
-        # [ \t]* -> Optional spaces after identifier
-        # \n                  -> Newline starting the block
-        # (.*?)               -> THE CONTENT (Lazy match)
-        # \n                  -> Newline ending the block
-        # [ \t]* -> Optional spaces before closing backticks
-        # ```                 -> Closing backticks
-        
-        block_pattern = r"```[ \t]*(?:scaffolding|yaml|json)?[ \t]*\n(.*?)\n[ \t]*```"
-        match = re.search(block_pattern, text, re.DOTALL | re.IGNORECASE)
+        # 1. Jira Wiki Markup (lo que está llegando en tus logs)
+        # {code:yaml} ... {code}
+        jira_wiki_pattern = r"\{code(?::(?:yaml|json|scaffolding))?\}\s*\n(.*?)\n\s*\{code\}"
+        match = re.search(jira_wiki_pattern, text, re.DOTALL | re.IGNORECASE)
         if match:
-             return match.group(1).strip()
+            logger.info("Found block using Jira Wiki {code} pattern")
+            return match.group(1).strip()
 
-        # 2. Legacy delimiters (Backup)
-        pattern = re.escape(BLOCK_START) + r"\s*(.*?)\s*" + re.escape(BLOCK_END)
-        match = re.search(pattern, text, re.DOTALL)
+        # 2. Markdown (```yaml)
+        markdown_pattern = r"```[ \t]*(?:scaffolding|yaml|json)?[ \t]*\n(.*?)\n[ \t]*```"
+        match = re.search(markdown_pattern, text, re.DOTALL | re.IGNORECASE)
         if match:
+            logger.info("Found block using Markdown ``` pattern")
+            return match.group(1).strip()
+
+        # 3. Legacy delimiters
+        legacy_pattern = re.escape(BLOCK_START) + r"\s*(.*?)\s*" + re.escape(BLOCK_END)
+        match = re.search(legacy_pattern, text, re.DOTALL)
+        if match:
+            logger.info("Found block using Legacy delimiters")
             return match.group(1).strip()
             
         return None
 
     def _parse_structure(self, content: str) -> dict:
-        # Try YAML
+        # Try YAML (Most likely)
         try:
             parsed = yaml.safe_load(content)
             if isinstance(parsed, dict):
