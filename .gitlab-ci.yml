@@ -1,0 +1,25 @@
+image: python:3.12-slim
+
+stages:
+  - test
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  UV_CACHE_DIR: "$CI_PROJECT_DIR/.cache/uv"
+
+cache:
+  paths:
+    - .cache/pip
+    - .cache/uv
+
+unit-tests:
+  stage: test
+  tags:
+    - poc
+  before_script:
+    - apt-get update && apt-get install -y make git
+    - pip install uv
+    - make install
+  script:
+    - make test
+    - echo "✅ Test ejecutado exitosamente en EC2 (Docker)"

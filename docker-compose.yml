@@ -1,0 +1,24 @@
+services:
+  app:
+    # Construye usando el Dockerfile del directorio actual
+    build: .
+    container_name: software-factory-poc-app
+    
+    # Mapeo de puertos: Host (Windows) : Contenedor
+    ports:
+      - "8000:8000"
+    
+    # Inyecta las variables de entorno automáticamente
+    env_file:
+      - .env
+    
+    # Volúmenes: "Espejo" de tu carpeta local hacia adentro del container
+    # Esto permite "Hot Reload": cambias código en VSCode y el server se reinicia
+    volumes:
+      - .:/app
+    
+    # Sobrescribimos el comando para habilitar --reload en desarrollo
+    command: uvicorn src.software_factory_poc.main:app --host 0.0.0.0 --port 8000 --reload
+    
+    # Política de reinicio (si falla, intenta levantar de nuevo)
+    restart: on-failure

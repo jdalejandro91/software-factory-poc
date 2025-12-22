@@ -1,61 +1,35 @@
-# Python
+# General Python
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+# Caches and temporary files
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
 
-# Virtual Environments
+# Build and distribution
+dist/
+build/
+*.egg-info/
+
+# Environment settings
 .env
-.venv
-env/
+*.env
+.venv/
 venv/
 ENV/
-env.bak/
-venv.bak/
+dev-container.sh
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
+# OS specific
+.DS_Store
 
-# Static Analysis
-.mypy_cache/
-.ruff_cache/
-
-# IDEs
-.vscode/
-.idea/
-
-# Custom
-output/
-tmp/
-*.log
+# Runtime Data
+# Ignore JSON stores but keep the directory structure via .keep
+runtime_data/*.json
+!runtime_data/.keep
 
 # Local container shims
 .container-bin/
