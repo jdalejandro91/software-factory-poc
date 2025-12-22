@@ -331,25 +331,15 @@ class ScaffoldOrchestratorService:
             except Exception:
                 logger.warning("Failed to post success comment")
 
-            # 9. Transition Issue to Review
+            # 9. Transition Issue to Review (Success Path)
             try:
-                # Intentamos con "Review" (inglés) o "Revisión" (español)
-                # Ojo: esto depende del workflow de tu proyecto en Jira.
-                keyword = "review" # Default to try review
-                # Si tu Jira es español "En Revisión" o "Solicitar revisión", 'revisión' funciona.
-                # Si es inglés "In Review" o "Review", 'review' funciona.
-                # Como tu UI es español, vamos a intentar 'revisión' primero, o ambas?
-                # El client busca substrings. Probemos con un try/fallback simple.
-                
-                def do_transition():
-                    # Intento 1: 'revisión' (Español)
+                def do_transition_success():
                     if not self.jira_client.transition_issue(issue_key, "revisión"):
-                        # Intento 2: 'review' (Inglés)
                         self.jira_client.transition_issue(issue_key, "review")
 
                 self.step_runner.run_step(
-                    "transition_issue",
-                    do_transition,
+                    "transition_issue_success",
+                    do_transition_success,
                     run_id,
                     issue_key
                 )
@@ -446,7 +436,23 @@ class ScaffoldOrchestratorService:
             return result_model
 
     def _handle_failure(self, run_id: str, issue_key: str, message_payload: Dict[str, Any], exc: Exception):
+        """
+        Notifica el fallo a Jira y revierte el estado de la tarea.
+        """
+        # 1. Comentar el error
         try:
             self.jira_client.add_comment(issue_key, message_payload)
         except Exception as notify_err:
             logger.error(f"Failed to post failure comment to Jira for run {run_id}: {notify_err}")
+
+        # 2. Revertir estado a "To Do" / "Por hacer"
+        try:
+            logger.info(f"Attempting to rollback issue {issue_key} to initial state due to failure.")
+            # Intentamos encontrar una transición hacia el estado inicial
+            # Si tu Jira está en Español, el estado suele ser "Tareas por hacer" (o la transición "Detener").
+            # Si está en Inglés, "To Do".
+            # Buscamos por palabras clave comunes.
+            if not self.jira_client.transition_issue(issue_key, "hacer"): # Cubre "Tareas por hacer", "Por hacer"
+                 self.jira_client.transition_issue(issue_key, "To Do") # Cubre "To Do"
+        except Exception as trans_err:
+            logger.error(f"Failed to rollback issue state to To Do for run {run_id}: {trans_err}")
