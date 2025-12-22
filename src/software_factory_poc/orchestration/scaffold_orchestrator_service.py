@@ -1,5 +1,5 @@
 import uuid
-from typing import Optional
+from typing import Optional, Dict, Any
 
 from software_factory_poc.config.settings_pydantic import Settings
 from software_factory_poc.contracts.artifact_result_model import (
@@ -146,15 +146,36 @@ class ScaffoldOrchestratorService:
             existing_mr = self.idempotency_store.get(idem_key)
             if existing_mr:
                 logger.info(f"Duplicate request detected for key {idem_key}")
+                
+                # ADF Para Duplicado (Panel Amarillo)
+                adf_duplicate = {
+                    "type": "doc",
+                    "version": 1,
+                    "content": [
+                        {
+                            "type": "panel",
+                            "attrs": {"panelType": "warning"},
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "content": [
+                                        {"type": "text", "text": "Duplicate Request Detected", "marks": [{"type": "strong"}]}
+                                    ]
+                                },
+                                {
+                                    "type": "paragraph",
+                                    "content": [
+                                        {"type": "text", "text": "This scaffolding has already been executed. "},
+                                        {"type": "text", "text": "View Existing MR", "marks": [{"type": "link", "attrs": {"href": existing_mr}}]}
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+
                 try:
-                    # Mensaje simple para duplicados
-                    self.jira_client.add_comment(
-                        issue_key, 
-                        f"{{panel:title=Duplicate Request|borderColor=#FFAB00|bgColor=#FFFFCE}}\n"
-                        f"*Result already exists:* [{existing_mr}]\n"
-                        f"Run ID: {run_id}\n"
-                        f"{{panel}}"
-                    )
+                    self.jira_client.add_comment(issue_key, adf_duplicate)
                 except Exception:
                     logger.warning("Failed to post duplicate comment")
 
@@ -192,7 +213,7 @@ class ScaffoldOrchestratorService:
                     generated_branch_name, 
                     target_base
                 )
-                branch_url = branch_resp.get("web_url") # GitLab API devuelve 'web_url'
+                branch_url = branch_resp.get("web_url")
                 
                 self.gitlab_client.commit_files(
                     contract.gitlab.project_id,
@@ -212,13 +233,11 @@ class ScaffoldOrchestratorService:
                 from software_factory_poc.integrations.gitlab.gitlab_result_mapper_service import GitLabResultMapperService
                 mapper = GitLabResultMapperService()
                 
-                # Devolvemos un dict con ambos datos
                 return {
                     "mr": mapper.map_mr(mr_data_raw),
                     "branch_url": branch_url
                 }
 
-            # Ejecutamos el step y extraemos los datos
             ops_result = self.step_runner.run_step(
                 "gitlab_operations",
                 gitlab_ops,
@@ -235,15 +254,20 @@ class ScaffoldOrchestratorService:
 
             # 7. Notify Jira Success (ADF Estructurado con Links)
             try:
-                # Construimos el documento ADF manualmente para garantizar el formato v3
                 adf_success_body = {
                     "type": "doc",
                     "version": 1,
                     "content": [
                         {
-                            "type": "heading",
-                            "attrs": {"level": 2},
-                            "content": [{"type": "text", "text": "Scaffolding Success 🚀"}]
+                            "type": "panel",
+                            "attrs": {"panelType": "success"},
+                            "content": [
+                                {
+                                    "type": "heading",
+                                    "attrs": {"level": 3},
+                                    "content": [{"type": "text", "text": "Scaffolding Success 🚀"}]
+                                }
+                            ]
                         },
                         {
                             "type": "bulletList",
@@ -274,7 +298,6 @@ class ScaffoldOrchestratorService:
                                                 {
                                                     "type": "text", 
                                                     "text": generated_branch_name, 
-                                                    # Aplicamos estilo de Código y Link simultáneamente
                                                     "marks": [
                                                         {"type": "code"},
                                                         {"type": "link", "attrs": {"href": branch_url or ""}}
@@ -319,51 +342,90 @@ class ScaffoldOrchestratorService:
         except StepExecutionError as e:
             cause = e.original_error
             
-            # Usamos Wiki Markup simple para errores por robustez (ya que usamos la v3 para todo, 
-            # si quisiéramos ADF bonito para error tendríamos que construirlo, 
-            # pero para PoC el fallback a string simple en jira_client maneja esto aceptablemente o se ve plano).
-            # Para mantener consistencia con el éxito, podríamos hacer ADF de error, 
-            # pero por ahora dejemos el string formateado tipo panel que ya tenías, 
-            # el jira_client lo envolverá en un párrafo simple.
-            
-            error_header = "🛑 *Scaffolding Failed*"
-
+            # ADF para Errores (Panel Rojo)
+            error_title = "Scaffolding Failed"
             if isinstance(cause, ContractParseError):
-                msg = f"{error_header}\n\n*Validation Error:*\n{str(cause)}"
-                self._handle_failure(run_id, issue_key, msg, cause)
-                result_model.status = ArtifactRunStatusEnum.FAILED
-                result_model.error_summary = str(cause)
-                self.run_result_store.put(run_id, result_model)
-                return result_model
-
+                error_title = "Validation Error"
             elif isinstance(cause, PolicyViolationError):
-                msg = f"{error_header}\n\n*Policy Violation:*\n{str(cause)}"
-                self._handle_failure(run_id, issue_key, msg, cause)
-                result_model.status = ArtifactRunStatusEnum.FAILED
-                result_model.error_summary = str(cause)
-                self.run_result_store.put(run_id, result_model)
-                return result_model
-                
-            else:
-                logger.exception("Unexpected error in orchestration step")
-                msg = f"{error_header}\n\n*System Error:*\nAn unexpected error occurred.\nRun ID: {run_id}"
-                self._handle_failure(run_id, issue_key, msg, cause)
-                result_model.status = ArtifactRunStatusEnum.FAILED
-                result_model.error_summary = f"Internal System Error: {str(cause)}" 
-                self.run_result_store.put(run_id, result_model)
-                return result_model
+                error_title = "Policy Violation"
+            
+            adf_error = {
+                "type": "doc",
+                "version": 1,
+                "content": [
+                    {
+                        "type": "panel",
+                        "attrs": {"panelType": "error"},
+                        "content": [
+                            {
+                                "type": "heading",
+                                "attrs": {"level": 3},
+                                "content": [{"type": "text", "text": error_title}]
+                            },
+                            {
+                                "type": "paragraph",
+                                "content": [{"type": "text", "text": str(cause)}]
+                            },
+                            {
+                                "type": "paragraph",
+                                "content": [
+                                    {"type": "text", "text": "Run ID: "},
+                                    {"type": "text", "text": run_id, "marks": [{"type": "code"}]}
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+
+            self._handle_failure(run_id, issue_key, adf_error, cause)
+            
+            result_model.status = ArtifactRunStatusEnum.FAILED
+            result_model.error_summary = str(cause)
+            self.run_result_store.put(run_id, result_model)
+            return result_model
 
         except Exception as e:
             logger.exception("Unexpected error in orchestration")
-            msg = f"🛑 *Critical Error*\nSystem Error. Run ID: {run_id}"
-            self._handle_failure(run_id, issue_key, msg, e)
+            
+            adf_critical = {
+                "type": "doc",
+                "version": 1,
+                "content": [
+                    {
+                        "type": "panel",
+                        "attrs": {"panelType": "error"},
+                        "content": [
+                            {
+                                "type": "heading",
+                                "attrs": {"level": 3},
+                                "content": [{"type": "text", "text": "Critical System Error"}]
+                            },
+                            {
+                                "type": "paragraph",
+                                "content": [{"type": "text", "text": "An unexpected error occurred. Please check system logs."}]
+                            },
+                            {
+                                "type": "paragraph",
+                                "content": [
+                                    {"type": "text", "text": "Run ID: "},
+                                    {"type": "text", "text": run_id, "marks": [{"type": "code"}]}
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+            
+            self._handle_failure(run_id, issue_key, adf_critical, e)
             result_model.status = ArtifactRunStatusEnum.FAILED
             result_model.error_summary = "Internal System Error" 
             self.run_result_store.put(run_id, result_model)
             return result_model
 
-    def _handle_failure(self, run_id: str, issue_key: str, user_message: str, exc: Exception):
+    def _handle_failure(self, run_id: str, issue_key: str, message_payload: Dict[str, Any], exc: Exception):
         try:
-            self.jira_client.add_comment(issue_key, user_message)
+            self.jira_client.add_comment(issue_key, message_payload)
         except Exception as notify_err:
             logger.error(f"Failed to post failure comment to Jira for run {run_id}: {notify_err}")
+            
