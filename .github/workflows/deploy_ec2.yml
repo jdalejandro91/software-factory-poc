@@ -22,32 +22,37 @@ jobs:
 
       - name: Deploy to EC2
         run: |
-          # COMENTARIO TÉCNICO:
-          # Usamos StrictHostKeyChecking=no y UserKnownHostsFile=/dev/null
-          # para evitar el error "Unable to negotiate host key" que vimos en los logs.
-          # Esto salta la verificación de identidad del servidor (aceptable para PoC).
-          
+          # Usamos StrictHostKeyChecking=no y UserKnownHostsFile=/dev/null para evitar error de host key.
           ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
             set -e
             
-            # Variables
-            PROJECT_DIR="~/software-factory-poc"
+            # USO DE $HOME EN LUGAR DE ~ (Corrección del error)
+            REPO_URL="https://github.com/jdalejandro91/software-factory-poc.git"
+            PROJECT_DIR="$HOME/software-factory-poc"
             
-            # 1. Verificar directorio
+            echo "📂 Verificando directorio: $PROJECT_DIR"
+            
+            # LÓGICA DE AUTO-HEALING (Si no existe, lo clona)
             if [ ! -d "$PROJECT_DIR" ]; then
-              echo "❌ Error: El directorio $PROJECT_DIR no existe."
-              exit 1
+              echo "⚠️ El directorio no existe. Intentando clonar por primera vez..."
+              # Intentamos clonar. Si el repo es privado, esto fallará si no hay credenciales en el EC2.
+              git clone "$REPO_URL" "$PROJECT_DIR" || { 
+                echo "❌ Falló el clonado automático (¿Repo privado?)."
+                echo "   Solución manual: Entra al EC2 y ejecuta: git clone $REPO_URL"
+                exit 1 
+              }
             fi
 
             cd "$PROJECT_DIR"
 
             # 2. Actualizar código
             echo "📥 Obteniendo últimos cambios..."
+            # Aseguramos estar en la rama correcta y limpia
             git fetch origin main
             git reset --hard origin/main
 
             # 3. Despliegue
-            echo "🔄 Reiniciando servicios..."
+            echo "🔄 Reiniciando servicios con Docker Compose..."
             make down
             make up
 
