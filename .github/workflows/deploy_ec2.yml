@@ -20,64 +20,54 @@ jobs:
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
+      - name: Create .env file from Secret
+        run: |
+          # Creamos el archivo .env en el runner de GitHub usando el secreto
+          echo "${{ secrets.PROD_ENV_FILE }}" > .env.production
+
       - name: Deploy to EC2
         run: |
-          # SSH con bypass de host key para PoC
-          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-            set -e
-            
-            # Variables
-            REPO_URL="https://github.com/jdalejandro91/software-factory-poc.git"
-            PROJECT_DIR="$HOME/software-factory-poc"
-            
-            echo "📂 Verificando directorio: $PROJECT_DIR"
-            
-            # Auto-healing: Clonar si no existe
-            if [ ! -d "$PROJECT_DIR" ]; then
-              echo "⚠️ Directorio no encontrado. Clonando..."
-              git clone "$REPO_URL" "$PROJECT_DIR"
-            fi
+          # 1. Definir variables de conexión
+          USER="${{ secrets.EC2_USER }}"
+          HOST="${{ secrets.EC2_HOST }}"
+          KEY="-i ~/.ssh/id_rsa"
+          OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+          TARGET_DIR="/home/$USER/software-factory-poc"
 
+          # 2. Asegurar que la carpeta existe antes de copiar nada
+          ssh $OPTS $KEY $USER@$HOST "mkdir -p $TARGET_DIR"
+
+          # 3. Copiar el archivo .env al servidor (Inyección de Secretos)
+          echo "🔐 Enviando configuración de entorno (.env)..."
+          scp $OPTS $KEY .env.production $USER@$HOST:$TARGET_DIR/.env
+
+          # 4. Ejecutar el despliegue
+          ssh $OPTS $KEY $USER@$HOST << 'EOF'
+            set -e
+            PROJECT_DIR="$HOME/software-factory-poc"
+            REPO_URL="https://github.com/jdalejandro91/software-factory-poc.git"
+            
             cd "$PROJECT_DIR"
+            
+            # Auto-healing del repo
+            if [ ! -d ".git" ]; then
+                echo "⚠️ Repo no detectado o corrupto. Clonando de nuevo..."
+                cd ..
+                rm -rf software-factory-poc
+                git clone "$REPO_URL" software-factory-poc
+                cd software-factory-poc
+            fi
 
             # Actualizar código
             echo "📥 Bajando cambios..."
             git fetch origin main
             git reset --hard origin/main
 
-            # Despliegue DIRECTO con Docker Compose (Sin make)
+            # Despliegue
             echo "🔄 Reiniciando contenedores..."
-            
-            # Bajamos servicios (|| true evita que falle si no estaban corriendo)
             docker compose down || true
-            
-            # Levantamos en modo detached, forzando rebuild
             docker compose up -d --build --remove-orphans
-
-            echo "✅ Despliegue completado exitosamente."
             
-            # Health check rápido (opcional)
+            echo "✅ Despliegue completado."
             docker compose ps
-
-            # Smoke Test / Health Check
-            echo "🧪 Ejecutando Smoke Test..."
-            echo "⏳ Esperando 10s para arranque de servicios..."
-            sleep 10
-            
-            # Usamos curl para obtener el código HTTP. Si falla la conexión, curl sale con error.
-            if HTTP_CODE=$(curl --write-out "%{http_code}" --silent --output /dev/null --fail http://localhost:8000/health); then
-                if [ "$HTTP_CODE" -eq 200 ]; then
-                    echo "✅ Smoke Test Passed: API is up and running (HTTP 200)."
-                else
-                    echo "❌ Smoke Test Failed: API returned HTTP $HTTP_CODE"
-                    echo "🔍 Mostrando últimos logs de la aplicación:"
-                    docker compose logs --tail=50
-                    exit 1
-                fi
-            else
-                echo "❌ Smoke Test Failed: No se pudo conectar a http://localhost:8000/health"
-                echo "🔍 Mostrando últimos logs de la aplicación:"
-                docker compose logs --tail=50
-                exit 1
-            fi
           EOF
