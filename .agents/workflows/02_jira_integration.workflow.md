@@ -14,7 +14,7 @@ Implementar Jira client con dos operaciones:
 ## Archivos a crear/modificar
 - src/software_factory_poc/integrations/jira/jira_client.py
 - src/software_factory_poc/integrations/jira/jira_issue_mapper_service.py
-- src/software_factory_poc/config/settings_pydantic.py
+- src/software_factory_poc.configuration.main_settings.py
 - tests/test_jira_client_stubbed.py (mock httpx)
 
 ## Pasos

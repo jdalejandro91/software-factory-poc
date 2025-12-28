@@ -1,4 +1,4 @@
-from software_factory_poc.config.settings_pydantic import Settings
+from software_factory_poc.configuration.application.app_settings import AppSettings
 from software_factory_poc.contracts.scaffolding_contract_model import ScaffoldingContractModel
 
 
@@ -8,7 +8,7 @@ class PolicyViolationError(Exception):
 
 
 class PocPolicyService:
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: AppSettings):
         self.settings = settings
 
     def validate_request(

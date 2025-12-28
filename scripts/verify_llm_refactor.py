@@ -7,8 +7,8 @@ sys.path.append(str(Path.cwd() / "src"))
 
 from pydantic import SecretStr
 
-from software_factory_poc.config.settings_pydantic import Settings
-from software_factory_poc.core.value_objects.provider_name import ProviderName
+from software_factory_poc.application.core.value_objects.provider_name import ProviderName
+from software_factory_poc.configuration.main_settings import Settings
 from software_factory_poc.providers.facade.llm_bridge import LlmBridge
 
 

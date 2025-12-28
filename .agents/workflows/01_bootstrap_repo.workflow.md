@@ -10,7 +10,7 @@ Dejar el repo ejecutable localmente: FastAPI arriba, healthcheck, configuración
 - src/software_factory_poc/main.py
 - src/software_factory_poc/api/app_factory.py
 - src/software_factory_poc/api/health_router.py
-- src/software_factory_poc/config/settings_pydantic.py
+- src/software_factory_poc.configuration.main_settings.py
 - tests/test_health.py (opcional)
 
 ## Pasos

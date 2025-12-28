@@ -9,7 +9,7 @@ sys.path.append(str(Path.cwd() / "src"))
 
 from pydantic import SecretStr
 
-from software_factory_poc.config.settings_pydantic import Settings
+from software_factory_poc.configuration.main_settings import Settings
 from software_factory_poc.integrations.confluence.confluence_client import ConfluenceClient
 from software_factory_poc.knowledge.architecture_knowledge_service import (
     ArchitectureKnowledgeService,

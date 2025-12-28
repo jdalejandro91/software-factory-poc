@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock, MagicMock
 # Add src to path
 sys.path.append(str(Path.cwd() / "src"))
 
-from software_factory_poc.core.entities.llm_response import LlmResponse
-from software_factory_poc.core.value_objects.model_id import ModelId
-from software_factory_poc.core.value_objects.provider_name import ProviderName
+from software_factory_poc.application.core.entities.llm_response import LlmResponse
+from software_factory_poc.application.core.value_objects.model_id import ModelId
+from software_factory_poc.application.core.value_objects.provider_name import ProviderName
 from software_factory_poc.scaffolding.genai_scaffolding_service import GenaiScaffoldingService
 
 

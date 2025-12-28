@@ -3,9 +3,14 @@ import uuid
 
 import pytest
 
-from software_factory_poc.config.settings_pydantic import Settings
-from software_factory_poc.integrations.gitlab.gitlab_client import GitLabClient
-from software_factory_poc.integrations.gitlab.gitlab_payload_builder_service import (
+from software_factory_poc.configuration.main_settings import Settings
+from software_factory_poc.infrastructure.providers.tools.gitlab.clients.gitlab_http_client import (
+    GitLabHttpClient,
+)
+from software_factory_poc.infrastructure.providers.tools.gitlab.gitlab_provider_impl import (
+    GitLabProviderImpl,
+)
+from software_factory_poc.infrastructure.providers.tools.gitlab.mappers.gitlab_payload_builder_service import (
     GitLabPayloadBuilderService,
 )
 
@@ -28,7 +33,8 @@ def test_gitlab_real_smoke():
     if not settings.gitlab_token:
         pytest.fail("GITLAB_TOKEN not set in environment")
 
-    client = GitLabClient(settings, GitLabPayloadBuilderService())
+    http = GitLabHttpClient(settings)
+    client = GitLabProviderImpl(http, GitLabPayloadBuilderService())
 
     # 1. Test Project ID Resolution
     # Use a public project for resolution test if user didn't specify a private one to test with

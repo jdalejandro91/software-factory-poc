@@ -16,7 +16,7 @@ Implementar GitLab client para:
 - src/software_factory_poc/integrations/gitlab/gitlab_client.py
 - src/software_factory_poc/integrations/gitlab/gitlab_payload_builder_service.py
 - src/software_factory_poc/integrations/gitlab/gitlab_result_mapper_service.py
-- src/software_factory_poc/config/settings_pydantic.py
+- src/software_factory_poc.configuration.main_settings.py
 - tests/test_gitlab_client_stubbed.py (mock httpx)
 
 ## Pasos

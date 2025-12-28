@@ -1,7 +1,7 @@
 import respx
 from httpx import Response
 
-from software_factory_poc.api.jira_trigger_router import get_orchestrator
+from software_factory_poc.infrastructure.entrypoints.api.jira_trigger_router import get_orchestrator
 from software_factory_poc.contracts.artifact_result_model import ArtifactRunStatusEnum
 
 

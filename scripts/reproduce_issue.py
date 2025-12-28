@@ -9,7 +9,7 @@ sys.path.append(str(Path(__file__).parent.parent / "src"))
 import os
 
 from software_factory_poc.api.app_factory import create_app
-from software_factory_poc.config.settings_pydantic import Settings
+from software_factory_poc.configuration.main_settings import Settings
 
 
 def reproduce():
