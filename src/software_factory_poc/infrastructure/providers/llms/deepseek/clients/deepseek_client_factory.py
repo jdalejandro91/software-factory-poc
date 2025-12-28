@@ -6,7 +6,7 @@ from typing import Any
 from software_factory_poc.infrastructure.providers.llms.deepseek.clients.deepseek_config import (
     DeepSeekConfig,
 )
-from software_factory_poc.providers.shared.dependency_guard import DependencyGuard
+from software_factory_poc.application.core.shared.dependency_guard import DependencyGuard
 
 
 @dataclass(frozen=True, slots=True)

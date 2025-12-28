@@ -26,15 +26,15 @@ from software_factory_poc.infrastructure.providers.tools.jira.mappers.jira_issue
 from software_factory_poc.infrastructure.repositories.idempotency_key_builder_service import (
     IdempotencyKeyBuilderService,
 )
-from software_factory_poc.observability.logger_factory_service import build_logger
-from software_factory_poc.orchestration.step_runner_service import (
+from software_factory_poc.infrastructure.observability.logger_factory_service import build_logger
+from software_factory_poc.application.usecases.orchestration.step_runner_service import (
     StepExecutionError,
     StepRunnerService,
 )
-from software_factory_poc.policy.poc_policy_service import (
+from software_factory_poc.application.core.policies.poc_policy_service import (
     PocPolicyService,
 )
-from software_factory_poc.utils.slugify_service import slugify_for_branch
+from software_factory_poc.application.core.shared.slugify_service import slugify_for_branch
 
 logger = build_logger(__name__)
 

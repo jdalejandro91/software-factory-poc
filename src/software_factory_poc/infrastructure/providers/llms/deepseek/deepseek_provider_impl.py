@@ -15,8 +15,8 @@ from software_factory_poc.infrastructure.providers.llms.deepseek.mappers.deepsee
 from software_factory_poc.infrastructure.providers.llms.deepseek.mappers.deepseek_response_mapper import (
     DeepSeekResponseMapper,
 )
-from software_factory_poc.providers.logging.correlation_id_context import CorrelationIdContext
-from software_factory_poc.providers.retry.retry_policy import RetryPolicy
+from software_factory_poc.infrastructure.observability.logging.correlation_id_context import CorrelationIdContext
+from software_factory_poc.infrastructure.common.retry.retry_policy import RetryPolicy
 
 
 @dataclass(frozen=True, slots=True)

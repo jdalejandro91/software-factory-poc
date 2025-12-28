@@ -4,7 +4,7 @@ from software_factory_poc.application.ports.tools.jira_provider import JiraProvi
 from software_factory_poc.infrastructure.providers.tools.jira.clients.jira_http_client import (
     JiraHttpClient,
 )
-from software_factory_poc.observability.logger_factory_service import build_logger
+from software_factory_poc.infrastructure.observability.logger_factory_service import build_logger
 
 logger = build_logger(__name__)
 

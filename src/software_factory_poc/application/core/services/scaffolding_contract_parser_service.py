@@ -5,7 +5,7 @@ import yaml
 from pydantic import ValidationError
 
 from software_factory_poc.application.core.entities.scaffolding.scaffolding_contract import ScaffoldingContractModel
-from software_factory_poc.observability.logger_factory_service import build_logger
+from software_factory_poc.infrastructure.observability.logger_factory_service import build_logger
 
 logger = build_logger(__name__)
 

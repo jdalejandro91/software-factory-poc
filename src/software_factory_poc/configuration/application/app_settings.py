@@ -3,7 +3,7 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from software_factory_poc.config.allowlists_config import (
+from software_factory_poc.configuration.allowlists_config import (
     DEFAULT_ALLOWLISTED_GITLAB_PROJECT_IDS,
     DEFAULT_ALLOWLISTED_TEMPLATE_IDS,
     DEFAULT_PROTECTED_BRANCHES,

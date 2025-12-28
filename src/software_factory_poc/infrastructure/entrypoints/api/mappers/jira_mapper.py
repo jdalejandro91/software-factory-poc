@@ -1,7 +1,7 @@
 import re
 from software_factory_poc.infrastructure.entrypoints.api.dtos.jira_webhook_dto import JiraWebhookDTO
 from software_factory_poc.application.core.entities.scaffolding.scaffolding_request import ScaffoldingRequest
-from software_factory_poc.observability.logger_factory_service import build_logger
+from software_factory_poc.infrastructure.observability.logger_factory_service import build_logger
 
 logger = build_logger(__name__)
 

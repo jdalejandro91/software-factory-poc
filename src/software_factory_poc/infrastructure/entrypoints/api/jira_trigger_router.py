@@ -55,10 +55,10 @@ from software_factory_poc.infrastructure.repositories.idempotency_store_file_ada
 from software_factory_poc.infrastructure.repositories.run_result_store_file_adapter import (
     RunResultStoreFileAdapter,
 )
-from software_factory_poc.observability.logger_factory_service import build_logger
-from software_factory_poc.orchestration.step_runner_service import StepRunnerService
-from software_factory_poc.policy.poc_policy_service import PocPolicyService
-from software_factory_poc.providers.facade.llm_bridge import LlmBridge
+from software_factory_poc.infrastructure.observability.logger_factory_service import build_logger
+from software_factory_poc.application.usecases.orchestration.step_runner_service import StepRunnerService
+from software_factory_poc.application.core.policies.poc_policy_service import PocPolicyService
+from software_factory_poc.infrastructure.providers.facade.llm_bridge import LlmBridge
 
 logger = build_logger(__name__)
 router = APIRouter()

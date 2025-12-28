@@ -2,7 +2,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from software_factory_poc.observability.logger_factory_service import (
+from software_factory_poc.infrastructure.observability.logger_factory_service import (
     build_logger,
     log_context_string,
 )

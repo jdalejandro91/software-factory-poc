@@ -15,8 +15,8 @@ from software_factory_poc.infrastructure.providers.llms.gemini.mappers.gemini_re
 from software_factory_poc.infrastructure.providers.llms.gemini.mappers.gemini_response_mapper import (
     GeminiResponseMapper,
 )
-from software_factory_poc.providers.logging.correlation_id_context import CorrelationIdContext
-from software_factory_poc.providers.retry.retry_policy import RetryPolicy
+from software_factory_poc.infrastructure.observability.logging.correlation_id_context import CorrelationIdContext
+from software_factory_poc.infrastructure.common.retry.retry_policy import RetryPolicy
 
 
 @dataclass(frozen=True, slots=True)

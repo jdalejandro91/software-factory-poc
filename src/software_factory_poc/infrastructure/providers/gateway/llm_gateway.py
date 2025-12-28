@@ -8,7 +8,7 @@ from software_factory_poc.application.core.entities.llm_response import LlmRespo
 from software_factory_poc.application.core.exceptions.configuration_error import ConfigurationError
 from software_factory_poc.application.core.value_objects.provider_name import ProviderName
 from software_factory_poc.application.ports.llms.llm_provider import LlmProvider
-from software_factory_poc.providers.gateway.model_allowlist import ModelAllowlist
+from software_factory_poc.infrastructure.providers.gateway.model_allowlist import ModelAllowlist
 
 
 @dataclass(frozen=True, slots=True)

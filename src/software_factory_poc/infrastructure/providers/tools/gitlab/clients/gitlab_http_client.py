@@ -3,7 +3,7 @@ from typing import Any
 import httpx
 
 from software_factory_poc.configuration.tools.tool_settings import ToolSettings
-from software_factory_poc.observability.logger_factory_service import build_logger
+from software_factory_poc.infrastructure.observability.logger_factory_service import build_logger
 
 logger = build_logger(__name__)
 

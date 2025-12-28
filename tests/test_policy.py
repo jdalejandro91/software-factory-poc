@@ -7,7 +7,7 @@ from software_factory_poc.application.core.entities.scaffolding.scaffolding_cont
     GitLabTargetModel,
     ScaffoldingContractModel,
 )
-from software_factory_poc.policy.poc_policy_service import PocPolicyService, PolicyViolationError
+from software_factory_poc.application.core.policies.poc_policy_service import PocPolicyService, PolicyViolationError
 
 
 @pytest.fixture
