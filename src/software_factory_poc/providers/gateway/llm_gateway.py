@@ -3,12 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Mapping
 
-from llm_bridge.core.entities.llm_request import LlmRequest
-from llm_bridge.core.entities.llm_response import LlmResponse
-from llm_bridge.core.exceptions.configuration_error import ConfigurationError
-from llm_bridge.core.value_objects.provider_name import ProviderName
-from llm_bridge.providers.gateway.model_allowlist import ModelAllowlist
-from llm_bridge.providers.ports.llm_provider import LlmProvider
+from software_factory_poc.core.entities.llm_request import LlmRequest
+from software_factory_poc.core.entities.llm_response import LlmResponse
+from software_factory_poc.core.exceptions.configuration_error import ConfigurationError
+from software_factory_poc.core.value_objects.provider_name import ProviderName
+from software_factory_poc.providers.gateway.model_allowlist import ModelAllowlist
+from software_factory_poc.providers.ports.llm_provider import LlmProvider
 
 
 @dataclass(frozen=True, slots=True)

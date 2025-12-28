@@ -5,7 +5,7 @@ from typing import Awaitable, Callable, TypeVar
 
 from tenacity import AsyncRetrying, RetryError, retry_if_exception, stop_after_attempt, wait_exponential_jitter
 
-from llm_bridge.core.exceptions.provider_error import ProviderError
+from software_factory_poc.core.exceptions.provider_error import ProviderError
 
 _T = TypeVar("_T")
 

@@ -3,11 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from llm_bridge.core.value_objects.generation_config import GenerationConfig
-from llm_bridge.core.value_objects.message import Message
-from llm_bridge.core.value_objects.model_id import ModelId
-from llm_bridge.core.value_objects.output_constraints import OutputConstraints
-from llm_bridge.core.value_objects.trace_context import TraceContext
+from software_factory_poc.core.value_objects.generation_config import GenerationConfig
+from software_factory_poc.core.value_objects.message import Message
+from software_factory_poc.core.value_objects.model_id import ModelId
+from software_factory_poc.core.value_objects.output_constraints import OutputConstraints
+from software_factory_poc.core.value_objects.trace_context import TraceContext
 
 
 @dataclass(frozen=True, slots=True)

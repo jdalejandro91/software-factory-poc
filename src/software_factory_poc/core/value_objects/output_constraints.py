@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from llm_bridge.core.value_objects.output_format import OutputFormat
-from llm_bridge.core.value_objects.structured_output_schema import StructuredOutputSchema
+from software_factory_poc.core.value_objects.output_format import OutputFormat
+from software_factory_poc.core.value_objects.structured_output_schema import StructuredOutputSchema
 
 
 @dataclass(frozen=True, slots=True)

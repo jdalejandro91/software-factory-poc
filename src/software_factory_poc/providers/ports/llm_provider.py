@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from llm_bridge.core.entities.llm_request import LlmRequest
-from llm_bridge.core.entities.llm_response import LlmResponse
-from llm_bridge.core.value_objects.provider_name import ProviderName
+from software_factory_poc.core.entities.llm_request import LlmRequest
+from software_factory_poc.core.entities.llm_response import LlmResponse
+from software_factory_poc.core.value_objects.provider_name import ProviderName
 
 
 class LlmProvider(ABC):

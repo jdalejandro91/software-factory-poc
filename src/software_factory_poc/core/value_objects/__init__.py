@@ -1,13 +1,13 @@
-from llm_bridge.core.value_objects.generation_config import GenerationConfig
-from llm_bridge.core.value_objects.message import Message
-from llm_bridge.core.value_objects.message_role import MessageRole
-from llm_bridge.core.value_objects.model_id import ModelId
-from llm_bridge.core.value_objects.output_constraints import OutputConstraints
-from llm_bridge.core.value_objects.output_format import OutputFormat
-from llm_bridge.core.value_objects.provider_name import ProviderName
-from llm_bridge.core.value_objects.structured_output_schema import StructuredOutputSchema
-from llm_bridge.core.value_objects.token_usage import TokenUsage
-from llm_bridge.core.value_objects.trace_context import TraceContext
+from software_factory_poc.core.value_objects.generation_config import GenerationConfig
+from software_factory_poc.core.value_objects.message import Message
+from software_factory_poc.core.value_objects.message_role import MessageRole
+from software_factory_poc.core.value_objects.model_id import ModelId
+from software_factory_poc.core.value_objects.output_constraints import OutputConstraints
+from software_factory_poc.core.value_objects.output_format import OutputFormat
+from software_factory_poc.core.value_objects.provider_name import ProviderName
+from software_factory_poc.core.value_objects.structured_output_schema import StructuredOutputSchema
+from software_factory_poc.core.value_objects.token_usage import TokenUsage
+from software_factory_poc.core.value_objects.trace_context import TraceContext
 
 __all__ = [
     "GenerationConfig",

@@ -4,15 +4,15 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from llm_bridge.core.entities.llm_request import LlmRequest
-from llm_bridge.core.entities.llm_response import LlmResponse
-from llm_bridge.core.exceptions.provider_error import ProviderError
-from llm_bridge.core.value_objects.provider_name import ProviderName
-from llm_bridge.providers.deepseek.deepseek_request_mapper import DeepSeekRequestMapper
-from llm_bridge.providers.deepseek.deepseek_response_mapper import DeepSeekResponseMapper
-from llm_bridge.providers.logging.correlation_id_context import CorrelationIdContext
-from llm_bridge.providers.ports.llm_provider import LlmProvider
-from llm_bridge.providers.retry.retry_policy import RetryPolicy
+from software_factory_poc.core.entities.llm_request import LlmRequest
+from software_factory_poc.core.entities.llm_response import LlmResponse
+from software_factory_poc.core.exceptions.provider_error import ProviderError
+from software_factory_poc.core.value_objects.provider_name import ProviderName
+from software_factory_poc.providers.deepseek.deepseek_request_mapper import DeepSeekRequestMapper
+from software_factory_poc.providers.deepseek.deepseek_response_mapper import DeepSeekResponseMapper
+from software_factory_poc.providers.logging.correlation_id_context import CorrelationIdContext
+from software_factory_poc.providers.ports.llm_provider import LlmProvider
+from software_factory_poc.providers.retry.retry_policy import RetryPolicy
 
 
 @dataclass(frozen=True, slots=True)

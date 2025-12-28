@@ -3,10 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from llm_bridge.core.entities.llm_request import LlmRequest
-from llm_bridge.core.value_objects.message import Message
-from llm_bridge.core.value_objects.message_role import MessageRole
-from llm_bridge.core.value_objects.output_format import OutputFormat
+from software_factory_poc.core.entities.llm_request import LlmRequest
+from software_factory_poc.core.value_objects.message import Message
+from software_factory_poc.core.value_objects.message_role import MessageRole
+from software_factory_poc.core.value_objects.output_format import OutputFormat
 
 
 @dataclass(frozen=True, slots=True)

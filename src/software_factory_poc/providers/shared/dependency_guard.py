@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from llm_bridge.core.exceptions.dependency_error import DependencyError
+from software_factory_poc.core.exceptions.dependency_error import DependencyError
 
 
 @dataclass(frozen=True, slots=True)

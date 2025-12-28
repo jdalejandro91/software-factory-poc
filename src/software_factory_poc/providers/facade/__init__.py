@@ -1,3 +1,3 @@
-from llm_bridge.providers.facade.llm_bridge import LlmBridge
+from software_factory_poc.providers.facade.llm_bridge import LlmBridge
 
 __all__ = ["LlmBridge"]

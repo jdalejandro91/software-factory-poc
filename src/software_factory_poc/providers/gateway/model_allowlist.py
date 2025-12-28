@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from llm_bridge.core.exceptions.configuration_error import ConfigurationError
-from llm_bridge.core.value_objects.model_id import ModelId
+from software_factory_poc.core.exceptions.configuration_error import ConfigurationError
+from software_factory_poc.core.value_objects.model_id import ModelId
 
 
 @dataclass(frozen=True, slots=True)

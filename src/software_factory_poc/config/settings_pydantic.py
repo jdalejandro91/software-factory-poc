@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     )
     runtime_data_dir: Path = Field(default=Path("runtime_data"))
 
+    # LLM Config
+    openai_api_key: Optional[SecretStr] = None
+    llm_allowed_models: List[str] = Field(default_factory=list)
+
     # Policies / Constraints
     default_target_base_branch: str = "main"
     
@@ -82,6 +86,10 @@ class Settings(BaseSettings):
             # but usually we want to enforce it if calling gitlab.
             # This method can be called explicitly when starting a GitLab flow.
             raise ValueError("GitLab token is missing in settings.")
+
+    def validate_openai_credentials(self) -> None:
+        if not self.openai_api_key:
+            raise ValueError("OpenAI API Key is required for AI generation features.")
 
     model_config = {
         "env_file": None, # Explicitly do not read .env automatically as per requirements

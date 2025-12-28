@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from llm_bridge.core.value_objects.provider_name import ProviderName
+from software_factory_poc.core.value_objects.provider_name import ProviderName
 
 
 @dataclass(frozen=True, slots=True)

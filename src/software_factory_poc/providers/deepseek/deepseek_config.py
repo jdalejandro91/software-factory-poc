@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from llm_bridge.core.exceptions.configuration_error import ConfigurationError
+from software_factory_poc.core.exceptions.configuration_error import ConfigurationError
 
 
 @dataclass(frozen=True, slots=True)

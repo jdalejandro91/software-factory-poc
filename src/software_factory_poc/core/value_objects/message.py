@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from llm_bridge.core.value_objects.message_role import MessageRole
+from software_factory_poc.core.value_objects.message_role import MessageRole
 
 
 @dataclass(frozen=True, slots=True)

@@ -5,8 +5,8 @@ import logging.config
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from llm_bridge.providers.logging.correlation_id_context import CorrelationIdContext
-from llm_bridge.providers.logging.correlation_id_filter import CorrelationIdFilter
+from software_factory_poc.providers.logging.correlation_id_context import CorrelationIdContext
+from software_factory_poc.providers.logging.correlation_id_filter import CorrelationIdFilter
 
 
 @dataclass(frozen=True, slots=True)

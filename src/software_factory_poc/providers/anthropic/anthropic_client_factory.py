@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from llm_bridge.providers.anthropic.anthropic_config import AnthropicConfig
-from llm_bridge.providers.shared.dependency_guard import DependencyGuard
+from software_factory_poc.providers.anthropic.anthropic_config import AnthropicConfig
+from software_factory_poc.providers.shared.dependency_guard import DependencyGuard
 
 
 @dataclass(frozen=True, slots=True)

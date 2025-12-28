@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from llm_bridge.core.value_objects.model_id import ModelId
-from llm_bridge.core.value_objects.token_usage import TokenUsage
+from software_factory_poc.core.value_objects.model_id import ModelId
+from software_factory_poc.core.value_objects.token_usage import TokenUsage
 
 
 @dataclass(frozen=True, slots=True)

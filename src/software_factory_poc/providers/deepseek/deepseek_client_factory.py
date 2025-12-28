@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from llm_bridge.providers.deepseek.deepseek_config import DeepSeekConfig
-from llm_bridge.providers.shared.dependency_guard import DependencyGuard
+from software_factory_poc.providers.deepseek.deepseek_config import DeepSeekConfig
+from software_factory_poc.providers.shared.dependency_guard import DependencyGuard
 
 
 @dataclass(frozen=True, slots=True)
