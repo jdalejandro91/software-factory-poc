@@ -1,5 +1,7 @@
-from typing import Any, Dict
+from typing import Any
+
 from pydantic import BaseModel
+
 
 class GitLabMergeRequestDataModel(BaseModel):
     mr_url: str
@@ -8,7 +10,7 @@ class GitLabMergeRequestDataModel(BaseModel):
 
 
 class GitLabResultMapperService:
-    def map_mr(self, raw_data: Dict[str, Any]) -> GitLabMergeRequestDataModel:
+    def map_mr(self, raw_data: dict[str, Any]) -> GitLabMergeRequestDataModel:
         """
         Maps raw GitLab MR response to internal data model.
         """

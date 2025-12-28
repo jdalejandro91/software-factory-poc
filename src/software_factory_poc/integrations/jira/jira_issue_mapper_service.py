@@ -1,5 +1,7 @@
-from typing import Any, Dict, Optional
+from typing import Any
+
 from pydantic import BaseModel
+
 
 class JiraIssueDataModel(BaseModel):
     issue_key: str
@@ -8,7 +10,7 @@ class JiraIssueDataModel(BaseModel):
 
 
 class JiraIssueMapperService:
-    def map_issue(self, raw_data: Dict[str, Any]) -> JiraIssueDataModel:
+    def map_issue(self, raw_data: dict[str, Any]) -> JiraIssueDataModel:
         """
         Maps raw Jira JSON response to internal data model.
         Handles ADF description best-effort extraction.
@@ -41,7 +43,7 @@ class JiraIssueMapperService:
             
         return str(description_raw)
 
-    def _extract_adf_text(self, node: Dict[str, Any]) -> str:
+    def _extract_adf_text(self, node: dict[str, Any]) -> str:
         text_parts = []
         node_type = node.get("type", "")
         

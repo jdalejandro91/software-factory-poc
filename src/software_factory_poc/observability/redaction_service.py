@@ -1,5 +1,5 @@
 import re
-from typing import Any, Dict, List, Union
+from typing import Any
 
 # Regex patterns for common secrets
 SECRET_PATTERNS = [
@@ -46,7 +46,7 @@ def redact_value(value: Any) -> Any:
         return [redact_value(item) for item in value]
     return value
 
-def redact_dict(obj: Dict[str, Any]) -> Dict[str, Any]:
+def redact_dict(obj: dict[str, Any]) -> dict[str, Any]:
     """
     Redacts sensitive keys and values in a dictionary (recursive).
     """

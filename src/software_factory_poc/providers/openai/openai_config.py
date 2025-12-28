@@ -13,7 +13,7 @@ class OpenAiConfig:
     max_retries: int = 0
 
     @staticmethod
-    def from_env(prefix: str = "OPENAI_") -> "OpenAiConfig":
+    def from_env(prefix: str = "OPENAI_") -> OpenAiConfig:
         key = os.getenv(f"{prefix}API_KEY")
         if not key:
             raise ConfigurationError(f"{prefix}API_KEY is required")

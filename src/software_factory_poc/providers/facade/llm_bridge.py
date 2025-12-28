@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping
 
 from software_factory_poc.config.settings_pydantic import Settings
 from software_factory_poc.core.entities.llm_request import LlmRequest
 from software_factory_poc.core.entities.llm_response import LlmResponse
-from software_factory_poc.core.exceptions.configuration_error import ConfigurationError
 from software_factory_poc.core.value_objects.provider_name import ProviderName
 from software_factory_poc.providers.gateway.llm_gateway import LlmGateway
 from software_factory_poc.providers.gateway.model_allowlist import ModelAllowlist
@@ -34,7 +33,7 @@ class LlmBridge:
         LoggingConfigurator(self.correlation).configure(level)
 
     @staticmethod
-    def from_settings(settings: Settings) -> "LlmBridge":
+    def from_settings(settings: Settings) -> LlmBridge:
         correlation = CorrelationIdContext()
         
         allowed_models = frozenset(settings.llm_allowed_models)

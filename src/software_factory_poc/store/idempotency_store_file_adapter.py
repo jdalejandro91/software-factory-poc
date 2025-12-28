@@ -1,8 +1,6 @@
 import json
 import os
 import tempfile
-from pathlib import Path
-from typing import Dict, Optional
 
 from software_factory_poc.config.settings_pydantic import Settings
 from software_factory_poc.observability.logger_factory_service import build_logger
@@ -24,11 +22,11 @@ class IdempotencyStoreFileAdapter:
         if not self.file_path.exists():
             self._write_json({})
 
-    def _read_json(self) -> Dict[str, str]:
+    def _read_json(self) -> dict[str, str]:
         if not self.file_path.exists():
             return {}
         try:
-            with open(self.file_path, "r", encoding="utf-8") as f:
+            with open(self.file_path, encoding="utf-8") as f:
                 content = f.read().strip()
                 if not content:
                     return {}
@@ -37,7 +35,7 @@ class IdempotencyStoreFileAdapter:
             logger.warning(f"Failed to read idempotency store: {e}. Returning empty.")
             return {}
 
-    def _write_json(self, data: Dict[str, str]):
+    def _write_json(self, data: dict[str, str]):
         """
         Atomic write: write to temp file then rename.
         """
@@ -56,7 +54,7 @@ class IdempotencyStoreFileAdapter:
                 os.remove(tmp_path)
             raise
 
-    def get(self, key: str) -> Optional[str]:
+    def get(self, key: str) -> str | None:
         data = self._read_json()
         return data.get(key)
 

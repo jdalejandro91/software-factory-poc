@@ -1,6 +1,5 @@
 from enum import StrEnum
 from pathlib import Path
-from typing import List, Optional
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings
@@ -29,13 +28,13 @@ class Settings(BaseSettings):
     # Jira Config
     jira_base_url: str = Field(..., description="Jira Base URL, e.g. https://myorg.atlassian.net")
     jira_auth_mode: JiraAuthMode = Field(default=JiraAuthMode.CLOUD_API_TOKEN)
-    jira_user_email: Optional[str] = None
-    jira_api_token: Optional[SecretStr] = None
-    jira_bearer_token: Optional[SecretStr] = None
+    jira_user_email: str | None = None
+    jira_api_token: SecretStr | None = None
+    jira_bearer_token: SecretStr | None = None
 
     # GitLab Config
     gitlab_base_url: str = "https://gitlab.com"
-    gitlab_token: Optional[SecretStr] = None
+    gitlab_token: SecretStr | None = None
 
     # Templates & Filesystem
     template_catalog_root: Path = Field(
@@ -44,20 +43,20 @@ class Settings(BaseSettings):
     runtime_data_dir: Path = Field(default=Path("runtime_data"))
 
     # LLM Config
-    openai_api_key: Optional[SecretStr] = None
-    llm_allowed_models: List[str] = Field(default_factory=list)
+    openai_api_key: SecretStr | None = None
+    llm_allowed_models: list[str] = Field(default_factory=list)
 
     # Policies / Constraints
     default_target_base_branch: str = "main"
     
-    allowlisted_template_ids: List[str] = Field(
+    allowlisted_template_ids: list[str] = Field(
         default_factory=lambda: DEFAULT_ALLOWLISTED_TEMPLATE_IDS
     )
-    allowlisted_gitlab_project_ids: List[int] = Field(
+    allowlisted_gitlab_project_ids: list[int] = Field(
         default_factory=lambda: DEFAULT_ALLOWLISTED_GITLAB_PROJECT_IDS
     )
-    allowlisted_groups: List[str] = ["jdalejandro91-group"] # Default allowed namespace
-    protected_branches: List[str] = Field(
+    allowlisted_groups: list[str] = ["jdalejandro91-group"] # Default allowed namespace
+    protected_branches: list[str] = Field(
         default_factory=lambda: DEFAULT_PROTECTED_BRANCHES
     )
 
@@ -86,6 +85,19 @@ class Settings(BaseSettings):
             # but usually we want to enforce it if calling gitlab.
             # This method can be called explicitly when starting a GitLab flow.
             raise ValueError("GitLab token is missing in settings.")
+
+    # Confluence Config
+    confluence_base_url: str = Field(..., description="Confluence Base URL")
+    confluence_user_email: str = Field(default="jacadenac@unal.edu.co")
+    confluence_api_token: SecretStr = Field(..., description="Confluence API Token")
+    architecture_doc_page_id: str = Field(default="3571713")
+
+    def validate_confluence_credentials(self) -> None:
+        """Validates that Confluence credentials are present."""
+        if not self.confluence_api_token:
+            raise ValueError("Confluence API Token is required.")
+        if not self.confluence_user_email:
+            raise ValueError("Confluence User Email is required.")
 
     def validate_openai_credentials(self) -> None:
         if not self.openai_api_key:

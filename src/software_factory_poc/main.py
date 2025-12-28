@@ -1,6 +1,8 @@
 import uvicorn
+
 from software_factory_poc.api.app_factory import create_app
 from software_factory_poc.config.settings_pydantic import Settings
+
 
 def dev():
     """Run the development server."""

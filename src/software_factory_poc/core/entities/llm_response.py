@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 from software_factory_poc.core.value_objects.model_id import ModelId
 from software_factory_poc.core.value_objects.token_usage import TokenUsage

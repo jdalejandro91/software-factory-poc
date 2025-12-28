@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import logging
 import logging.config
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 from software_factory_poc.providers.logging.correlation_id_context import CorrelationIdContext
 from software_factory_poc.providers.logging.correlation_id_filter import CorrelationIdFilter

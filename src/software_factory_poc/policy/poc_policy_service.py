@@ -1,6 +1,5 @@
 from software_factory_poc.config.settings_pydantic import Settings
 from software_factory_poc.contracts.scaffolding_contract_model import ScaffoldingContractModel
-from software_factory_poc.templates.template_manifest_model import TemplateManifestModel
 
 
 class PolicyViolationError(Exception):
@@ -15,7 +14,6 @@ class PocPolicyService:
     def validate_request(
         self, 
         contract: ScaffoldingContractModel,
-        manifest: TemplateManifestModel,
         generated_branch_name: str
     ):
         """

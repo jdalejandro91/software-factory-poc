@@ -1,11 +1,11 @@
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from software_factory_poc.observability.logger_factory_service import build_logger
 
 from software_factory_poc.api.health_router import router as health_router
 from software_factory_poc.api.jira_trigger_router import router as jira_router
 from software_factory_poc.config.settings_pydantic import Settings
+from software_factory_poc.observability.logger_factory_service import build_logger
 
 logger = build_logger(__name__)
 

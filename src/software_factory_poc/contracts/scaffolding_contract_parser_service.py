@@ -1,6 +1,5 @@
 import json
 import re
-from typing import Optional
 
 import yaml
 from pydantic import ValidationError
@@ -56,7 +55,7 @@ class ScaffoldingContractParserService:
                 safe_snippet=snippet
             ) from e
 
-    def _extract_block(self, text: str) -> Optional[str]:
+    def _extract_block(self, text: str) -> str | None:
         """
         Finds the content using multiple patterns (Markdown, Jira Wiki, Legacy).
         Relaxed regex to handle missing newlines or tight spacing.

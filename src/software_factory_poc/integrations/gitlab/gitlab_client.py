@@ -1,7 +1,7 @@
-from typing import Any, Dict
 import urllib.parse
+from typing import Any
+
 import httpx
-from pydantic import SecretStr
 
 from software_factory_poc.config.settings_pydantic import Settings
 from software_factory_poc.integrations.gitlab.gitlab_payload_builder_service import (
@@ -26,7 +26,7 @@ class GitLabClient:
     def _validate_config(self):
         self.settings.validate_gitlab_credentials()
 
-    def _get_headers(self) -> Dict[str, str]:
+    def _get_headers(self) -> dict[str, str]:
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
@@ -53,7 +53,7 @@ class GitLabClient:
             data = response.json()
             return data["id"]
 
-    def get_branch(self, project_id: int, branch_name: str) -> Dict[str, Any] | None:
+    def get_branch(self, project_id: int, branch_name: str) -> dict[str, Any] | None:
         """
         Checks if a branch exists. Returns branch info or None.
         """
@@ -66,7 +66,7 @@ class GitLabClient:
                 return response.json()
             return None
 
-    def create_branch(self, project_id: int, branch_name: str, ref: str) -> Dict[str, Any]:
+    def create_branch(self, project_id: int, branch_name: str, ref: str) -> dict[str, Any]:
         """
         Creates a new branch from a reference (e.g. main).
         Idempotent: If branch exists, returns existing info.
@@ -106,9 +106,9 @@ class GitLabClient:
         self, 
         project_id: int, 
         branch_name: str, 
-        files_map: Dict[str, str], 
+        files_map: dict[str, str], 
         commit_message: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Commits files to a branch.
         Smart Upsert: Checks if file exists to determine 'create' or 'update' action.
@@ -136,7 +136,7 @@ class GitLabClient:
             response.raise_for_status()
             return response.json()
 
-    def create_merge_request(self, project_id: int, source_branch: str, target_branch: str, title: str, description: str = None) -> Dict[str, Any]:
+    def create_merge_request(self, project_id: int, source_branch: str, target_branch: str, title: str, description: str = None) -> dict[str, Any]:
         """
         Crea un MR. Si ya existe (409 Conflict), busca el existente y devuelve su objeto completo (Idempotencia).
         """
@@ -164,7 +164,7 @@ class GitLabClient:
             logger.error(f"Failed to create MR: {e.response.text}")
             raise e
 
-    def _get_existing_mr(self, project_id: int, source_branch: str, target_branch: str) -> Dict[str, Any]:
+    def _get_existing_mr(self, project_id: int, source_branch: str, target_branch: str) -> dict[str, Any]:
         """
         Helper para buscar un MR existente cuando falla la creación por duplicado.
         """

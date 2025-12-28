@@ -1,5 +1,6 @@
 import re
 
+
 def slugify_for_branch(text: str) -> str:
     """
     Creates a slug suitable for git branches from the provided text.

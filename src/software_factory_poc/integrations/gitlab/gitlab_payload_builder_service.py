@@ -1,19 +1,20 @@
-from typing import Any, Dict, List
+from typing import Any
+
 
 class GitLabPayloadBuilderService:
     def build_commit_payload(
         self, 
-        files_map: Dict[str, str], 
+        files_map: dict[str, str], 
         branch_name: str, 
         message: str,
-        files_action_map: Dict[str, str] = None
-    ) -> Dict[str, Any]:
+        files_action_map: dict[str, str] = None
+    ) -> dict[str, Any]:
         """
         Builds the JSON payload for the GitLab Commits API.
         Transforms files_map {path: content} into actions list.
         :param files_action_map: Optional dict mapping file_path -> "create"|"update"
         """
-        actions: List[Dict[str, str]] = []
+        actions: list[dict[str, str]] = []
         files_action_map = files_action_map or {}
         
         for file_path, content in files_map.items():

@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 
+
 class JiraUserNode(BaseModel):
     name: str | None = None
     displayName: str | None = None

@@ -1,9 +1,9 @@
 import base64
-from typing import Any, Dict, Union, Optional
+from typing import Any
 
 import httpx
 
-from software_factory_poc.config.settings_pydantic import Settings, JiraAuthMode
+from software_factory_poc.config.settings_pydantic import JiraAuthMode, Settings
 from software_factory_poc.observability.logger_factory_service import build_logger
 
 logger = build_logger(__name__)
@@ -18,7 +18,7 @@ class JiraClient:
     def _validate_config(self):
         self.settings.validate_jira_credentials()
 
-    def _get_headers(self) -> Dict[str, str]:
+    def _get_headers(self) -> dict[str, str]:
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
@@ -46,7 +46,7 @@ class JiraClient:
 
         return headers
 
-    def get_issue(self, issue_key: str) -> Dict[str, Any]:
+    def get_issue(self, issue_key: str) -> dict[str, Any]:
         url = f"{self.base_url}/rest/api/3/issue/{issue_key}"
         logger.info(f"Fetching Jira issue: {url}")
         
@@ -55,7 +55,7 @@ class JiraClient:
             response.raise_for_status()
             return response.json()
 
-    def add_comment(self, issue_key: str, content: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
+    def add_comment(self, issue_key: str, content: str | dict[str, Any]) -> dict[str, Any]:
         """
         Agrega un comentario. Soporta ADF nativo (Dict) o texto simple (str).
         """

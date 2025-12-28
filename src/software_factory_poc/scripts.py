@@ -1,6 +1,7 @@
 import subprocess
 import sys
 
+
 def test():
     """Run tests using pytest."""
     cmd = ["pytest", "tests"]

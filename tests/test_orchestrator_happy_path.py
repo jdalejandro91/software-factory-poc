@@ -1,10 +1,16 @@
+from unittest.mock import AsyncMock
+
 import pytest
 import respx
-import os
 from httpx import Response
+
 from software_factory_poc.api.jira_trigger_router import get_orchestrator
 from software_factory_poc.contracts.artifact_result_model import ArtifactRunStatusEnum
-from software_factory_poc.contracts.scaffolding_contract_parser_service import BLOCK_START, BLOCK_END
+from software_factory_poc.contracts.scaffolding_contract_parser_service import (
+    BLOCK_END,
+    BLOCK_START,
+)
+
 
 @pytest.fixture
 def full_orchestrator(settings):
@@ -13,30 +19,23 @@ def full_orchestrator(settings):
 
 @respx.mock
 def test_orchestrator_happy_path(full_orchestrator, settings):
-    # 1. Setup Template
-    t_id = "corp_nodejs_api"
-    t_dir = settings.template_catalog_root / t_id
-    os.makedirs(t_dir, exist_ok=True)
-    (t_dir / "template_manifest.yaml").write_text("""
-template_version: "1"
-description: "NodeJS API"
-expected_paths: ["README.md"]
-supported_vars: ["service_name"]
-""")
-    (t_dir / "README.md.j2").write_text("# {{ service_name }}")
+    # 1. Setup GenAI Mock
+    full_orchestrator.genai_service.generate_scaffolding = AsyncMock(
+        return_value={"README.md": "# GenAI Generated Service"}
+    )
 
     # 2. Mock Jira Get Issue
     issue_key = "PROJ-1"
     contract = f"""
 {BLOCK_START}
-contract_version: "1"
-template_id: "{t_id}"
-service_slug: "my-svc"
-gitlab:
+version: "1"
+template: "any-template"
+target:
   project_id: 123
-vars:
+parameters:
   service_name: "My Best Service"
 {BLOCK_END}
+Just some description that will be hashed.
 """
     
     respx.get(f"{settings.jira_base_url}/rest/api/3/issue/{issue_key}").mock(
@@ -50,9 +49,18 @@ vars:
     )
 
     # 3. Mock GitLab Calls
-    # Create Branch
+    # Check Branch (GET) - 404 Not Found (New Branch)
+    # branch_name = feature/proj-1-my-best-service-scaffold
+    respx.get(f"{settings.gitlab_base_url}/api/v4/projects/123/repository/branches/feature%2Fproj-1-my-best-service-scaffold").mock(
+        return_value=Response(404)
+    )
+    # Create Branch (POST)
     respx.post(f"{settings.gitlab_base_url}/api/v4/projects/123/repository/branches").mock(
-        return_value=Response(201, json={"name": "scaffold/proj-1-my-svc"})
+        return_value=Response(201, json={"name": "feature/proj-1-my-best-service-scaffold", "web_url": "http://gitlab.com/branch"})
+    )
+    # Check File Existence (HEAD) - 404 (New File)
+    respx.head(f"{settings.gitlab_base_url}/api/v4/projects/123/repository/files/README.md").mock(
+        return_value=Response(404)
     )
     # Commit
     respx.post(f"{settings.gitlab_base_url}/api/v4/projects/123/repository/commits").mock(
@@ -86,3 +94,7 @@ vars:
     payload = jira_comment_mock.calls.last.request.read()
     assert b"Scaffolding Success" in payload
     assert mock_mr_url.encode() in payload
+    
+    # Verify GenAI was called
+    full_orchestrator.genai_service.generate_scaffolding.assert_called_once()
+

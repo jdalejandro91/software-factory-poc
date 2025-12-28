@@ -1,3 +1,3 @@
-from .settings_pydantic import Settings, JiraAuthMode
+from .settings_pydantic import JiraAuthMode, Settings
 
 __all__ = ["Settings", "JiraAuthMode"]

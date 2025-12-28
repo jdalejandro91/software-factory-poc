@@ -1,5 +1,4 @@
 from enum import StrEnum
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -15,8 +14,8 @@ class ArtifactResultModel(BaseModel):
     status: ArtifactRunStatusEnum
     issue_key: str
     
-    mr_url: Optional[str] = None
-    branch_name: Optional[str] = None
-    jira_comment_id: Optional[str] = None
+    mr_url: str | None = None
+    branch_name: str | None = None
+    jira_comment_id: str | None = None
     
-    error_summary: Optional[str] = None  # Safe summary for public consumption
+    error_summary: str | None = None  # Safe summary for public consumption

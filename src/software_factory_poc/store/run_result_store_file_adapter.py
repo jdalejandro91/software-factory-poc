@@ -1,7 +1,6 @@
 import json
 import os
 import tempfile
-from typing import Dict, Optional
 
 from software_factory_poc.config.settings_pydantic import Settings
 from software_factory_poc.contracts.artifact_result_model import ArtifactResultModel
@@ -24,11 +23,11 @@ class RunResultStoreFileAdapter:
         if not self.file_path.exists():
             self._write_json({})
 
-    def _read_json(self) -> Dict[str, dict]:
+    def _read_json(self) -> dict[str, dict]:
         if not self.file_path.exists():
             return {}
         try:
-            with open(self.file_path, "r", encoding="utf-8") as f:
+            with open(self.file_path, encoding="utf-8") as f:
                 content = f.read().strip()
                 if not content:
                     return {}
@@ -37,7 +36,7 @@ class RunResultStoreFileAdapter:
             logger.warning(f"Failed to read run result store: {e}. Returning empty.")
             return {}
 
-    def _write_json(self, data: Dict[str, dict]):
+    def _write_json(self, data: dict[str, dict]):
         try:
             with tempfile.NamedTemporaryFile("w", dir=self.store_dir, delete=False, encoding="utf-8") as tmp:
                 json.dump(data, tmp, indent=2)
@@ -51,7 +50,7 @@ class RunResultStoreFileAdapter:
                 os.remove(tmp_path)
             raise
 
-    def get(self, run_id: str) -> Optional[ArtifactResultModel]:
+    def get(self, run_id: str) -> ArtifactResultModel | None:
         data = self._read_json()
         item = data.get(run_id)
         if item:

@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import Any, Dict, Optional
+from typing import Any
 
 # Basic configuration to ensure logs go to stdout
 logging.basicConfig(
@@ -17,11 +17,11 @@ def build_logger(name: str) -> logging.Logger:
     return logging.getLogger(name)
 
 def build_log_context(
-    run_id: Optional[str] = None,
-    issue_key: Optional[str] = None,
-    step_name: Optional[str] = None,
-    extra: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
+    run_id: str | None = None,
+    issue_key: str | None = None,
+    step_name: str | None = None,
+    extra: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """
     Builds a dictionary for use in logging 'extra' fields or structural logging.
     Since standard python logging %s formatting doesn't automatically print 'extra',
@@ -50,9 +50,9 @@ def build_log_context(
     return context
 
 def log_context_string(
-    run_id: Optional[str] = None,
-    issue_key: Optional[str] = None,
-    step_name: Optional[str] = None
+    run_id: str | None = None,
+    issue_key: str | None = None,
+    step_name: str | None = None
 ) -> str:
     """
     Helper to create a standard prefix string '[run_id=... issue_key=...]'

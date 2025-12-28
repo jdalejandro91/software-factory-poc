@@ -10,5 +10,5 @@ class TraceContext:
     request_id: str | None = None
 
     @staticmethod
-    def create() -> "TraceContext":
+    def create() -> TraceContext:
         return TraceContext(correlation_id=str(uuid4()))

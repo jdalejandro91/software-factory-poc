@@ -1,15 +1,16 @@
 
 import sys
-import os
 from pathlib import Path
 
 # Add src to path
 sys.path.append(str(Path.cwd() / "src"))
 
 from pydantic import SecretStr
+
 from software_factory_poc.config.settings_pydantic import Settings
-from software_factory_poc.providers.facade.llm_bridge import LlmBridge
 from software_factory_poc.core.value_objects.provider_name import ProviderName
+from software_factory_poc.providers.facade.llm_bridge import LlmBridge
+
 
 def verify():
     print("Verifying LlmBridge instantiation with Settings...")
@@ -19,7 +20,9 @@ def verify():
         jira_webhook_secret=SecretStr("dummy"),
         jira_base_url="https://dummy.atlassian.net",
         openai_api_key=SecretStr("sk-dummy-key"),
-        llm_allowed_models=["gpt-4o", "gpt-3.5-turbo"]
+        llm_allowed_models=["gpt-4o", "gpt-3.5-turbo"],
+        confluence_base_url="https://dummy.atlassian.net/wiki",
+        confluence_api_token=SecretStr("dummy-token")
     )
     
     # Instantiate Bridge

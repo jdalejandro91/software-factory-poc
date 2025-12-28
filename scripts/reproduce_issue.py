@@ -1,14 +1,16 @@
 import sys
 from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 # Add src to path
 sys.path.append(str(Path(__file__).parent.parent / "src"))
 
+import os
+
 from software_factory_poc.api.app_factory import create_app
 from software_factory_poc.config.settings_pydantic import Settings
 
-import os
 
 def reproduce():
     # Mock env vars for Settings

@@ -1,9 +1,14 @@
-import pytest
 import os
 import uuid
+
+import pytest
+
 from software_factory_poc.config.settings_pydantic import Settings
 from software_factory_poc.integrations.gitlab.gitlab_client import GitLabClient
-from software_factory_poc.integrations.gitlab.gitlab_payload_builder_service import GitLabPayloadBuilderService
+from software_factory_poc.integrations.gitlab.gitlab_payload_builder_service import (
+    GitLabPayloadBuilderService,
+)
+
 
 @pytest.mark.skipif(
     os.environ.get("RUN_REAL_GITLAB") != "1",

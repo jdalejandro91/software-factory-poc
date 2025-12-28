@@ -23,6 +23,7 @@ venv/
 ENV/
 env_production_source
 dev-container.sh
+build_secrets.sh
 
 # OS specific
 .DS_Store
