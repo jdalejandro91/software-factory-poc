@@ -13,8 +13,11 @@ from software_factory_poc.application.usecases.scaffolding.genai_scaffolding_ser
     GenaiScaffoldingService,
 )
 from software_factory_poc.configuration.main_settings import Settings
-from software_factory_poc.contracts.artifact_result_model import ArtifactResultModel
-from software_factory_poc.contracts.scaffolding_contract_parser_service import (
+from software_factory_poc.application.core.entities.artifact_result import (
+    ArtifactResultModel,
+    ArtifactRunStatusEnum,
+)
+from software_factory_poc.application.core.services.scaffolding_contract_parser_service import (
     ScaffoldingContractParserService,
 )
 from software_factory_poc.infrastructure.providers.tools.confluence.clients.confluence_http_client import (
@@ -35,9 +38,8 @@ from software_factory_poc.infrastructure.providers.tools.gitlab.mappers.gitlab_p
 from software_factory_poc.infrastructure.providers.tools.jira.clients.jira_http_client import (
     JiraHttpClient,
 )
-from software_factory_poc.infrastructure.providers.tools.jira.dtos.jira_webhook_models import (
-    JiraWebhookModel,
-)
+from software_factory_poc.infrastructure.entrypoints.api.dtos.jira_webhook_dto import JiraWebhookDTO
+from software_factory_poc.infrastructure.entrypoints.api.mappers.jira_mapper import JiraMapper
 from software_factory_poc.infrastructure.providers.tools.jira.jira_provider_impl import (
     JiraProviderImpl,
 )
@@ -129,25 +131,46 @@ def get_orchestrator(settings: Settings = Depends(get_settings)) -> ScaffoldOrch
         run_result_store=run_result_store,
     )
 
+from software_factory_poc.application.usecases.scaffolding.process_jira_request_usecase import ProcessJiraRequestUseCase
+from software_factory_poc.infrastructure.providers.knowledge.confluence_mock_adapter import ConfluenceMockAdapter
+from software_factory_poc.infrastructure.providers.llms.llm_gateway_adapter import LlmGatewayAdapter
+from software_factory_poc.application.core.entities.scaffolding_agent import ScaffoldingAgent
+
+def get_usecase(settings: Settings = Depends(get_settings)) -> ProcessJiraRequestUseCase:
+    # Adapters
+    kb_adapter = ConfluenceMockAdapter()
+    
+    llm_bridge = LlmBridge.from_settings(settings)
+    llm_adapter = LlmGatewayAdapter(llm_bridge)
+    
+    # Agent
+    agent = ScaffoldingAgent(supported_models=["model-1"]) # Using a simple list, actual model selection handled by adapter/bridge usually
+    
+    return ProcessJiraRequestUseCase(agent, kb_adapter, llm_adapter)
+
 @router.post("/jira-webhook", response_model=ArtifactResultModel, dependencies=[Depends(verify_api_key)])
 def trigger_scaffold(
-    payload: JiraWebhookModel,
-    orchestrator: ScaffoldOrchestratorService = Depends(get_orchestrator)
+    payload: JiraWebhookDTO,
+    usecase: ProcessJiraRequestUseCase = Depends(get_usecase)
 ):
     issue_key = payload.issue.key
-    event_type = payload.webhookEvent or "unknown"
-    user_display = payload.user.displayName if payload.user else "unknown"
-
-    logger.info(
-        f"Recibido evento '{event_type}' por usuario '{user_display}' para issue '{issue_key}'"
-    )
-
+    event_type = payload.webhook_event or "unknown"
+    
+    logger.info(f"Processing webhook for {issue_key}")
+    
+    mapper = JiraMapper()
+    request = mapper.map_webhook_to_command(payload)
+    
     try:
-        result = orchestrator.execute(issue_key, payload)
-        return result
-    except Exception:
-        logger.exception(f"Unhandled error processing trigger for {issue_key}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error during scaffolding execution."
+        code_result = usecase.execute(request)
+        # For now, we return success with a placeholder URL, as we only generated code string.
+        return ArtifactResultModel(
+            run_id="sync-run",
+            status=ArtifactRunStatusEnum.COMPLETED,
+            issue_key=issue_key,
+            mr_url="http://not-implemented-yet.com",
+            branch_name="generated-code-in-logs"
         )
+    except Exception as e:
+        logger.exception(f"Error processing jira request: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

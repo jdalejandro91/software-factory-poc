@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - master
+      - 'feature/*'
 
 jobs:
   deploy:
@@ -20,48 +21,51 @@ jobs:
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-      - name: Create .env file from Secret
+      - name: Extract Secrets from Env File
         run: |
-          # AHORA: Decodificamos el Base64 para recuperar el archivo original intacto
-          echo "${{ secrets.PROD_ENV_FILE }}" | base64 -d > .env.production
+          echo "${{ secrets.PROD_ENV_FILE }}" | base64 -d > .env
+          echo "EC2_HOST=$(grep EC2_HOST .env | cut -d= -f2)" >> $GITHUB_ENV
+          echo "EC2_USER=$(grep EC2_USER .env | cut -d= -f2)" >> $GITHUB_ENV
 
       - name: Deploy to EC2
         run: |
-          # 1. Definir variables de conexión
-          USER="${{ secrets.EC2_USER }}"
-          HOST="${{ secrets.EC2_HOST }}"
+          # 1. Variables de conexión (desde GITHUB_ENV)
+          USER="$EC2_USER"
+          HOST="$EC2_HOST"
           KEY="-i ~/.ssh/id_rsa"
           OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
           TARGET_DIR="/home/$USER/software-factory-poc"
+          BRANCH="${{ github.ref_name }}"
 
-          # 2. Asegurar que la carpeta existe antes de copiar nada
+          # 2. Asegurar que la carpeta existe
           ssh $OPTS $KEY $USER@$HOST "mkdir -p $TARGET_DIR"
 
-          # 3. Copiar el archivo .env al servidor (Inyección de Secretos)
+          # 3. Copiar el archivo .env al servidor
           echo "🔐 Enviando configuración de entorno (.env)..."
-          scp $OPTS $KEY .env.production $USER@$HOST:$TARGET_DIR/.env
+          scp $OPTS $KEY .env $USER@$HOST:$TARGET_DIR/.env
 
           # 4. Ejecutar el despliegue
-          ssh $OPTS $KEY $USER@$HOST << 'EOF'
+          ssh $OPTS $KEY $USER@$HOST << EOF
             set -e
-            PROJECT_DIR="$HOME/software-factory-poc"
+            PROJECT_DIR="\$HOME/software-factory-poc"
             REPO_URL="https://github.com/jdalejandro91/software-factory-poc.git"
             
-            cd "$PROJECT_DIR"
+            cd "\$PROJECT_DIR"
             
             # Auto-healing del repo
             if [ ! -d ".git" ]; then
                 echo "⚠️ Repo no detectado o corrupto. Clonando de nuevo..."
                 cd ..
                 rm -rf software-factory-poc
-                git clone "$REPO_URL" software-factory-poc
+                git clone "\$REPO_URL" software-factory-poc
                 cd software-factory-poc
             fi
 
             # Actualizar código
-            echo "📥 Bajando cambios..."
-            git fetch origin main
-            git reset --hard origin/main
+            echo "📥 Bajando cambios de \$BRANCH..."
+            git fetch origin \$BRANCH
+            git checkout \$BRANCH
+            git reset --hard origin/\$BRANCH
 
             # Despliegue
             echo "🔄 Reiniciando contenedores..."

@@ -1,6 +1,6 @@
 import pytest
 
-from software_factory_poc.contracts.scaffolding_contract_parser_service import (
+from software_factory_poc.application.core.services.scaffolding_contract_parser_service import (
     BLOCK_END,
     BLOCK_START,
     ContractParseError,

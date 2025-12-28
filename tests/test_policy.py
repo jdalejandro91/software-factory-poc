@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from software_factory_poc.configuration.main_settings import Settings
-from software_factory_poc.contracts.scaffolding_contract_model import (
+from software_factory_poc.application.core.entities.scaffolding.scaffolding_contract import (
     GitLabTargetModel,
     ScaffoldingContractModel,
 )

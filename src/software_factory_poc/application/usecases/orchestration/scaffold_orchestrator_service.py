@@ -4,6 +4,7 @@ import uuid
 from typing import Any
 
 from software_factory_poc.application.core.entities.idempotency_record import IdempotencyRecord
+from software_factory_poc.application.core.entities.scaffolding.scaffolding_request import ScaffoldingRequest
 from software_factory_poc.application.ports.memory.repository import Repository
 from software_factory_poc.application.ports.tools.gitlab_provider import GitLabProvider
 from software_factory_poc.application.ports.tools.jira_provider import JiraProvider
@@ -11,16 +12,14 @@ from software_factory_poc.application.usecases.scaffolding.genai_scaffolding_ser
     GenaiScaffoldingService,
 )
 from software_factory_poc.configuration.main_settings import Settings
-from software_factory_poc.contracts.artifact_result_model import (
+from software_factory_poc.application.core.entities.artifact_result import (
     ArtifactResultModel,
     ArtifactRunStatusEnum,
 )
-from software_factory_poc.contracts.scaffolding_contract_parser_service import (
+from software_factory_poc.application.core.services.scaffolding_contract_parser_service import (
     ScaffoldingContractParserService,
 )
-from software_factory_poc.infrastructure.providers.tools.jira.dtos.jira_webhook_models import (
-    JiraWebhookModel,
-)
+
 from software_factory_poc.infrastructure.providers.tools.jira.mappers.jira_issue_mapper_service import (
     JiraIssueMapperService,
 )
@@ -67,7 +66,8 @@ class ScaffoldOrchestratorService:
         self.idempotency_store = idempotency_store
         self.run_result_store = run_result_store
 
-    def execute(self, issue_key: str, webhook_payload: JiraWebhookModel | None = None) -> ArtifactResultModel:
+    def execute(self, request: ScaffoldingRequest) -> ArtifactResultModel:
+        issue_key = request.ticket_id
         run_id = str(uuid.uuid4())
         logger.info(f"Starting orchestration for issue={issue_key}, run_id={run_id}")
 
@@ -78,33 +78,11 @@ class ScaffoldOrchestratorService:
         )
 
         try:
-            # 1. Get Jira Issue
-            jira_issue = None
-            if webhook_payload and webhook_payload.issue.fields:
-                logger.info(f"Using webhook payload data (Skipping Jira Fetch) for {issue_key}")
-                class OptimisticIssue:
-                    def __init__(self, key, description, summary):
-                        self.key = key
-                        self.description = description
-                        self.summary = summary
-                
-                jira_issue = OptimisticIssue(
-                    key=issue_key,
-                    description=webhook_payload.issue.fields.description or "",
-                    summary=webhook_payload.issue.fields.summary or ""
-                )
-            else:
-                jira_issue = self.step_runner.run_step(
-                    "fetch_jira_issue",
-                    lambda: self.jira_mapper.map_issue(self.jira_client.get_issue(issue_key)),
-                    run_id,
-                    issue_key
-                )
-
-            # 2. Parse Contract
+            # 1. Parse Contract (from request instruction)
+            # No need to fetch Jira issue as we trust the request data (Optimistic)
             contract = self.step_runner.run_step(
                 "parse_contract",
-                lambda: self.contract_parser.parse(jira_issue.description),
+                lambda: self.contract_parser.parse(request.raw_instruction),
                 run_id,
                 issue_key
             )
@@ -123,7 +101,8 @@ class ScaffoldOrchestratorService:
                 raise ValueError("Could not resolve a valid GitLab Project ID.")
 
             # 4. Idempotency Check
-            description_hash = hashlib.sha256(jira_issue.description.encode("utf-8")).hexdigest()
+            # Using SHA256 of raw_instruction
+            description_hash = hashlib.sha256(request.raw_instruction.encode("utf-8")).hexdigest()
             idem_key = self.idempotency_builder.build(
                 issue_key, contract.contract_version, description_hash
             )
@@ -139,9 +118,17 @@ class ScaffoldOrchestratorService:
                 return result_model
 
             # 5. GenAI Scaffolding Generation
+            # We pass raw_instruction as context? Or full description?
+            # GenAI might need full context? User said "raw_instruction (el contenido del bloque)".
+            # If user puts helpful info outside the block, it is lost?
+            # For now, sticking to raw_instruction as "description" passed to GenAI?
+            # GenAI service signature: `generate_scaffolding(issue_key, description)`.
+            # I will pass `request.raw_instruction` (or maybe `request.summary` + `request.raw_instruction`?)
+            # I'll pass `request.raw_instruction` as the description/prompt context.
+
             files_map = self.step_runner.run_step(
                 "generate_scaffolding",
-                lambda: asyncio.run(self.genai_service.generate_scaffolding(issue_key, jira_issue.description)),
+                lambda: asyncio.run(self.genai_service.generate_scaffolding(issue_key, request.raw_instruction)),
                 run_id,
                 issue_key
             )

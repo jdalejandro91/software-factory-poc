@@ -5,8 +5,8 @@ import respx
 from httpx import Response
 
 from software_factory_poc.infrastructure.entrypoints.api.jira_trigger_router import get_orchestrator
-from software_factory_poc.contracts.artifact_result_model import ArtifactRunStatusEnum
-from software_factory_poc.contracts.scaffolding_contract_parser_service import (
+from software_factory_poc.application.core.entities.artifact_result import ArtifactRunStatusEnum
+from software_factory_poc.application.core.services.scaffolding_contract_parser_service import (
     BLOCK_END,
     BLOCK_START,
 )
@@ -24,9 +24,9 @@ def test_orchestrator_happy_path(full_orchestrator, settings):
         return_value={"README.md": "# GenAI Generated Service"}
     )
 
-    # 2. Mock Jira Get Issue
+    # 2. Setup Request (Simulate Trigger)
     issue_key = "PROJ-1"
-    contract = f"""
+    contract_snippet = f"""
 {BLOCK_START}
 version: "1"
 template: "any-template"
@@ -35,18 +35,18 @@ target:
 parameters:
   service_name: "My Best Service"
 {BLOCK_END}
-Just some description that will be hashed.
 """
+    raw_instruction = contract_snippet + "\nJust some description that will be hashed."
     
-    respx.get(f"{settings.jira_base_url}/rest/api/3/issue/{issue_key}").mock(
-        return_value=Response(200, json={
-            "key": issue_key,
-            "fields": {
-                "summary": "Scaffold this",
-                "description": contract
-            }
-        })
+    from software_factory_poc.application.core.entities.scaffolding.scaffolding_request import ScaffoldingRequest
+    request = ScaffoldingRequest(
+        ticket_id=issue_key,
+        project_key="PROJ",
+        summary="Scaffold this",
+        raw_instruction=raw_instruction,
+        requester="Tester"
     )
+    # Note: No need to mock Jira GET issue because Orchestrator uses Request data.
 
     # 3. Mock GitLab Calls
     # Check Branch (GET) - 404 Not Found (New Branch)
@@ -82,7 +82,7 @@ Just some description that will be hashed.
     )
 
     # EXECUTE
-    result = full_orchestrator.execute(issue_key)
+    result = full_orchestrator.execute(request)
 
     # VERIFY
     assert result.status == ArtifactRunStatusEnum.COMPLETED

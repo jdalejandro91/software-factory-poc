@@ -1,5 +1,5 @@
 from software_factory_poc.configuration.application.app_settings import AppSettings
-from software_factory_poc.contracts.scaffolding_contract_model import ScaffoldingContractModel
+from software_factory_poc.application.core.entities.scaffolding.scaffolding_contract import ScaffoldingContractModel
 
 
 class PolicyViolationError(Exception):

@@ -4,8 +4,8 @@ import respx
 from httpx import Response
 
 from software_factory_poc.infrastructure.entrypoints.api.jira_trigger_router import get_orchestrator
-from software_factory_poc.contracts.artifact_result_model import ArtifactRunStatusEnum
-from software_factory_poc.contracts.scaffolding_contract_parser_service import (
+from software_factory_poc.application.core.entities.artifact_result import ArtifactRunStatusEnum
+from software_factory_poc.application.core.services.scaffolding_contract_parser_service import (
     BLOCK_END,
     BLOCK_START,
 )
@@ -31,13 +31,24 @@ target:
 {BLOCK_END}
 """
 
-    # Mock Jira
-    respx.get(f"{settings.jira_base_url}/rest/api/3/issue/{issue_key}").mock(
-        return_value=Response(200, json={
-            "key": issue_key, "fields": {"summary": "S", "description": contract}
-        })
+    # Setup Request
+    from software_factory_poc.application.core.entities.scaffolding.scaffolding_request import ScaffoldingRequest
+    raw_instruction = f"""
+{BLOCK_START}
+version: "1"
+template: "fail_test"
+target:
+  project_id: 123
+{BLOCK_END}
+"""
+    request = ScaffoldingRequest(
+        ticket_id=issue_key,
+        project_key="PROJ",
+        summary="S",
+        raw_instruction=raw_instruction,
+        requester="Tester"
     )
-    
+
     # Mock GitLab Branch Check (GET)
     respx.get(f"{settings.gitlab_base_url}/api/v4/projects/123/repository/branches/feature%2Fproj-3-fail-test-scaffold").mock(
         return_value=Response(404)
@@ -72,7 +83,7 @@ target:
     )
 
     # EXECUTE
-    result = orchestrator.execute(issue_key)
+    result = orchestrator.execute(request)
 
     # VERIFY
     assert result.status == ArtifactRunStatusEnum.FAILED

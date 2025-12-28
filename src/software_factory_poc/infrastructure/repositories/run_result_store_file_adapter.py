@@ -4,7 +4,7 @@ import tempfile
 
 from software_factory_poc.application.ports.memory.repository import Repository
 from software_factory_poc.configuration.application.app_settings import AppSettings
-from software_factory_poc.contracts.artifact_result_model import ArtifactResultModel
+from software_factory_poc.application.core.entities.artifact_result import ArtifactResultModel
 from software_factory_poc.observability.logger_factory_service import build_logger
 
 logger = build_logger(__name__)
