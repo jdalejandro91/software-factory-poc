@@ -10,23 +10,30 @@ logger = build_logger(__name__)
 from software_factory_poc.application.core.services.scaffolding_contract_parser_service import ScaffoldingContractParserService
 from software_factory_poc.infrastructure.providers.tools.jira.mappers.jira_adf_builder import JiraAdfBuilder
 
+from software_factory_poc.configuration.tools.tool_settings import ToolSettings
+
 @dataclass
 class ProcessJiraRequestUseCase:
     agent: ScaffoldingAgent
     jira_provider: JiraProvider
     gitlab_provider: GitLabProvider
+    settings: ToolSettings
 
     def execute(self, request: ScaffoldingRequest) -> str:
         issue_key = request.issue_key
         logger.info(f"Processing Jira Request for ticket {issue_key}")
         
+        # Determine Lifecycle States from Config
+        STATE_INITIAL = self.settings.workflow_state_initial
+        STATE_PROCESSING = self.settings.workflow_state_processing
+        STATE_SUCCESS = self.settings.workflow_state_success
+        
         try:
-            # Step 1: Notify Start
-            self.jira_provider.add_comment(issue_key, "🤖 Iniciando agente de scaffolding...")
-            # Optional: Transition to 'In Progress' - skipping ID lookup complexity for now or assuming explicit ID if known
+            # Step 1: Notify Start & Move to Processing
+            self.jira_provider.add_comment(issue_key, "🤖 Iniciando misión de scaffolding...")
+            self.jira_provider.transition_issue(issue_key, STATE_PROCESSING)
             
             # Step 2: Agent Execution (Core)
-            # This invokes the retry logic + architectural knowledge retrieval
             generated_files = self.agent.execute_mission(request)
             
             # Security Check: Validate paths
@@ -37,27 +44,17 @@ class ProcessJiraRequestUseCase:
             # Step 3: Persistence (GitLab)
             branch_name = f"feature/{issue_key}-scaffolding"
             
-            # Resolve Project Path from Contract
             parser = ScaffoldingContractParserService()
             contract = parser.parse(request.raw_instruction)
             project_path = contract.gitlab.project_path
             
             if not project_path:
-                # Fallback to Jira project key if not in contract (or raise error if mandatory)
-                # But contract validation should handle it.
-                # If parsed model returns None, we use request.project_key ?
-                # User says: "use that value". 
                 project_path = request.project_key
 
-            # Resolve ID if needed, strict DDD usually implies ID in request or separate resolution service
-            # For now relying on provider to handle resolution or passed ID
-            # Re-reading GitLabProvider: resolve_project_id(project_path)
             project_id = self.gitlab_provider.resolve_project_id(project_path)
             
-            # Ensure branch exists/created
             self.gitlab_provider.create_branch(project_id, branch_name, "main")
             
-            # Commit files (Agent returns Dict[str, str] mapping filenames to content)
             self.gitlab_provider.commit_files(
                 project_id, 
                 branch_name, 
@@ -74,7 +71,7 @@ class ProcessJiraRequestUseCase:
             )
             mr_url = mr_response.get("web_url", "URL_NOT_FOUND")
             
-            # Step 4: Notify Completion
+            # Step 4: Notify Completion & Success Transition
             links = {"Ver Merge Request": mr_url}
             success_msg = JiraAdfBuilder.build_success_panel(
                 title="🚀 Misión Cumplida: Scaffolding Generado",
@@ -83,7 +80,7 @@ class ProcessJiraRequestUseCase:
             )
             self.jira_provider.add_comment(issue_key, success_msg)
             
-            self.jira_provider.transition_issue(issue_key, "Done")
+            self.jira_provider.transition_issue(issue_key, STATE_SUCCESS)
             
             return mr_url
 
@@ -96,7 +93,7 @@ class ProcessJiraRequestUseCase:
                 error_detail = str(e)
                 steps = [
                     "Se detuvo la generación de código.",
-                    "Se ha revertido el estado de la tarea a 'To Do'.",
+                    f"Se ha revertido el estado de la tarea a '{STATE_INITIAL}'.",
                     "Por favor revise los inputs del contrato YAML."
                 ]
                 error_msg = JiraAdfBuilder.build_error_panel(
@@ -110,8 +107,9 @@ class ProcessJiraRequestUseCase:
             
             # 2. Attempt Rollback
             try:
-                self.jira_provider.transition_issue(issue_key, "To Do")
+                logger.info(f"Reverting issue {issue_key} to {STATE_INITIAL}")
+                self.jira_provider.transition_issue(issue_key, STATE_INITIAL)
             except Exception as transition_err:
-                logger.warning(f"Failed to rollback Jira status: {transition_err}")
+                logger.warning(f"Rollback status failed (ignoring): {transition_err}")
                 
             raise e

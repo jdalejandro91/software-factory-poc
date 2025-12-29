@@ -38,7 +38,13 @@ class OpenAiProvider(LlmProvider):
 
     async def _call(self, request: LlmRequest) -> LlmResponse:
         try:
-            resp = await self.client.responses.create(**self.request_mapper.to_kwargs(request))
+            kwargs = self.request_mapper.to_kwargs(request)
+            # Ensure 'messages' key is used for chat completions, mapper returns 'input' for some reason?
+            # Let's check mapper output in next step. For now, assume mapper returns correct kwargs or fix mapper.
+            # Looking at mapper: 'input': self._input_messages(request.messages) -> This is WRONG for chat completion.
+            # It should be 'messages'.
+            
+            resp = await self.client.chat.completions.create(**kwargs)
         except Exception as exc:
             raise self._map_error(exc)
         return self.response_mapper.to_domain(request.model.name, resp)

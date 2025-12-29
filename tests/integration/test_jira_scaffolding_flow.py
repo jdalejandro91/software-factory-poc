@@ -56,7 +56,15 @@ def override_get_usecase():
     mock_gitlab.resolve_project_id.return_value = 123
     mock_gitlab.create_merge_request.return_value = {"web_url": "http://gitlab.mock/mr/1"}
     
-    return ProcessJiraRequestUseCase(agent=agent, jira_provider=mock_jira, gitlab_provider=mock_gitlab)
+    # Mock ToolSettings with default values
+    settings = Settings()
+    tool_settings = settings # ToolSettings is mixed into Settings or separate? 
+    # ToolSettings is a base class or component? 
+    # In tool_settings.py: class ToolSettings(BaseSettings).
+    # In main_settings.py: class Settings(ToolSettings).
+    # So `Settings()` instance is also a `ToolSettings` instance.
+    
+    return ProcessJiraRequestUseCase(agent=agent, jira_provider=mock_jira, gitlab_provider=mock_gitlab, settings=settings)
 
 app.dependency_overrides[get_usecase] = override_get_usecase
 

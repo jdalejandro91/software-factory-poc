@@ -9,3 +9,4 @@ class ProviderName(str, Enum):
     GEMINI = "gemini"
     DEEPSEEK = "deepseek"
     GATEWAY = "gateway"
+    JIRA = "jira"

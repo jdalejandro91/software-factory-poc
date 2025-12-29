@@ -19,6 +19,11 @@ class ToolSettings(BaseSettings):
     jira_user_email: str | None = None
     jira_api_token: SecretStr | None = None
     jira_bearer_token: SecretStr | None = None
+    
+    # Jira Workflow Configuration
+    workflow_state_initial: str = Field(default="To Do", description="Initial/Rollback state name")
+    workflow_state_processing: str = Field(default="In Progress", description="State during active processing")
+    workflow_state_success: str = Field(default="In Review", description="Success/Final state name")
 
     # GitLab Config
     gitlab_base_url: str = "https://gitlab.com"

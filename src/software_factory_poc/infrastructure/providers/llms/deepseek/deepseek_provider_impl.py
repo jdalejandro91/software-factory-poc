@@ -20,7 +20,7 @@ from software_factory_poc.infrastructure.common.retry.retry_policy import RetryP
 
 
 @dataclass(frozen=True, slots=True)
-class DeepSeekProvider(LlmProvider):
+class DeepSeekProviderImpl(LlmProvider):
     client: Any
     retry: RetryPolicy
     request_mapper: DeepSeekRequestMapper

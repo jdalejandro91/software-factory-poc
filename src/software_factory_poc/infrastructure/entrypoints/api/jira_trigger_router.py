@@ -155,7 +155,7 @@ def get_usecase(settings: Settings = Depends(get_settings)) -> ProcessJiraReques
     # Agent
     agent = ScaffoldingAgent(llm_gateway=llm_adapter, knowledge_port=kb_adapter)
     
-    return ProcessJiraRequestUseCase(agent, jira_provider, gitlab_provider)
+    return ProcessJiraRequestUseCase(agent, jira_provider, gitlab_provider, settings)
 
 
 

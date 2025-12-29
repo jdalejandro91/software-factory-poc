@@ -15,7 +15,7 @@ class OpenAiRequestMapper:
     def to_kwargs(self, request: LlmRequest) -> Mapping[str, Any]:
         return {
             "model": request.model.name,
-            "input": self._input_messages(request.messages),
+            "messages": self._input_messages(request.messages),
             **self._generation_kwargs(request),
             **self._output_kwargs(request),
         }

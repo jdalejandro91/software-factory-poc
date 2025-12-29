@@ -37,7 +37,7 @@ from software_factory_poc.infrastructure.providers.llms.deepseek.mappers.deepsee
     DeepSeekResponseMapper,
 )
 from software_factory_poc.infrastructure.providers.llms.deepseek.deepseek_provider_impl import (
-    DeepSeekProvider,
+    DeepSeekProviderImpl,
 )
 from software_factory_poc.infrastructure.providers.llms.gemini.clients.gemini_client_factory import (
     GeminiClientFactory,
@@ -52,7 +52,7 @@ from software_factory_poc.infrastructure.providers.llms.gemini.mappers.gemini_re
     GeminiResponseMapper,
 )
 from software_factory_poc.infrastructure.providers.llms.gemini.gemini_provider_impl import (
-    GeminiProvider,
+    GeminiProviderImpl,
 )
 from software_factory_poc.infrastructure.providers.llms.anthropic.clients.anthropic_client_factory import (
     AnthropicClientFactory,
@@ -67,7 +67,7 @@ from software_factory_poc.infrastructure.providers.llms.anthropic.mappers.anthro
     AnthropicResponseMapper,
 )
 from software_factory_poc.infrastructure.providers.llms.anthropic.anthropic_provider_impl import (
-    AnthropicProvider,
+    AnthropicProviderImpl,
 )
 from software_factory_poc.infrastructure.providers.llms.gateway.llm_gateway import LlmGateway
 from software_factory_poc.infrastructure.providers.llms.gateway.model_allowlist import ModelAllowlist
@@ -93,16 +93,10 @@ class LlmBridge:
         
         allowed_models = frozenset(settings.llm_allowed_models)
         if not allowed_models and settings.openai_api_key:
-             # Basic safety: if models aren't explicit but key is provided, we might want to warn or fail. 
-             # The previous logic raised ConfigurationError if allowed_models was empty.
-             # We should probably maintain that strictness or check if user provided them.
-             # User prompt said "Asegúrate de que ... puede instanciarse".
-             # If I force it to require allowed_models, user must provide them in Settings.
              pass
 
         allowlist = ModelAllowlist(allowed=allowed_models)
         
-        # We can keep reading retry from env or defaulting, as it's not in Settings
         retry_attempts = int(os.getenv("LLM_BRIDGE_RETRY_ATTEMPTS", "3"))
         retry = RetryPolicy(max_attempts=retry_attempts)
         
@@ -114,13 +108,6 @@ def _build_providers(settings: LlmSettings, retry: RetryPolicy, correlation: Cor
     providers: dict[ProviderName, LlmProvider] = {}
     
     if settings.openai_api_key:
-        # We use the key from settings. The OpenAiConfig typically reads from env.
-        # We need to bridge that. OpenAiConfig.from_env() reads OPENAI_API_KEY.
-        # If we want to use the one from Settings, we should instantiate OpenAiConfig manually.
-        # Let's see OpenAiConfig structure. Assuming it accepts api_key in constructor.
-        
-        # We'll create a config object using the secret from settings.
-        # Note: settings.openai_api_key is SecretStr.
         api_key = settings.openai_api_key.get_secret_value()
         config = OpenAiConfig(api_key=api_key) 
         
@@ -137,7 +124,7 @@ def _build_providers(settings: LlmSettings, retry: RetryPolicy, correlation: Cor
         api_key = settings.deepseek_api_key.get_secret_value()
         config = DeepSeekConfig(api_key=api_key)
         client = DeepSeekClientFactory(config).create()
-        providers[ProviderName.DEEPSEEK] = DeepSeekProvider(
+        providers[ProviderName.DEEPSEEK] = DeepSeekProviderImpl(
             client=client,
             retry=retry,
             request_mapper=DeepSeekRequestMapper(),
@@ -149,7 +136,7 @@ def _build_providers(settings: LlmSettings, retry: RetryPolicy, correlation: Cor
         api_key = settings.gemini_api_key.get_secret_value()
         config = GeminiConfig(api_key=api_key)
         client = GeminiClientFactory(config).create()
-        providers[ProviderName.GEMINI] = GeminiProvider(
+        providers[ProviderName.GEMINI] = GeminiProviderImpl(
             client=client,
             retry=retry,
             request_mapper=GeminiRequestMapper(),
@@ -161,7 +148,7 @@ def _build_providers(settings: LlmSettings, retry: RetryPolicy, correlation: Cor
         api_key = settings.anthropic_api_key.get_secret_value()
         config = AnthropicConfig(api_key=api_key)
         client = AnthropicClientFactory(config).create()
-        providers[ProviderName.ANTHROPIC] = AnthropicProvider(
+        providers[ProviderName.ANTHROPIC] = AnthropicProviderImpl(
             client=client,
             retry=retry,
             request_mapper=AnthropicRequestMapper(),

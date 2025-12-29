@@ -52,25 +52,48 @@ class JiraProviderImpl(JiraProvider):
         
         # 1. Get available transitions
         response = self.client.get(f"rest/api/3/issue/{issue_key}/transitions")
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except Exception as e:
+            logger.error(f"Failed to fetch transitions for {issue_key}: {e}")
+            raise e
+            
         transitions = response.json().get("transitions", [])
+        
+        available_names = [t["name"] for t in transitions]
+        logger.debug(f"Transiciones disponibles para {issue_key}: {available_names}")
 
-        # 2. Find target ID
+        # 2. Find target ID with enhanced logic
         final_id = None
         keyword_lower = target_status_keyword.lower()
         
+        # Strategy A: Exact Match (Case Insensitive)
         for t in transitions:
-            t_name = t["name"].lower()
-            t_to = t["to"]["name"].lower()
-            if keyword_lower in t_name or keyword_lower in t_to:
+            if t["name"].lower() == keyword_lower:
                 final_id = t["id"]
+                logger.info(f"Transition '{target_status_keyword}' found (Exact Match ID: {final_id})")
                 break
         
+        # Strategy B: Partial Match (if no exact found)
         if not final_id:
-            # If input was already an ID, we might try to use it directly, 
-            # but simplest is to log warning as per original client
-            logger.warning(f"No transition found containing '{target_status_keyword}' for issue {issue_key}")
-            return
+            for t in transitions:
+                if keyword_lower in t["name"].lower() or keyword_lower in t["to"]["name"].lower():
+                    final_id = t["id"]
+                    logger.info(f"Transition '{target_status_keyword}' found (Partial Match ID: {final_id})")
+                    break
+        
+        if not final_id:
+            error_msg = f"Transition '{target_status_keyword}' not found. Available: {available_names}"
+            logger.error(error_msg)
+            # Importing here to avoid circular dependencies if any at module level
+            from software_factory_poc.application.core.exceptions.provider_error import ProviderError
+            from software_factory_poc.application.core.value_objects.provider_name import ProviderName
+            
+            raise ProviderError(
+                provider=ProviderName.JIRA,
+                message=error_msg,
+                retryable=True  # Jira might be slow or just need a retry? Or maybe config error.
+            )
 
         logger.info(f"Transitioning issue {issue_key} to (ID: {final_id})")
         payload = {
