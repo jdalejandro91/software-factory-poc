@@ -1,6 +1,6 @@
 import asyncio
 from software_factory_poc.application.core.interfaces.llm_gateway import LLMGatewayPort, LLMError
-from software_factory_poc.infrastructure.providers.facade.llm_bridge import LlmBridge
+from software_factory_poc.infrastructure.providers.llms.facade.llm_bridge import LlmBridge
 from software_factory_poc.infrastructure.observability.logger_factory_service import build_logger
 
 logger = build_logger(__name__)

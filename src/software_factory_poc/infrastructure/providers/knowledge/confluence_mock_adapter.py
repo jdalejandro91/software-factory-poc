@@ -1,26 +1,19 @@
-from software_factory_poc.application.core.interfaces.knowledge_base import KnowledgeBasePort
+from software_factory_poc.application.core.ports.knowledge_base_port import KnowledgeBasePort
+from software_factory_poc.infrastructure.providers.knowledge.architecture_constants import (
+    SHOPPING_CART_ARCHITECTURE,
+    DEFAULT_ARCHITECTURE,
+)
+from software_factory_poc.infrastructure.observability.logger_factory_service import build_logger
+
+logger = build_logger(__name__)
 
 class ConfluenceMockAdapter(KnowledgeBasePort):
-    def get_architecture_guidelines(self, url: str) -> str:
-        if "carrito-de-compra" in url:
-            return """0) Fuentes base: Clean Architecture (Robert C. Martin), Domain-Driven Design (Eric Evans).
-
-1. Objetivo:
-El sistema debe implementar un backend para un e-commerce, específicamente el módulo de Carrito de Compra (Shopping Cart). Debe ser agnóstico del framework (FastAPI por defecto) y desacoplar las reglas de negocio de la infraestructura.
-
-2. Estructura de Proyecto (Hexagonal / Clean):
-- src/
-  - application/  (Casos de uso, puertos de entrada)
-  - domain/       (Entidades, value objects, puertos de salida)
-  - infrastructure/ (Adaptadores: DB, API, logs)
-- tests/
-
-3. Reglas:
-- Las entidades no deben tener dependencias de frameworks.
-- Los casos de uso orquestan el flujo.
-- La infraestructura implementa las interfaces definidas en dominio.
-
-4. Diagramas Requeridos:
-- C4 mínimo (Context + Container)."""
+    def get_knowledge(self, url: str) -> str:
+        logger.info(f"Fetching knowledge from Confluence: {url}")
         
-        return "Guías de arquitectura estándar."
+        if "carrito-de-compra" in url:
+            logger.info("Match found: Shopping Cart Architecture")
+            return SHOPPING_CART_ARCHITECTURE
+            
+        logger.info("No specific match found, returning default guidelines")
+        return DEFAULT_ARCHITECTURE

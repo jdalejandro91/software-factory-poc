@@ -1,4 +1,6 @@
 import re
+from typing import Optional
+
 from software_factory_poc.infrastructure.entrypoints.api.dtos.jira_webhook_dto import JiraWebhookDTO
 from software_factory_poc.application.core.entities.scaffolding.scaffolding_request import ScaffoldingRequest
 from software_factory_poc.infrastructure.observability.logger_factory_service import build_logger
@@ -7,46 +9,52 @@ logger = build_logger(__name__)
 
 class JiraMapper:
     def map_webhook_to_command(self, dto: JiraWebhookDTO) -> ScaffoldingRequest:
-        description = dto.issue.fields.description if dto.issue.fields else ""
-        raw_instruction = self._extract_scaffolding_block(description or "")
+        description = self._get_description(dto)
+        raw_instruction = self._extract_scaffolding_block(description)
         
         return ScaffoldingRequest(
-            ticket_id=dto.issue.key,
-            project_key=dto.issue.key.split("-")[0] if "-" in dto.issue.key else "",
-            summary=dto.issue.fields.summary or "" if dto.issue.fields else "",
+            issue_key=dto.issue.key,
+            summary=self._get_summary(dto),
             raw_instruction=raw_instruction,
-            requester=dto.user.display_name or dto.user.name or "unknown" if dto.user else "unknown"
+            reporter=self._get_reporter(dto)
         )
+
+    def _get_description(self, dto: JiraWebhookDTO) -> str:
+        if dto.issue.fields and dto.issue.fields.description:
+            return dto.issue.fields.description
+        return ""
+
+    def _get_summary(self, dto: JiraWebhookDTO) -> str:
+        if dto.issue.fields and dto.issue.fields.summary:
+            return dto.issue.fields.summary
+        return ""
+
+    def _get_reporter(self, dto: JiraWebhookDTO) -> str:
+        if dto.user:
+            return dto.user.display_name or dto.user.name or "unknown"
+        return "unknown"
 
     def _extract_scaffolding_block(self, text: str) -> str:
         if not text:
             return ""
+        
+        content = self._match_regex(text, r"```scaffolding\s*(.*?)\s*```")
+        if content:
+            return content
+            
+        return self._fallback_extraction(text)
 
-        # Pattern: ```scaffolding ... ```
-        # Case insensitive for 'scaffolding' tag
-        scaffold_pattern = r"```scaffolding\s*(.*?)\s*```"
-        match = re.search(scaffold_pattern, text, re.DOTALL | re.IGNORECASE)
+    def _fallback_extraction(self, text: str) -> str:
+        # Fallback to generic ``` or ```yaml
+        content = self._match_regex(text, r"```(?:[\w]+)?\s*(.*?)\s*```")
+        if content:
+            return content
+            
+        # Fallback to Jira Wiki Code
+        return self._match_regex(text, r"\{code(?:[:\w]+)?\}\s*(.*?)\s*\{code\}") or ""
+
+    def _match_regex(self, text: str, pattern: str) -> Optional[str]:
+        match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
         if match:
             return match.group(1).strip()
-        
-        # Fallback: Generic markdown block if scaffolding specific not found?
-        # User requirement was specific: "extract the code block ```scaffolding ... ```"
-        # But to avoid breaking existing "yaml" or "json" blocks usage if that was the intent,
-        # checking parser service code: it handled `{code}`, ` ``` `, ` ```yaml `.
-        # I should probably try to be flexible but prioritize `scaffolding`.
-        
-        # Fallback to generic ``` or ```yaml
-        generic_pattern = r"```(?:[\w]+)?\s*(.*?)\s*```"
-        match_gen = re.search(generic_pattern, text, re.DOTALL)
-        if match_gen:
-             # Logic to differentiate? If multiple blocks exist? 
-             # Assuming single block or first block.
-             return match_gen.group(1).strip()
-             
-        # Jira Wiki Code
-        jira_wiki_pattern = r"\{code(?:[:\w]+)?\}\s*(.*?)\s*\{code\}"
-        match_wiki = re.search(jira_wiki_pattern, text, re.DOTALL | re.IGNORECASE)
-        if match_wiki:
-            return match_wiki.group(1).strip()
-
-        return ""
+        return None

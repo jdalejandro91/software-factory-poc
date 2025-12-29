@@ -1,21 +1,22 @@
+from typing import Optional
 from pydantic import BaseModel, Field
 
 class JiraUserDTO(BaseModel):
-    name: str | None = None
-    display_name: str | None = Field(None, alias="displayName")
-    active: bool | None = None
+    name: Optional[str] = None
+    display_name: Optional[str] = Field(None, alias="displayName")
+    active: Optional[bool] = None
 
 class JiraIssueFieldsDTO(BaseModel):
-    summary: str | None = None
-    description: str | None = None
+    summary: Optional[str] = None
+    description: Optional[str] = None
 
 class JiraIssueDTO(BaseModel):
-    id: str | None = None
+    id: Optional[str] = None
     key: str
-    fields: JiraIssueFieldsDTO | None = None
+    fields: Optional[JiraIssueFieldsDTO] = None
 
 class JiraWebhookDTO(BaseModel):
-    webhook_event: str | None = Field(None, alias="webhookEvent")
-    timestamp: int | None = None
-    user: JiraUserDTO | None = None
+    webhook_event: Optional[str] = Field(None, alias="webhookEvent")
+    timestamp: Optional[int] = None
+    user: Optional[JiraUserDTO] = None
     issue: JiraIssueDTO

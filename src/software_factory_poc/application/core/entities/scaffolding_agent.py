@@ -1,61 +1,39 @@
-from dataclasses import dataclass, field
-from typing import List, Any
-import logging
+from typing import List, Optional
 
 from software_factory_poc.application.core.entities.scaffolding.scaffolding_request import ScaffoldingRequest
 from software_factory_poc.application.core.interfaces.llm_gateway import LLMGatewayPort, LLMError
-from software_factory_poc.application.core.interfaces.knowledge_base import KnowledgeBasePort
+from software_factory_poc.application.core.ports.knowledge_base_port import KnowledgeBasePort
+from software_factory_poc.application.core.services.prompt_builder_service import PromptBuilderService
+from software_factory_poc.infrastructure.observability.logger_factory_service import build_logger
 
-logger = logging.getLogger(__name__)
+logger = build_logger(__name__)
 
 class MaxRetriesExceededError(Exception):
-    """Raised when all models fail to generate code."""
     pass
 
-@dataclass
 class ScaffoldingAgent:
-    supported_models: List[str]
-    tools: List[Any] = field(default_factory=list)
+    def __init__(self, llm_gateway: LLMGatewayPort, knowledge_port: KnowledgeBasePort):
+        self.llm_gateway = llm_gateway
+        self.knowledge_port = knowledge_port
+        self.prompt_builder = PromptBuilderService()
+        self.supported_models = ['deepseek-coder', 'gpt-4-turbo']
+        # URL hardcoded as per requirement for now
+        self._knowledge_url = "https://confluence.corp.com/wiki/spaces/ARCH/pages/carrito-de-compra-architecture"
 
-    def execute_scaffolding_mission(
-        self, 
-        request: ScaffoldingRequest, 
-        knowledge_url: str, 
-        knowledge_port: KnowledgeBasePort,
-        llm_gateway: LLMGatewayPort
-    ) -> str:
-        # 1. Retrieve Knowledge
-        try:
-            guidelines = knowledge_port.get_architecture_guidelines(knowledge_url)
-        except Exception as e:
-            logger.warning(f"Failed to retrieve guidelines from {knowledge_url}: {e}")
-            guidelines = "Follow standard clean architecture principles."
+    def execute_mission(self, request: ScaffoldingRequest) -> str:
+        logger.info(f"Starting mission for {request.issue_key}")
+        knowledge = self.knowledge_port.get_knowledge(self._knowledge_url)
+        prompt = self.prompt_builder.build_prompt(request.raw_instruction, knowledge)
+        
+        return self._try_generate_with_fallback(prompt)
 
-        # 2. Build Prompt
-        system_role = "You are an expert Software Architect and Engineer. Generate the requested scaffolding structure."
-        final_prompt = (
-            f"{system_role}\n\n"
-            f"ARCHITECTURE GUIDELINES:\n{guidelines}\n\n"
-            f"USER REQUEST:\n{request.raw_instruction}\n\n"
-            f"CONTEXT:\nTicket: {request.ticket_id}\nRequester: {request.requester}"
-        )
-
-        # 3. Chain of Fallback
-        last_error = None
+    def _try_generate_with_fallback(self, prompt: str) -> str:
         for model in self.supported_models:
             try:
                 logger.info(f"Attempting generation with model: {model}")
-                result = llm_gateway.generate_code(final_prompt, model)
-                logger.info(f"Success with model: {model}")
-                return result
+                return self.llm_gateway.generate_code(prompt, model)
             except LLMError as e:
-                logger.error(f"Model {model} failed: {e}")
-                last_error = e
-                continue
-            except Exception as e:
-                logger.error(f"Model {model} failed with unexpected error: {e}")
-                last_error = e
+                logger.warning(f"Model {model} failed: {e}")
                 continue
         
-        # 4. Failure
-        raise MaxRetriesExceededError(f"All models failed. Last error: {last_error}")
+        raise MaxRetriesExceededError("All supported models failed to generate code.")

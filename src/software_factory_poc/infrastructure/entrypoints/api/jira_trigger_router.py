@@ -58,7 +58,7 @@ from software_factory_poc.infrastructure.repositories.run_result_store_file_adap
 from software_factory_poc.infrastructure.observability.logger_factory_service import build_logger
 from software_factory_poc.application.usecases.orchestration.step_runner_service import StepRunnerService
 from software_factory_poc.application.core.policies.poc_policy_service import PocPolicyService
-from software_factory_poc.infrastructure.providers.facade.llm_bridge import LlmBridge
+from software_factory_poc.infrastructure.providers.llms.facade.llm_bridge import LlmBridge
 
 logger = build_logger(__name__)
 router = APIRouter()
@@ -144,9 +144,9 @@ def get_usecase(settings: Settings = Depends(get_settings)) -> ProcessJiraReques
     llm_adapter = LlmGatewayAdapter(llm_bridge)
     
     # Agent
-    agent = ScaffoldingAgent(supported_models=["model-1"]) # Using a simple list, actual model selection handled by adapter/bridge usually
+    agent = ScaffoldingAgent(llm_gateway=llm_adapter, knowledge_port=kb_adapter)
     
-    return ProcessJiraRequestUseCase(agent, kb_adapter, llm_adapter)
+    return ProcessJiraRequestUseCase(agent)
 
 @router.post("/jira-webhook", response_model=ArtifactResultModel, dependencies=[Depends(verify_api_key)])
 def trigger_scaffold(
