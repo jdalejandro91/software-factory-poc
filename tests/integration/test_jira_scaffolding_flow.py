@@ -55,6 +55,7 @@ def setup_overrides():
         # Setup GitLab Mock return values to avoid failures
         mock_gitlab.resolve_project_id.return_value = 123
         mock_gitlab.create_merge_request.return_value = {"web_url": "http://gitlab.mock/mr/1"}
+        mock_gitlab.branch_exists.return_value = False # <--- Ensure standard flow proceeds
         
         settings = Settings()
         

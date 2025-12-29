@@ -16,6 +16,11 @@ class GitLabProvider(ABC):
         pass
 
     @abstractmethod
+    def branch_exists(self, project_id: int, branch_name: str) -> bool:
+        """Checks if a branch exists in the project."""
+        pass
+
+    @abstractmethod
     def commit_files(self, project_id: int, branch_name: str, files_map: dict[str, str], commit_message: str) -> dict[str, Any]:
         """Commits files to a branch. Performs smart upsert."""
         pass

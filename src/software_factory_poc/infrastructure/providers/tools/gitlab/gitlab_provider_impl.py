@@ -50,6 +50,32 @@ class GitLabProviderImpl(GitLabProvider):
             return response.json()
         return None
 
+    def branch_exists(self, project_id: int, branch_name: str) -> bool:
+        """
+        Checks if a branch exists in the project.
+        """
+        import urllib.parse
+        safe_branch = urllib.parse.quote(branch_name, safe="")
+        
+        try:
+            logger.info(f"Checking if branch '{branch_name}' exists in project {project_id}...")
+            # Note: We are constructing the path here similar to get_branch but returning bool
+            # The client base URL is handled by the client itself, we just pass the relative path
+            response = self.client.get(f"api/v4/projects/{project_id}/repository/branches/{safe_branch}")
+            
+            if response.status_code == 200:
+                return True
+            if response.status_code == 404:
+                return False
+                
+            response.raise_for_status()
+            return False
+        except Exception as e:
+            if "404" in str(e): 
+                return False
+            logger.error(f"Error checking branch existence: {e}")
+            raise e
+
     def create_branch(self, project_id: int, branch_name: str, ref: str = "main") -> dict[str, Any]:
         # 1. Check existence
         existing_branch = self.get_branch(project_id, branch_name)

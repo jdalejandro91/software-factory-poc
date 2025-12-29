@@ -23,7 +23,7 @@ def _retryable(exc: BaseException) -> bool:
 
 @dataclass(frozen=True, slots=True)
 class RetryPolicy:
-    max_attempts: int = 3
+    max_attempts: int = 1  # Default: Fail fast (1 attempt, 0 retries)
 
     async def run(self, fn: Callable[[], Awaitable[_T]]) -> _T:
         try:

@@ -97,7 +97,8 @@ class LlmBridge:
 
         allowlist = ModelAllowlist(allowed=allowed_models)
         
-        retry_attempts = int(os.getenv("LLM_BRIDGE_RETRY_ATTEMPTS", "3"))
+        # CAMBIO: Default a 1 para evitar reintentos costosos. El agente maneja el fallback.
+        retry_attempts = int(os.getenv("LLM_BRIDGE_RETRY_ATTEMPTS", "1"))
         retry = RetryPolicy(max_attempts=retry_attempts)
         
         providers = _build_providers(settings, retry, correlation)

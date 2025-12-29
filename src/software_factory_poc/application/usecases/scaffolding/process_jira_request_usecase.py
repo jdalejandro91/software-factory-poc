@@ -33,19 +33,11 @@ class ProcessJiraRequestUseCase:
             self.jira_provider.add_comment(issue_key, "🤖 Iniciando misión de scaffolding...")
             self.jira_provider.transition_issue(issue_key, STATE_PROCESSING)
             
-            # Step 2: Agent Execution (Core)
-            generated_files = self.agent.execute_mission(request)
-            
-            # Security Check: Validate paths
-            for file_path in generated_files.keys():
-                if ".." in file_path or file_path.startswith("/") or "\\" in file_path:
-                    raise ValueError(f"Security Error: Invalid file path generated '{file_path}'")
-            
-            # Step 3: Persistence (GitLab)
-            branch_name = f"feature/{issue_key}-scaffolding"
-            
+            # Step 2: Parsing & Setup (Fail Fast)
             parser = ScaffoldingContractParserService()
             contract = parser.parse(request.raw_instruction)
+            
+            branch_name = f"feature/{issue_key}-scaffolding"
             project_path = contract.gitlab.project_path
             
             if not project_path:
@@ -53,6 +45,28 @@ class ProcessJiraRequestUseCase:
 
             project_id = self.gitlab_provider.resolve_project_id(project_path)
             
+            # Step 3: Guard Check (Remote Idempotency)
+            if self.gitlab_provider.branch_exists(project_id, branch_name):
+                logger.info(f"Rama {branch_name} ya existe. Omitiendo generación LLM.")
+                msg = (
+                    f"ℹ️ **Rama Existente Detectada**\n\n"
+                    f"La rama `{branch_name}` ya existe en el repositorio.\n"
+                    f"El sistema asume que el trabajo fue generado previamente.\n"
+                    f"⏩ **Acción**: Se mueve la tarea a Revisión sin regenerar código."
+                )
+                self.jira_provider.add_comment(issue_key, msg)
+                self.jira_provider.transition_issue(issue_key, STATE_SUCCESS) 
+                return "SKIPPED_BRANCH_EXISTS"
+            
+            # Step 4: Agent Execution (Core)
+            generated_files = self.agent.execute_mission(request)
+            
+            # Security Check: Validate paths
+            for file_path in generated_files.keys():
+                if ".." in file_path or file_path.startswith("/") or "\\" in file_path:
+                    raise ValueError(f"Security Error: Invalid file path generated '{file_path}'")
+            
+            # Step 5: Persistence (GitLab)
             self.gitlab_provider.create_branch(project_id, branch_name, "main")
             
             self.gitlab_provider.commit_files(
@@ -71,7 +85,7 @@ class ProcessJiraRequestUseCase:
             )
             mr_url = mr_response.get("web_url", "URL_NOT_FOUND")
             
-            # Step 4: Notify Completion & Success Transition
+            # Step 6: Notify Completion & Success Transition
             links = {"Ver Merge Request": mr_url}
             success_msg = JiraAdfBuilder.build_success_panel(
                 title="🚀 Misión Cumplida: Scaffolding Generado",
