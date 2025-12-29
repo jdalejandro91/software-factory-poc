@@ -25,7 +25,7 @@ def test_orchestrator_gitlab_failure(settings):
     contract = f"""
 {BLOCK_START}
 version: "1"
-template: "fail_test"
+technology_stack: "fail_test"
 target:
   project_id: 123
 {BLOCK_END}

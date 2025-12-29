@@ -28,7 +28,7 @@ class JiraTargetModel(BaseModel):
 
 class ScaffoldingContractModel(BaseModel):
     contract_version: str = Field(..., description="Version of the contract schema, e.g. '1.0'", alias="version")
-    technology_stack: str = Field(..., description="The tech stack to use, e.g., 'NodeJS', 'Python', 'Java SpringBoot'")
+    technology_stack: str = Field(..., description="Target technology stack (e.g., 'TypeScript with NestJS')")
     
     # Optional logic: Derived from parameters.service_name if not strict
     service_slug: str | None = Field(None, description="Slug for the new service, used in branch naming")
