@@ -41,14 +41,26 @@ def test_execute_handles_exception_and_attempts_rollback():
     # 1. Start notification
     mock_jira.add_comment.assert_any_call("TEST-123", "🤖 Iniciando agente de scaffolding...")
     
-    # 2. Error notification (Partial match check due to formatting)
-    # We check if add_comment was called with a string containing specific phrases
+    # 2. Error notification (ADF Panel Check)
+    # We check if add_comment was called with a dict (ADF) containing specific error text
     error_call_args = mock_jira.add_comment.call_args_list[-1] # Last call
-    msg_content = error_call_args[0][1]
+    msg_payload = error_call_args[0][1] # argument 1 is body
     
-    assert "{panel:title=❌ Misión Fallida" in msg_content
-    assert "Model Overload" in msg_content
-    assert "Se intentó revertir la tarea" in msg_content
+    assert isinstance(msg_payload, dict)
+    assert msg_payload["type"] == "doc"
+    # Drill down to find the text "Model Overload"
+    # ADF structure is deep, so we just check string representation or key elements
+    # But better to check structure reasonably
+    
+    panel = msg_payload["content"][0]
+    assert panel["type"] == "panel"
+    assert panel["attrs"]["panelType"] == "error"
+    
+    # Check if error detail is present in content
+    # Converting to string to search is easier for test
+    payload_str = str(msg_payload)
+    assert "Model Overload" in payload_str
+    assert "Misión Abortada" in payload_str
     
     # 3. Rollback transition
     mock_jira.transition_issue.assert_called_with("TEST-123", "To Do")

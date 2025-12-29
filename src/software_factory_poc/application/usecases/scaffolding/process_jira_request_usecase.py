@@ -8,6 +8,7 @@ from software_factory_poc.infrastructure.observability.logger_factory_service im
 logger = build_logger(__name__)
 
 from software_factory_poc.application.core.services.scaffolding_contract_parser_service import ScaffoldingContractParserService
+from software_factory_poc.infrastructure.providers.tools.jira.mappers.jira_adf_builder import JiraAdfBuilder
 
 @dataclass
 class ProcessJiraRequestUseCase:
@@ -26,7 +27,12 @@ class ProcessJiraRequestUseCase:
             
             # Step 2: Agent Execution (Core)
             # This invokes the retry logic + architectural knowledge retrieval
-            scaffolding_content = self.agent.execute_mission(request)
+            generated_files = self.agent.execute_mission(request)
+            
+            # Security Check: Validate paths
+            for file_path in generated_files.keys():
+                if ".." in file_path or file_path.startswith("/") or "\\" in file_path:
+                    raise ValueError(f"Security Error: Invalid file path generated '{file_path}'")
             
             # Step 3: Persistence (GitLab)
             branch_name = f"feature/{issue_key}-scaffolding"
@@ -51,22 +57,11 @@ class ProcessJiraRequestUseCase:
             # Ensure branch exists/created
             self.gitlab_provider.create_branch(project_id, branch_name, "main")
             
-            # Commit files (Using a simple map for now, assuming content is a single file or need parsing)
-            # The agent return 'str', but commit_files expects map.
-            # Assuming agent returns raw code or packaged structure. 
-            # Prompt 2 context implies "scaffolding_content" is what we commit.
-            # I will wrap it in a default file if strict map needed, e.g. "scaffold.py" or parse headers?
-            # User instruction: "content: scaffolding_content". 
-            # Commit needs map: { "filename": content }
-            # I'll check ScaffoldingAgent output format. 
-            # Agent returns `str`.
-            # I will assume "generated_scaffold.py" or use a parser if available.
-            # For this step, I'll use a placeholder filename "generated_code.py" or similar.
-            files_map = {"generated_scaffolding.py": scaffolding_content}
+            # Commit files (Agent returns Dict[str, str] mapping filenames to content)
             self.gitlab_provider.commit_files(
                 project_id, 
                 branch_name, 
-                files_map, 
+                generated_files, 
                 f"feat: Scaffolding for {issue_key}"
             )
             
@@ -79,35 +74,44 @@ class ProcessJiraRequestUseCase:
             )
             mr_url = mr_response.get("web_url", "URL_NOT_FOUND")
             
-            # Step 4: Notify Success
-            self.jira_provider.add_comment(issue_key, f"✅ Misión completada. MR creado: {mr_url}")
+            # Step 4: Notify Completion
+            links = {"Ver Merge Request": mr_url}
+            success_msg = JiraAdfBuilder.build_success_panel(
+                title="🚀 Misión Cumplida: Scaffolding Generado",
+                summary=f"El agente ha generado exitosamente el código base para: {request.summary}",
+                links=links
+            )
+            self.jira_provider.add_comment(issue_key, success_msg)
             
-            return scaffolding_content
+            self.jira_provider.transition_issue(issue_key, "Done")
+            
+            return mr_url
 
         except Exception as e:
-            # Step 5: Error Handling & Rollback
-            logger.exception(f"Mission failed for {issue_key}")
+            logger.error(f"Mission failed for {issue_key}")
+            logger.exception(e)
             
-            error_msg = f"""
-{{panel:title=❌ Misión Fallida|borderStyle=dashed|borderColor=#ff0000|titleBGColor=#ffe7e7|bgColor=#fff0f0}}
-El agente de Scaffolding encontró un error irrecuperable.
-
-*Razón Técnica:* {str(e)}
-
-*Acciones:*
-* Se intentó revertir la tarea a estado inicial.
-* Por favor revisa los logs o intenta de nuevo más tarde.
-{{panel}}
-"""
-            
+            # 1. Notify Failure
             try:
+                error_detail = str(e)
+                steps = [
+                    "Se detuvo la generación de código.",
+                    "Se ha revertido el estado de la tarea a 'To Do'.",
+                    "Por favor revise los inputs del contrato YAML."
+                ]
+                error_msg = JiraAdfBuilder.build_error_panel(
+                    title="⚠️ Misión Abortada",
+                    error_detail=error_detail,
+                    steps_taken=steps
+                )
                 self.jira_provider.add_comment(issue_key, error_msg)
-            except Exception as comment_error:
-                logger.error(f"Failed to add error comment: {comment_error}")
-
+            except Exception as jira_err:
+                logger.error(f"Failed to send error notification to Jira: {jira_err}")
+            
+            # 2. Attempt Rollback
             try:
                 self.jira_provider.transition_issue(issue_key, "To Do")
-            except Exception as transition_error:
-                logger.warning(f"Failed to rollback issue state: {transition_error}")
-            
+            except Exception as transition_err:
+                logger.warning(f"Failed to rollback Jira status: {transition_err}")
+                
             raise e

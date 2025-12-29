@@ -1,4 +1,6 @@
-from typing import List, Optional
+from typing import List, Optional, Dict
+import json
+import re
 
 from software_factory_poc.application.core.entities.scaffolding.scaffolding_request import ScaffoldingRequest
 from software_factory_poc.application.core.interfaces.llm_gateway import LLMGatewayPort, LLMError
@@ -9,6 +11,9 @@ from software_factory_poc.infrastructure.observability.logger_factory_service im
 logger = build_logger(__name__)
 
 class MaxRetriesExceededError(Exception):
+    pass
+
+class LLMOutputFormatError(Exception):
     pass
 
 class ScaffoldingAgent:
@@ -25,12 +30,13 @@ class ScaffoldingAgent:
         ]
         self._knowledge_url = self.DEFAULT_KNOWLEDGE_URL
 
-    def execute_mission(self, request: ScaffoldingRequest) -> str:
+    def execute_mission(self, request: ScaffoldingRequest) -> Dict[str, str]:
         logger.info(f"Starting mission for {request.issue_key}")
         knowledge = self.knowledge_port.get_knowledge(self._knowledge_url)
         prompt = self.prompt_builder.build_prompt(request.raw_instruction, knowledge)
         
-        return self._try_generate_with_fallback(prompt)
+        raw_response = self._try_generate_with_fallback(prompt)
+        return self._parse_response_to_files(raw_response)
 
     def _try_generate_with_fallback(self, prompt: str) -> str:
         for model in self.supported_models:
@@ -42,3 +48,24 @@ class ScaffoldingAgent:
                 continue
         
         raise MaxRetriesExceededError("All supported models failed to generate code.")
+
+    def _parse_response_to_files(self, raw_text: str) -> Dict[str, str]:
+        try:
+            # Limpiar markdown
+            clean_text = raw_text.strip()
+            if clean_text.startswith("```"):
+                clean_text = re.sub(r"^```(json)?", "", clean_text)
+                clean_text = re.sub(r"```$", "", clean_text)
+            
+            clean_text = clean_text.strip()
+            
+            # Parsear
+            files_map = json.loads(clean_text)
+            
+            if not isinstance(files_map, dict):
+                raise ValueError("Response is not a dictionary")
+                
+            return files_map
+        except Exception as e:
+            logger.error(f"Failed to parse LLM JSON: {e}. Raw: {raw_text[:100]}...")
+            raise LLMOutputFormatError(f"El agente generó una respuesta inválida (no JSON): {e}")

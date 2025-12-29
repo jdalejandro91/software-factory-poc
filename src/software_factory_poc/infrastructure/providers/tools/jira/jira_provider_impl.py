@@ -40,6 +40,7 @@ class JiraProviderImpl(JiraProvider):
                 }
             }
         
+        logger.debug(f"Sending comment payload to Jira: {payload}")
         response = self.client.post(f"rest/api/3/issue/{issue_key}/comment", payload)
         response.raise_for_status()
         return response.json()

@@ -23,7 +23,7 @@ class MockLLMGateway(LLMGatewayPort):
     def generate_code(self, prompt: str, model: str) -> str:
         self.last_prompt = prompt
         self.last_model = model
-        return "class ShoppingCart: pass"
+        return '{"src/shopping_cart.py": "class ShoppingCart: pass"}'
 
 mock_llm = MockLLMGateway()
 
@@ -118,5 +118,5 @@ Instruction: Create a Python shopping cart with add_item method.
     assert "Cart Entity" in prompt
     
     # 3. Agent Verification: Constructed structure
-    assert "CONTEXT:" in prompt
-    assert "INSTRUCTION:" in prompt
+    assert "INPUT CONTEXT:" in prompt
+    assert "USER REQUEST:" in prompt
