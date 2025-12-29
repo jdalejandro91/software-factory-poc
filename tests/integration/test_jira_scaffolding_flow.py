@@ -10,6 +10,8 @@ from software_factory_poc.infrastructure.providers.knowledge.confluence_mock_ada
 from software_factory_poc.infrastructure.providers.knowledge.architecture_constants import SHOPPING_CART_ARCHITECTURE
 from software_factory_poc.application.core.interfaces.llm_gateway import LLMGatewayPort
 from software_factory_poc.configuration.main_settings import Settings
+from software_factory_poc.application.ports.tools.jira_provider import JiraProvider
+from software_factory_poc.application.ports.tools.gitlab_provider import GitLabProvider
 
 client = TestClient(app)
 
@@ -46,10 +48,15 @@ def override_get_usecase():
     # I MUST update the Agent's URL or Adapter's check or inject a URL that matches.
     # The user requirement for Adapter was: "Si la URL contiene 'carrito-de-compra'".
     
-    # I will patch the Agent's URL in this test to ensure it triggers the logic.
-    agent._knowledge_url = "http://confluence/carrito-de-compra"
+    # Mock Providers
+    mock_jira = MagicMock(spec=JiraProvider)
+    mock_gitlab = MagicMock(spec=GitLabProvider)
     
-    return ProcessJiraRequestUseCase(agent=agent)
+    # Setup GitLab Mock return values to avoid failures
+    mock_gitlab.resolve_project_id.return_value = 123
+    mock_gitlab.create_merge_request.return_value = {"web_url": "http://gitlab.mock/mr/1"}
+    
+    return ProcessJiraRequestUseCase(agent=agent, jira_provider=mock_jira, gitlab_provider=mock_gitlab)
 
 app.dependency_overrides[get_usecase] = override_get_usecase
 
@@ -67,7 +74,11 @@ def test_jira_scaffolding_flow_end_to_end():
             "key": "KAN-123",
             "fields": {
                 "summary": "Implement Shopping Cart Feature",
-                "description": "Please create the following: \n```scaffolding\nCreate a Python shopping cart with add_item method.\n```\nThanks."
+                "description": "Please create the following: \n```scaffolding\nCreate a Python shopping cart with add_item method.\n```\nThanks.",
+                "project": {
+                    "key": "KAN",
+                    "name": "Kanban Project"
+                }
             }
         }
     }

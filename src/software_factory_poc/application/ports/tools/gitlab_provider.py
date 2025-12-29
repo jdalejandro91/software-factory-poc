@@ -6,6 +6,11 @@ class GitLabProvider(ABC):
     """Abstract base class for GitLab operations."""
 
     @abstractmethod
+    def resolve_project_id(self, project_path: str) -> int:
+        """Resolves a project path to an ID."""
+        pass
+
+    @abstractmethod
     def create_branch(self, project_id: int, branch_name: str, ref: str = "main") -> dict[str, Any]:
         """Creates a new branch in the specified project."""
         pass

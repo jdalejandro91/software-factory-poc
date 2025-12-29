@@ -14,10 +14,16 @@ class JiraMapper:
         
         return ScaffoldingRequest(
             issue_key=dto.issue.key,
+            project_key=self._get_project_key(dto),
             summary=self._get_summary(dto),
             raw_instruction=raw_instruction,
             reporter=self._get_reporter(dto)
         )
+
+    def _get_project_key(self, dto: JiraWebhookDTO) -> str:
+        if dto.issue.fields and dto.issue.fields.project:
+            return dto.issue.fields.project.key
+        return "UNKNOWN"
 
     def _get_description(self, dto: JiraWebhookDTO) -> str:
         if dto.issue.fields and dto.issue.fields.description:

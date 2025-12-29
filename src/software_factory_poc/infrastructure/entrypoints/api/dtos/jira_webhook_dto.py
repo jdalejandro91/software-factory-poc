@@ -6,9 +6,14 @@ class JiraUserDTO(BaseModel):
     display_name: Optional[str] = Field(None, alias="displayName")
     active: Optional[bool] = None
 
+class JiraProjectDTO(BaseModel):
+    key: str
+    name: Optional[str] = None
+
 class JiraIssueFieldsDTO(BaseModel):
     summary: Optional[str] = None
     description: Optional[str] = None
+    project: Optional[JiraProjectDTO] = None
 
 class JiraIssueDTO(BaseModel):
     id: Optional[str] = None

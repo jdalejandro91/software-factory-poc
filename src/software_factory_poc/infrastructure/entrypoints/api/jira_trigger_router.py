@@ -142,11 +142,19 @@ def get_usecase(settings: Settings = Depends(get_settings)) -> ProcessJiraReques
     
     llm_bridge = LlmBridge.from_settings(settings)
     llm_adapter = LlmGatewayAdapter(llm_bridge)
+
+    # Providers
+    jira_http = JiraHttpClient(settings)
+    jira_provider = JiraProviderImpl(jira_http)
+
+    gitlab_http = GitLabHttpClient(settings)
+    payload_builder = GitLabPayloadBuilderService()
+    gitlab_provider = GitLabProviderImpl(gitlab_http, payload_builder)
     
     # Agent
     agent = ScaffoldingAgent(llm_gateway=llm_adapter, knowledge_port=kb_adapter)
     
-    return ProcessJiraRequestUseCase(agent)
+    return ProcessJiraRequestUseCase(agent, jira_provider, gitlab_provider)
 
 @router.post("/jira-webhook", response_model=ArtifactResultModel, dependencies=[Depends(verify_api_key)])
 def trigger_scaffold(

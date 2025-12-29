@@ -12,13 +12,18 @@ class MaxRetriesExceededError(Exception):
     pass
 
 class ScaffoldingAgent:
-    def __init__(self, llm_gateway: LLMGatewayPort, knowledge_port: KnowledgeBasePort):
+    DEFAULT_KNOWLEDGE_URL = "https://confluence.corp.com/wiki/spaces/ARCH/pages/carrito-de-compra-architecture"
+
+    def __init__(self, llm_gateway: LLMGatewayPort, knowledge_port: KnowledgeBasePort, model_priority_list: Optional[List[str]] = None):
         self.llm_gateway = llm_gateway
         self.knowledge_port = knowledge_port
         self.prompt_builder = PromptBuilderService()
-        self.supported_models = ['deepseek-coder', 'gpt-4-turbo']
-        # URL hardcoded as per requirement for now
-        self._knowledge_url = "https://confluence.corp.com/wiki/spaces/ARCH/pages/carrito-de-compra-architecture"
+        self.supported_models = model_priority_list or [
+            "gpt-4-turbo",
+            "gpt-4o",
+            "deepseek-coder"
+        ]
+        self._knowledge_url = self.DEFAULT_KNOWLEDGE_URL
 
     def execute_mission(self, request: ScaffoldingRequest) -> str:
         logger.info(f"Starting mission for {request.issue_key}")
