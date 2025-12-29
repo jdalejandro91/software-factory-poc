@@ -99,6 +99,17 @@ Instruction: Create a Python shopping cart with add_item method.
                     "name": "Kanban Project"
                 }
             }
+        },
+        "changelog": {
+            "id": "9999",
+            "items": [
+                {
+                    "field": "status",
+                    "fieldtype": "jira",
+                    "fromString": "Por hacer",
+                    "toString": "En curso"
+                }
+            ]
         }
     }
 

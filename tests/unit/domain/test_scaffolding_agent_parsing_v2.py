@@ -35,10 +35,44 @@ def test_parse_failure(agent):
     invalid_text = 'Not valid json'
     with pytest.raises(LLMOutputFormatError) as exc:
         agent._parse_response_to_files(invalid_text)
-    assert "Model output is not valid JSON" in str(exc.value)
+    assert "Invalid JSON:" in str(exc.value)
 
 def test_parse_nested_braces_in_strings(agent):
     # Ensure regex/find logic doesn't break on braces inside strings
     complex_json = '{"file.js": "function test() { return true; }"}'
     result = agent._parse_response_to_files(complex_json)
     assert result == {"file.js": "function test() { return true; }"}
+
+def test_parse_deeply_nested_json(agent):
+    nested_json = '{"dir/file.json": "{\\"k\\": {\\"v\\": 1}}"}'
+    result = agent._parse_response_to_files(nested_json)
+    assert result == {"dir/file.json": '{"k": {"v": 1}}'}
+
+def test_parse_markdown_with_surrounding_noise(agent):
+    # Regex should capture the markdown block specifically
+    text = """
+    Okay, here is the solution:
+    
+    ```json
+    {
+        "foo": "bar"
+    }
+    ```
+    
+    Let me know if you need changes.
+    """
+    result = agent._parse_response_to_files(text)
+    assert result == {"foo": "bar"}
+
+def test_parse_dirty_fallback(agent):
+    # When regex fails (no markdown), fallback to finding {}
+    text = """
+    Sure!
+    {
+        "a": 1,
+        "b": 2
+    }
+    Hope this works.
+    """
+    result = agent._parse_response_to_files(text)
+    assert result == {"a": 1, "b": 2}

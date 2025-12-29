@@ -20,8 +20,19 @@ class JiraIssueDTO(BaseModel):
     key: str
     fields: Optional[JiraIssueFieldsDTO] = None
 
+class JiraChangelogItem(BaseModel):
+    field: Optional[str] = None
+    fieldtype: Optional[str] = None
+    fromString: Optional[str] = None
+    toString: Optional[str] = None
+
+class JiraChangelog(BaseModel):
+    id: Optional[str] = None
+    items: list[JiraChangelogItem] = []
+
 class JiraWebhookDTO(BaseModel):
     webhook_event: Optional[str] = Field(None, alias="webhookEvent")
     timestamp: Optional[int] = None
     user: Optional[JiraUserDTO] = None
     issue: JiraIssueDTO
+    changelog: Optional[JiraChangelog] = None

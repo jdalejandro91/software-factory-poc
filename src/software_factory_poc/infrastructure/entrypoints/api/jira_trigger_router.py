@@ -163,12 +163,34 @@ def get_usecase(settings: Settings = Depends(get_settings)) -> ProcessJiraReques
 def trigger_scaffold(
     payload: JiraWebhookDTO,
     background_tasks: BackgroundTasks,
-    usecase: ProcessJiraRequestUseCase = Depends(get_usecase)
+    usecase: ProcessJiraRequestUseCase = Depends(get_usecase),
+    settings: Settings = Depends(get_settings)
 ):
     issue_key = payload.issue.key
     event_type = payload.webhook_event or "unknown"
     
-    logger.info(f"Received webhook for {issue_key}. Queuing background task.")
+    # Filter Logic: Only process if transitioning to Processing State
+    processing_state = settings.workflow_state_processing
+    is_start_event = False
+    
+    if payload.changelog:
+        for item in payload.changelog.items:
+            if item.field == "status" and item.toString == processing_state:
+                is_start_event = True
+                break
+    
+    if not is_start_event:
+        logger.info(f"Ignorando evento Jira para {issue_key}: No es una transición a '{processing_state}'.")
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "status": "ignored",
+                "message": f"Event ignored. Not a transition to {processing_state}",
+                "issue_key": issue_key
+            }
+        )
+
+    logger.info(f"Received start webhook for {issue_key}. Queuing background task.")
     
     mapper = JiraMapper()
     request = mapper.map_webhook_to_command(payload)

@@ -86,6 +86,17 @@ parameters:
 """,
                 "project": {"key": "KAN", "name": "Project"}
             }
+        },
+        "changelog": {
+            "id": "1111",
+            "items": [
+                {
+                    "field": "status",
+                    "fieldtype": "jira",
+                    "fromString": "Por hacer",
+                    "toString": "En curso"
+                }
+            ]
         }
     }
     

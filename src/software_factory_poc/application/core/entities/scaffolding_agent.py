@@ -51,28 +51,24 @@ class ScaffoldingAgent:
         raise MaxRetriesExceededError("All supported models failed to generate code.")
 
     def _parse_response_to_files(self, raw_text: str) -> Dict[str, str]:
-        # 1. Intentar limpieza básica de Markdown
         text = raw_text.strip()
-        if "```" in text:
-            # Regex para extraer contenido de bloque de código json o genérico
-            match = re.search(r"```(?:json)?(.*?)```", text, re.DOTALL)
-            if match:
-                text = match.group(1).strip()
         
-        # 2. Intentar parseo
+        # 1. Intentar extraer de bloques Markdown primero
+        markdown_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+        if markdown_match:
+            text = markdown_match.group(1)
+            
+        # 2. Fallback: Buscar el primer '{' y el último '}'
+        else:
+            start = text.find("{")
+            end = text.rfind("}")
+            if start != -1 and end != -1:
+                text = text[start : end + 1]
+
+        # 3. Parsear
         try:
             return json.loads(text)
-        except json.JSONDecodeError:
-            # 3. Fallback: Intentar encontrar llaves extremas si hay texto basura alrededor
-            try:
-                start = text.find("{")
-                end = text.rfind("}") + 1
-                if start != -1 and end != 0:
-                    json_candidate = text[start:end]
-                    return json.loads(json_candidate)
-            except:
-                pass
-            
-            # Si todo falla
-            logger.error(f"Invalid JSON received from LLM. Preview: {raw_text[:200]}")
-            raise LLMOutputFormatError("Model output is not valid JSON")
+        except json.JSONDecodeError as e:
+            # Último recurso: Intentar usar un parser resiliente o fallar
+            logger.error(f"Failed to parse JSON. Raw: {raw_text[:100]}... Error: {e}")
+            raise LLMOutputFormatError(f"Invalid JSON: {e}")
