@@ -3,6 +3,7 @@ import asyncio
 from software_factory_poc.application.core.entities.llm_request import LlmRequest
 from software_factory_poc.application.core.interfaces.llm_gateway import LLMError, LLMGatewayPort
 from software_factory_poc.application.core.value_objects.generation_config import GenerationConfig
+from software_factory_poc.application.core.value_objects.output_format import OutputFormat
 from software_factory_poc.application.core.value_objects.message import Message
 from software_factory_poc.application.core.value_objects.message_role import MessageRole
 from software_factory_poc.application.core.value_objects.model_id import ModelId
@@ -35,10 +36,12 @@ class LlmGatewayAdapter(LLMGatewayPort):
         # Heuristic: Enable JSON mode if "JSON" matches in prompt (case insensitive)
         json_mode = "json" in prompt.lower()
         
+        format_enum = OutputFormat.JSON if json_mode else OutputFormat.TEXT
+        
         request = LlmRequest(
             model=ModelId(provider=provider, name=model),
             messages=(Message(role=MessageRole.USER, content=prompt),),
-            generation=GenerationConfig(temperature=0.0, json_mode=json_mode)
+            generation=GenerationConfig(temperature=0.0, format=format_enum)
         )
         
         try:

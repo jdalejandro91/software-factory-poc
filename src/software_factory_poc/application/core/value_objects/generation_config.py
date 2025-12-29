@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from software_factory_poc.application.core.value_objects.output_format import OutputFormat
 
 @dataclass(frozen=True, slots=True)
 class GenerationConfig:
@@ -10,8 +11,16 @@ class GenerationConfig:
     temperature: float | None = None
     top_p: float | None = None
     seed: int | None = None
-    json_mode: bool = False
     stop: Sequence[str] | None = None
+    format: OutputFormat = OutputFormat.TEXT
+
+    @property
+    def json_mode(self) -> bool:
+         return self.format == OutputFormat.JSON
+
+    @property
+    def is_json(self) -> bool:
+         return self.format == OutputFormat.JSON
 
     def __post_init__(self) -> None:
         if self.max_output_tokens is not None and self.max_output_tokens <= 0:

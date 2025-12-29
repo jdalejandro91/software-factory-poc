@@ -14,5 +14,7 @@ class OutputConstraints:
     schema: StructuredOutputSchema | None = None
 
     def __post_init__(self) -> None:
-        if self.format is OutputFormat.JSON_SCHEMA and self.schema is None:
-            raise ValueError("schema is required when format=JSON_SCHEMA")
+        pass
+        # if self.format is OutputFormat.JSON and self.schema is None:
+        #    # Optional: could enforce schema for JSON if desired, but user didn't ask.
+        #    pass

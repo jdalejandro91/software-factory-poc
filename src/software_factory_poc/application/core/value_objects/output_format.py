@@ -1,9 +1,7 @@
-from __future__ import annotations
+from enum import StrEnum, auto
 
-from enum import Enum
-
-
-class OutputFormat(str, Enum):
-    TEXT = "text"
-    JSON_OBJECT = "json_object"
-    JSON_SCHEMA = "json_schema"
+class OutputFormat(StrEnum):
+    JSON = auto()      # Para datos estructurados estrictos
+    XML = auto()       # Para integraciones legacy o SOAP
+    MARKDOWN = auto()  # Para documentación o contenido legible
+    TEXT = auto()      # Para chat natural o razonamiento (CoT)

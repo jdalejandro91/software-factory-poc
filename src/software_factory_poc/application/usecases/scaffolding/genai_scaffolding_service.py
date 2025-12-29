@@ -76,7 +76,7 @@ class GenaiScaffoldingService:
                 Message(MessageRole.USER, user_prompt),
             ),
             generation=GenerationConfig(temperature=0.2), # Low temp for structural consistency
-            output=OutputConstraints(format=OutputFormat.JSON_OBJECT) # Hint JSON mode if supported
+            output=OutputConstraints(format=OutputFormat.JSON) # Hint JSON mode if supported
         )
         
         try:

@@ -18,6 +18,7 @@ from software_factory_poc.infrastructure.providers.llms.openai.mappers.openai_re
 from software_factory_poc.infrastructure.observability.logging.correlation_id_context import CorrelationIdContext
 from software_factory_poc.infrastructure.common.retry.retry_policy import RetryPolicy
 
+from openai import AsyncOpenAI
 
 @dataclass(frozen=True, slots=True)
 class OpenAiProvider(LlmProvider):
@@ -38,15 +39,21 @@ class OpenAiProvider(LlmProvider):
 
     async def _call(self, request: LlmRequest) -> LlmResponse:
         try:
+            # 1. Obtener argumentos base del mapper
             kwargs = self.request_mapper.to_kwargs(request)
-            # Ensure 'messages' key is used for chat completions, mapper returns 'input' for some reason?
-            # Let's check mapper output in next step. For now, assume mapper returns correct kwargs or fix mapper.
-            # Looking at mapper: 'input': self._input_messages(request.messages) -> This is WRONG for chat completion.
-            # It should be 'messages'.
             
+            # 2. Inyectar 'response_format' si el config lo pide (JSON Mode nativo)
+            # Nota: Esto es soportado por gpt-4-turbo y gpt-3.5-turbo-1106+
+            if request.generation.json_mode:
+                kwargs["response_format"] = {"type": "json_object"}
+            
+            # 3. Llamada Oficial SDK v1
+            # logging.debug(f"OpenAI Payload: {kwargs}") # Descomentar para debug local
             resp = await self.client.chat.completions.create(**kwargs)
+            
         except Exception as exc:
             raise self._map_error(exc)
+            
         return self.response_mapper.to_domain(request.model.name, resp)
 
     def _map_error(self, exc: Exception) -> ProviderError:
