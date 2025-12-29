@@ -25,6 +25,7 @@ class ScaffoldingAgent:
         self.prompt_builder = PromptBuilderService()
         self.supported_models = model_priority_list or [
             "gpt-4-turbo",
+            "gemini-1.5-flash",
             "gpt-4o",
             "deepseek-coder"
         ]
@@ -50,22 +51,28 @@ class ScaffoldingAgent:
         raise MaxRetriesExceededError("All supported models failed to generate code.")
 
     def _parse_response_to_files(self, raw_text: str) -> Dict[str, str]:
+        # 1. Intentar limpieza básica de Markdown
+        text = raw_text.strip()
+        if "```" in text:
+            # Regex para extraer contenido de bloque de código json o genérico
+            match = re.search(r"```(?:json)?(.*?)```", text, re.DOTALL)
+            if match:
+                text = match.group(1).strip()
+        
+        # 2. Intentar parseo
         try:
-            # Limpiar markdown
-            clean_text = raw_text.strip()
-            if clean_text.startswith("```"):
-                clean_text = re.sub(r"^```(json)?", "", clean_text)
-                clean_text = re.sub(r"```$", "", clean_text)
+            return json.loads(text)
+        except json.JSONDecodeError:
+            # 3. Fallback: Intentar encontrar llaves extremas si hay texto basura alrededor
+            try:
+                start = text.find("{")
+                end = text.rfind("}") + 1
+                if start != -1 and end != 0:
+                    json_candidate = text[start:end]
+                    return json.loads(json_candidate)
+            except:
+                pass
             
-            clean_text = clean_text.strip()
-            
-            # Parsear
-            files_map = json.loads(clean_text)
-            
-            if not isinstance(files_map, dict):
-                raise ValueError("Response is not a dictionary")
-                
-            return files_map
-        except Exception as e:
-            logger.error(f"Failed to parse LLM JSON: {e}. Raw: {raw_text[:100]}...")
-            raise LLMOutputFormatError(f"El agente generó una respuesta inválida (no JSON): {e}")
+            # Si todo falla
+            logger.error(f"Invalid JSON received from LLM. Preview: {raw_text[:200]}")
+            raise LLMOutputFormatError("Model output is not valid JSON")

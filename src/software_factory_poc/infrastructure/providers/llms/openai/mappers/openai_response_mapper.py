@@ -13,22 +13,28 @@ from software_factory_poc.application.core.value_objects.token_usage import Toke
 @dataclass(frozen=True, slots=True)
 class OpenAiResponseMapper:
     def to_domain(self, model_name: str, response: Any) -> LlmResponse:
-        content = self._output_text(response)
-        usage = self._usage(response)
-        payload = self._payload(response)
-        return LlmResponse(model=ModelId(provider=ProviderName.OPENAI, name=model_name), content=content, usage=usage, provider_payload=payload)
+        try:
+            choice = response.choices[0]
+            content = choice.message.content
+            
+            if not content:
+                finish_reason = getattr(choice, 'finish_reason', 'unknown')
+                raise ValueError(f"OpenAI returned empty content. Finish reason: {finish_reason}")
+            
+            # Sanitization: Strip markdown code blocks if present
+            # This is a safe default for JSON mode
+            if content.strip().startswith("```"):
+                 import re
+                 content = re.sub(r"^```(?:json)?\s*", "", content.strip())
+                 content = re.sub(r"\s*```$", "", content)
 
-    def _output_text(self, response: Any) -> str:
-        text = getattr(response, "output_text", None)
-        return text if isinstance(text, str) and text else self._scan_output(response)
+            payload = self._payload(response)
+            usage = self._usage(response)
+            
+            return LlmResponse(model=ModelId(provider=ProviderName.OPENAI, name=model_name), content=content, usage=usage, provider_payload=payload)
 
-    def _scan_output(self, response: Any) -> str:
-        for item in getattr(response, "output", []) or []:
-            for part in getattr(item, "content", []) or []:
-                t = getattr(part, "text", None)
-                if isinstance(t, str) and t:
-                    return t
-        raise ValueError("OpenAI response did not contain text output")
+        except Exception as e:
+            raise ValueError(f"Failed to map OpenAI response: {e}")
 
     def _usage(self, response: Any) -> TokenUsage | None:
         u = getattr(response, "usage", None)
