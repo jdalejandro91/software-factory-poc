@@ -120,7 +120,7 @@ class JiraAdfBuilder:
         }
 
     @classmethod
-    def build_info_panel(cls, title: str, details: str) -> Dict[str, Any]:
+    def build_info_panel(cls, title: str, details: str, links: Dict[str, str] = None) -> Dict[str, Any]:
         panel_content = []
         
         # 1. Heading
@@ -130,6 +130,10 @@ class JiraAdfBuilder:
         panel_content.append(cls._create_paragraph([
             cls._create_text(details)
         ]))
+
+        # 3. Links List
+        if links:
+            panel_content.append(cls._create_link_list(links))
 
         root_content = [
             cls._create_panel("info", panel_content)

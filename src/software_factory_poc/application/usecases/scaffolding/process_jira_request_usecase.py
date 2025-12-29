@@ -46,9 +46,13 @@ class ProcessJiraRequestUseCase:
             # Step 3: Guard Check (Remote Idempotency)
             if self.gitlab_provider.branch_exists(project_id, branch_name):
                 logger.info(f"Branch {branch_name} already exists. Skipping LLM generation.")
+                
+                branch_url = f"{self.settings.gitlab_base_url}/{project_path}/-/tree/{branch_name}"
+                
                 info_msg = JiraAdfBuilder.build_info_panel(
                     title="Rama Existente Detectada",
-                    details=f"La rama '{branch_name}' ya existe en el repositorio. Se asume que el trabajo fue generado previamente. La tarea pasará a revisión."
+                    details=f"La rama '{branch_name}' ya existe en el repositorio. Se asume que el trabajo fue generado previamente. La tarea pasará a revisión.",
+                    links={"🔗 Ver Rama Existente": branch_url}
                 )
                 self.jira_provider.add_comment(issue_key, info_msg)
                 self.jira_provider.transition_issue(issue_key, STATE_SUCCESS) 
