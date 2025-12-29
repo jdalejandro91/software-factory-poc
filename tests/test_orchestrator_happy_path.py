@@ -29,7 +29,7 @@ def test_orchestrator_happy_path(full_orchestrator, settings):
     contract_snippet = f"""
 {BLOCK_START}
 version: "1"
-template: "any-template"
+technology_stack: "any-template"
 target:
   project_id: 123
 parameters:
@@ -40,11 +40,11 @@ parameters:
     
     from software_factory_poc.application.core.entities.scaffolding.scaffolding_request import ScaffoldingRequest
     request = ScaffoldingRequest(
-        ticket_id=issue_key,
+        issue_key=issue_key,
         project_key="PROJ",
         summary="Scaffold this",
         raw_instruction=raw_instruction,
-        requester="Tester"
+        reporter="Tester"
     )
     # Note: No need to mock Jira GET issue because Orchestrator uses Request data.
 

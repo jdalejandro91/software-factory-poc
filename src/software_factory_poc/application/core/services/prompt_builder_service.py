@@ -6,11 +6,11 @@ class PromptBuilderService:
     def _format_prompt(self, instruction: str, knowledge_context: str) -> str:
         return (
             f"ACT AS: Senior Software Architect & Tech Lead.\n\n"
-            f"MISSION: Create a clean 'Skeleton Scaffolding' for a new software project based on the requested 'template'.\n\n"
+            f"MISSION: Create a clean 'Skeleton Scaffolding' for a new software project based on the requested 'technology_stack'.\n\n"
             f"INPUT CONTEXT (Architecture Pattern):\n{knowledge_context}\n\n"
-            f"USER REQUEST (Contains 'template' and 'parameters'):\n{instruction}\n\n"
+            f"USER REQUEST (Contains 'technology_stack' and 'parameters'):\n{instruction}\n\n"
             f"CRITICAL RULES FOR GENERATION:\n"
-            f"1. **Analyze the 'template' field** in the User Request. Use the best standard practices and folder structures for that specific framework (e.g., NestJS modules, SpringBoot packages).\n"
+            f"1. **Analyze the 'technology_stack' field** in the User Request. Use the best standard practices and folder structures for that specific framework (e.g., NestJS modules, SpringBoot packages).\n"
             f"2. **Configuration Files (FULL CONTENT)**: You MUST generate valid, complete content for all essential project configuration files. Examples: 'package.json', 'pom.xml', 'requirements.txt', 'Dockerfile', 'tsconfig.json', '.gitignore'. The project must be installable/buildable.\n"
             f"3. **Source Code Directories (DESCRIPTIVE ONLY)**: Do NOT generate business logic implementation files (no entities, no services code). Instead, create the directory structure and place a 'README.md' file inside each architectural folder (e.g., 'src/domain/README.md') describing what should go there.\n"
             f"4. **Root README**: Generate a professional 'README.md' at the root with project name, architecture overview, and setup commands.\n"

@@ -12,14 +12,36 @@ from software_factory_poc.application.core.interfaces.llm_gateway import LLMGate
 from software_factory_poc.configuration.main_settings import Settings
 
 mock_llm = Mock(spec=LLMGatewayPort)
-mock_llm.generate_code.return_value = "Generated Code by Mock LLM"
+mock_llm.generate_code.return_value = '{"main.py": "print(\'Generated Code by Mock LLM\')"}'
 
-def override_get_usecase():
-    agent = ScaffoldingAgent(supported_models=["test-model"])
-    kb = ConfluenceMockAdapter()
-    return ProcessJiraRequestUseCase(agent, kb, mock_llm)
+@pytest.fixture(autouse=True)
+def setup_overrides():
+    from software_factory_poc.infrastructure.providers.knowledge.confluence_mock_adapter import ConfluenceMockAdapter
+    from software_factory_poc.application.core.entities.scaffolding_agent import ScaffoldingAgent
+    from software_factory_poc.application.ports.tools.jira_provider import JiraProvider
+    from software_factory_poc.application.ports.tools.gitlab_provider import GitLabProvider
+    from software_factory_poc.infrastructure.entrypoints.api.jira_trigger_router import get_settings
+    
+    def override_get_usecase():
+        agent = ScaffoldingAgent(llm_gateway=mock_llm, knowledge_port=ConfluenceMockAdapter(), model_priority_list=["test-model"])
+        kb = ConfluenceMockAdapter()
+        return ProcessJiraRequestUseCase(
+            agent=agent, 
+            jira_provider=Mock(spec=JiraProvider), 
+            gitlab_provider=Mock(spec=GitLabProvider), 
+            settings=Settings()
+        )
 
-app.dependency_overrides[get_usecase] = override_get_usecase
+    def get_settings_override():
+        s = Settings()
+        from pydantic import SecretStr
+        s.jira_webhook_secret = SecretStr("test-secret")
+        return s
+
+    app.dependency_overrides[get_usecase] = override_get_usecase
+    app.dependency_overrides[get_settings] = get_settings_override
+    yield
+    app.dependency_overrides = {}
 
 client = TestClient(app)
 
@@ -38,20 +60,24 @@ def test_jira_flow_integration():
             "key": "KAN-1",
             "fields": {
                 "summary": "Shopping Cart MVP",
-                "description": "Please scaffolding this:\n```scaffolding\ninstruction: 'Create Clean Arch Shopping Cart'\n```"
+                "description": "Please scaffolding this:\n```scaffolding\nversion: '1'\ntechnology_stack: 'python-api'\ntarget:\n  project_id: 123\nparameters:\n  service_name: 'shopping-cart'\n```",
+                "project": {
+                    "key": "KAN",
+                    "name": "Kanban Project"
+                }
             }
         }
     }
     
     # API Key
-    headers = {"X-API-Key": Settings().jira_webhook_secret.get_secret_value()}
+    headers = {"X-API-Key": "test-secret"}
     
     response = client.post("/api/v1/jira-webhook", json=payload, headers=headers)
     
     # Verify Response
-    assert response.status_code == 200
+    assert response.status_code == 202
     data = response.json()
-    assert data["status"] == "COMPLETED"
+    assert data["status"] == "accepted"
     assert data["issue_key"] == "KAN-1"
     
     # Verify LLM was called
@@ -61,7 +87,6 @@ def test_jira_flow_integration():
     args = mock_llm.generate_code.call_args
     prompt = args[0][0]
     
-    assert "Fuentes base: Clean Architecture" in prompt
-    assert "C4 mínimo" in prompt
-    assert "USER REQUEST:\ninstruction: 'Create Clean Arch Shopping Cart'" in prompt
+    assert "Shopping Cart Architecture (Modular Monolith)" in prompt
+    assert "USER REQUEST (Contains 'technology_stack'" in prompt
 

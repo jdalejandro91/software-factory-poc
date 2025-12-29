@@ -14,11 +14,11 @@ def test_orchestrator_invalid_contract(settings):
     # Setup Request with NO contract
     from software_factory_poc.application.core.entities.scaffolding.scaffolding_request import ScaffoldingRequest
     request = ScaffoldingRequest(
-        ticket_id=issue_key,
+        issue_key=issue_key,
         project_key="PROJ",
         summary="Only Human Description",
         raw_instruction="Please make me a sandwich.",
-        requester="Tester"
+        reporter="Tester"
     )
 
     # Mock Jira Add Comment (Failure notification)

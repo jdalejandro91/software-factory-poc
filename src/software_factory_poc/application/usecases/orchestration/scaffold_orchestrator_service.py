@@ -67,7 +67,7 @@ class ScaffoldOrchestratorService:
         self.run_result_store = run_result_store
 
     def execute(self, request: ScaffoldingRequest) -> ArtifactResultModel:
-        issue_key = request.ticket_id
+        issue_key = request.issue_key
         run_id = str(uuid.uuid4())
         logger.info(f"Starting orchestration for issue={issue_key}, run_id={run_id}")
 

@@ -12,10 +12,17 @@ def test_execute_handles_exception_and_attempts_rollback():
     mock_jira = MagicMock(spec=JiraProvider)
     mock_gitlab = MagicMock(spec=GitLabProvider)
     
+    from software_factory_poc.configuration.tools.tool_settings import ToolSettings
+    mock_settings = MagicMock(spec=ToolSettings)
+    mock_settings.workflow_state_initial = "To Do"
+    mock_settings.workflow_state_processing = "Processing"
+    mock_settings.workflow_state_success = "Success"
+
     usecase = ProcessJiraRequestUseCase(
         agent=mock_agent,
         jira_provider=mock_jira,
-        gitlab_provider=mock_gitlab
+        gitlab_provider=mock_gitlab,
+        settings=mock_settings
     )
     
     request = ScaffoldingRequest(
@@ -39,7 +46,7 @@ def test_execute_handles_exception_and_attempts_rollback():
     
     # Verify Jira interactions
     # 1. Start notification
-    mock_jira.add_comment.assert_any_call("TEST-123", "🤖 Iniciando agente de scaffolding...")
+    mock_jira.add_comment.assert_any_call("TEST-123", "🤖 Iniciando misión de scaffolding...")
     
     # 2. Error notification (ADF Panel Check)
     # We check if add_comment was called with a dict (ADF) containing specific error text

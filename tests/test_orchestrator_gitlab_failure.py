@@ -36,17 +36,17 @@ target:
     raw_instruction = f"""
 {BLOCK_START}
 version: "1"
-template: "fail_test"
+technology_stack: "fail_test"
 target:
   project_id: 123
 {BLOCK_END}
 """
     request = ScaffoldingRequest(
-        ticket_id=issue_key,
+        issue_key=issue_key,
         project_key="PROJ",
         summary="S",
         raw_instruction=raw_instruction,
-        requester="Tester"
+        reporter="Tester"
     )
 
     # Mock GitLab Branch Check (GET)

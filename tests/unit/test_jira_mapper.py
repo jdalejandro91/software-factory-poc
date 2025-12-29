@@ -1,6 +1,6 @@
 import pytest
 from software_factory_poc.infrastructure.entrypoints.api.dtos.jira_webhook_dto import (
-    JiraWebhookDTO, JiraIssueDTO, JiraIssueFieldsDTO, JiraUserDTO
+    JiraWebhookDTO, JiraIssueDTO, JiraIssueFieldsDTO, JiraUserDTO, JiraProjectDTO
 )
 from software_factory_poc.infrastructure.entrypoints.api.mappers.jira_mapper import JiraMapper
 
@@ -23,7 +23,8 @@ def test_map_webhook_to_command_scaffolding_block():
             key="PROJ-123",
             fields=JiraIssueFieldsDTO(
                 summary="Scaffold Request",
-                description=description
+                description=description,
+                project=JiraProjectDTO(key="PROJ", name="Project")
             )
         )
     )
@@ -31,9 +32,9 @@ def test_map_webhook_to_command_scaffolding_block():
     mapper = JiraMapper()
     cmd = mapper.map_webhook_to_command(dto)
     
-    assert cmd.ticket_id == "PROJ-123"
+    assert cmd.issue_key == "PROJ-123"
     assert cmd.project_key == "PROJ"
-    assert cmd.requester == "Developer"
+    assert cmd.reporter == "Developer"
     assert 'instruction: "Create an app"' in cmd.raw_instruction
     assert "components:" in cmd.raw_instruction
     # Ensure delimiters are removed

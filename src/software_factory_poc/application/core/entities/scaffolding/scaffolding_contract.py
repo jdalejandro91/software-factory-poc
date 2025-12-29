@@ -28,7 +28,7 @@ class JiraTargetModel(BaseModel):
 
 class ScaffoldingContractModel(BaseModel):
     contract_version: str = Field(..., description="Version of the contract schema, e.g. '1.0'", alias="version")
-    template_id: str = Field(..., description="ID of the template to use", alias="template")
+    technology_stack: str = Field(..., description="The tech stack to use, e.g., 'NodeJS', 'Python', 'Java SpringBoot'")
     
     # Optional logic: Derived from parameters.service_name if not strict
     service_slug: str | None = Field(None, description="Slug for the new service, used in branch naming")
@@ -45,10 +45,10 @@ class ScaffoldingContractModel(BaseModel):
             raise ValueError("Only contract_version '1' or '1.0' is supported")
         return v
 
-    @field_validator("template_id")
-    def validate_template_id(cls, v: str) -> str:
+    @field_validator("technology_stack")
+    def validate_technology_stack(cls, v: str) -> str:
         if not v or not v.strip():
-            raise ValueError("template_id cannot be empty")
+            raise ValueError("technology_stack cannot be empty")
         return v.strip()
 
     @model_validator(mode="before")

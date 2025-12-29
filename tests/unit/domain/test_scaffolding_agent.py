@@ -11,32 +11,30 @@ def mock_llm_gateway():
 
 @pytest.fixture
 def mock_knowledge_base():
-    kb = Mock(spec=KnowledgeBasePort)
-    kb.get_architecture_guidelines.return_value = "Use Ports and Adapters."
+    kb = MagicMock()
+    kb.get_knowledge.return_value = "Use Ports and Adapters."
     return kb
 
 @pytest.fixture
-def agent():
-    return ScaffoldingAgent(supported_models=["fast-model", "smart-model"])
+def agent(mock_llm_gateway, mock_knowledge_base):
+    return ScaffoldingAgent(llm_gateway=mock_llm_gateway, knowledge_port=mock_knowledge_base, model_priority_list=["fast-model", "smart-model"])
 
 @pytest.fixture
 def sample_request():
     return ScaffoldingRequest(
-        ticket_id="TH-1",
+        issue_key="TH-1",
         project_key="TH",
         summary="Test",
         raw_instruction="Create a login API",
-        requester="Dev"
+        reporter="Dev"
     )
 
 def test_execute_success_first_model(agent, mock_knowledge_base, mock_llm_gateway, sample_request):
-    mock_llm_gateway.generate_code.return_value = "Success Code"
+    mock_llm_gateway.generate_code.return_value = '{"main.py": "print(\'Success Code\')"}'
     
-    result = agent.execute_scaffolding_mission(
-        sample_request, "http://kb", mock_knowledge_base, mock_llm_gateway
-    )
+    result = agent.execute_mission(sample_request)
     
-    assert result == "Success Code"
+    assert result == {"main.py": "print('Success Code')"}
     mock_llm_gateway.generate_code.assert_called_once_with(pytest.approx(any_str_containing("Use Ports and Adapters")), "fast-model")
 
 def test_execute_fallback_to_second_model(agent, mock_knowledge_base, mock_llm_gateway, sample_request):
@@ -44,15 +42,13 @@ def test_execute_fallback_to_second_model(agent, mock_knowledge_base, mock_llm_g
     def side_effect(prompt, model):
         if model == "fast-model":
             raise LLMError("Too dumb")
-        return "Smart Code"
+        return '{"main.py": "print(\'Smart Code\')"}'
     
     mock_llm_gateway.generate_code.side_effect = side_effect
     
-    result = agent.execute_scaffolding_mission(
-        sample_request, "http://kb", mock_knowledge_base, mock_llm_gateway
-    )
+    result = agent.execute_mission(sample_request)
     
-    assert result == "Smart Code"
+    assert result == {"main.py": "print('Smart Code')"}
     assert mock_llm_gateway.generate_code.call_count == 2
     
     # Verify calls
@@ -64,9 +60,7 @@ def test_execute_all_models_fail(agent, mock_knowledge_base, mock_llm_gateway, s
     mock_llm_gateway.generate_code.side_effect = LLMError("Out of credits")
     
     with pytest.raises(MaxRetriesExceededError):
-        agent.execute_scaffolding_mission(
-            sample_request, "http://kb", mock_knowledge_base, mock_llm_gateway
-        )
+        agent.execute_mission(sample_request)
 
 # Helper for assert_called_with partial matching
 class any_str_containing:

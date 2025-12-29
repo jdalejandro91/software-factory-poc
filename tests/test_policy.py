@@ -26,7 +26,7 @@ def policy_service(mock_settings):
 def valid_contract():
     return ScaffoldingContractModel(
         version="1",
-        template="allowed_tmpl",
+        technology_stack="allowed_tmpl",
         target=GitLabTargetModel(project_id=123),
         parameters={"service_name": "test-service"}
     )

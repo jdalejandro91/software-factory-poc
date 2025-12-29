@@ -57,7 +57,10 @@ class ScaffoldingContractParserService:
                 cleaned_errors.append(f"{loc}: {msg}")
             
             error_msg = "; ".join(cleaned_errors)
-            snippet = block_content[:200] + ("..." if len(block_content) > 200 else "")
+            
+            # Fallback to cleaned_text if block_content is None (e.g. raw parsing)
+            ref_content = block_content if block_content else cleaned_text
+            snippet = ref_content[:200] + ("..." if len(ref_content) > 200 else "")
             
             raise ContractParseError(
                 f"Contract validation failed: {error_msg}", 

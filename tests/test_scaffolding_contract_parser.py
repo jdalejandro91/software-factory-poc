@@ -14,7 +14,7 @@ def test_parse_valid_contract():
 Title
 {BLOCK_START}
 version: "1"
-template: "corp_nodejs_api"
+technology_stack: "corp_nodejs_api"
 target:
   project_id: 10
 parameters:
@@ -24,7 +24,7 @@ Footer
 """
     contract = parser.parse(text)
     assert contract.contract_version == "1"
-    assert contract.template_id == "corp_nodejs_api"
+    assert contract.technology_stack == "corp_nodejs_api"
     # Service slug derived from parameters service_name
     assert contract.service_slug == "My Service"
     assert contract.gitlab.project_id == 10
