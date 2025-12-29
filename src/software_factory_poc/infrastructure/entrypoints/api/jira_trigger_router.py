@@ -166,7 +166,7 @@ def trigger_scaffold(
     usecase: ProcessJiraRequestUseCase = Depends(get_usecase)
 ):
     issue_key = payload.issue.key
-    logger.info(f"Webhook recibido para {issue_key}. Iniciando procesamiento en background (Confianza ciega).")
+    logger.info(f"Webhook received for {issue_key}. Starting background processing (Blind Trust).")
     
     mapper = JiraMapper()
     request = mapper.map_webhook_to_command(payload)

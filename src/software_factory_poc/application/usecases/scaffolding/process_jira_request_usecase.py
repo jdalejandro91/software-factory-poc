@@ -29,7 +29,7 @@ class ProcessJiraRequestUseCase:
         
         try:
             # Step 1: Notify Start
-            self.jira_provider.add_comment(issue_key, "🤖 Iniciando misión de scaffolding...")
+            self.jira_provider.add_comment(issue_key, "🤖 Iniciando tarea de scaffolding...")
             
             # Step 2: Parsing & Setup (Fail Fast)
             parser = ScaffoldingContractParserService()
@@ -45,14 +45,12 @@ class ProcessJiraRequestUseCase:
             
             # Step 3: Guard Check (Remote Idempotency)
             if self.gitlab_provider.branch_exists(project_id, branch_name):
-                logger.info(f"Rama {branch_name} ya existe. Omitiendo generación LLM.")
-                msg = (
-                    f"ℹ️ **Rama Existente Detectada**\n\n"
-                    f"La rama `{branch_name}` ya existe en el repositorio.\n"
-                    f"El sistema asume que el trabajo fue generado previamente.\n"
-                    f"⏩ **Acción**: Se mueve la tarea a Revisión sin regenerar código."
+                logger.info(f"Branch {branch_name} already exists. Skipping LLM generation.")
+                info_msg = JiraAdfBuilder.build_info_panel(
+                    title="ℹ️ Rama Existente Detectada",
+                    details=f"La rama '{branch_name}' ya existe en el repositorio. Se asume que el trabajo fue generado previamente. La tarea pasará a revisión."
                 )
-                self.jira_provider.add_comment(issue_key, msg)
+                self.jira_provider.add_comment(issue_key, info_msg)
                 self.jira_provider.transition_issue(issue_key, STATE_SUCCESS) 
                 return "SKIPPED_BRANCH_EXISTS"
             
@@ -84,10 +82,10 @@ class ProcessJiraRequestUseCase:
             mr_url = mr_response.get("web_url", "URL_NOT_FOUND")
             
             # Step 6: Notify Completion & Success Transition
-            links = {"Ver Merge Request": mr_url}
+            links = {"🔗 Ver Merge Request": mr_url}
             success_msg = JiraAdfBuilder.build_success_panel(
-                title="🚀 Misión Cumplida: Scaffolding Generado",
-                summary=f"El agente ha generado exitosamente el código base para: {request.summary}",
+                title="✅ Tarea Completada",
+                summary="El scaffolding ha sido generado correctamente.",
                 links=links
             )
             self.jira_provider.add_comment(issue_key, success_msg)
@@ -97,21 +95,18 @@ class ProcessJiraRequestUseCase:
             return mr_url
 
         except Exception as e:
-            logger.error(f"Mission failed for {issue_key}")
+            logger.error(f"Task failed for {issue_key}")
             logger.exception(e)
             
             # 1. Notify Failure
             try:
-                error_detail = str(e)
-                steps = [
-                    "Se detuvo la generación de código.",
-                    f"Se ha revertido el estado de la tarea a '{STATE_INITIAL}'.",
-                    "Por favor revise los inputs del contrato YAML."
-                ]
+                # Sanitizar error para Jira (Evitar payload gigante)
+                tech_detail = f"{type(e).__name__}: {str(e)}"
+                error_summary = "La ejecución se detuvo debido a una excepción técnica. La tarea ha vuelto al estado inicial."
+
                 error_msg = JiraAdfBuilder.build_error_panel(
-                    title="⚠️ Misión Abortada",
-                    error_detail=error_detail,
-                    steps_taken=steps
+                    error_summary=error_summary,
+                    technical_detail=tech_detail
                 )
                 self.jira_provider.add_comment(issue_key, error_msg)
             except Exception as jira_err:

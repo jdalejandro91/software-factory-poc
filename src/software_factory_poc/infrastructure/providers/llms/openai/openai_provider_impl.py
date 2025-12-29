@@ -47,7 +47,15 @@ class OpenAiProvider(LlmProvider):
             if request.generation.json_mode:
                 kwargs["response_format"] = {"type": "json_object"}
             
-            # 3. Llamada Oficial SDK v1
+            # 3. Debug Logging for Audit
+            import json
+            msgs = kwargs.get("messages", [])
+            debug_payload = json.dumps(msgs, indent=2, ensure_ascii=False)
+            logging.getLogger(__name__).info(
+                f"\n🚀 [OPENAI PROMPT SENDING] ({request.model.name}):\n{debug_payload}\n"
+            )
+
+            # 4. Llamada Oficial SDK v1
             # logging.debug(f"OpenAI Payload: {kwargs}") # Descomentar para debug local
             resp = await self.client.chat.completions.create(**kwargs)
             

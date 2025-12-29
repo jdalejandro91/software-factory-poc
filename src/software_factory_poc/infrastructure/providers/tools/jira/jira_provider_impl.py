@@ -61,7 +61,7 @@ class JiraProviderImpl(JiraProvider):
         transitions = response.json().get("transitions", [])
         
         available_names = [t["name"] for t in transitions]
-        logger.debug(f"Transiciones disponibles para {issue_key}: {available_names}")
+        logger.debug(f"Transitions available for {issue_key}: {available_names}")
 
         # 2. Find target ID with enhanced logic
         final_id = None

@@ -111,41 +111,58 @@ class JiraAdfBuilder:
             "content": list_items
         }
 
+    @staticmethod
+    def _create_code_block(text: str, language: str = "text") -> Dict[str, Any]:
+        return {
+            "type": "codeBlock",
+            "attrs": {"language": language},
+            "content": [{"type": "text", "text": text}]
+        }
+
     @classmethod
-    def build_error_panel(cls, title: str, error_detail: str, steps_taken: List[str]) -> Dict[str, Any]:
-        """
-        Builds an error panel ADF document.
-        """
+    def build_info_panel(cls, title: str, details: str) -> Dict[str, Any]:
         panel_content = []
         
         # 1. Heading
         panel_content.append(cls._create_heading(3, title))
         
-        # 2. Error Detail
+        # 2. Details
         panel_content.append(cls._create_paragraph([
-            cls._create_text("Error: ", marks=[{"type": "strong"}]),
-            cls._create_text(error_detail)
+            cls._create_text(details)
         ]))
 
-        # 3. Actions Taken Label
+        root_content = [
+            cls._create_panel("info", panel_content)
+        ]
+        return cls._create_doc(root_content)
+
+    @classmethod
+    def build_error_panel(cls, error_summary: str, technical_detail: str) -> Dict[str, Any]:
+        panel_content = []
+        
+        # 1. Heading
+        panel_content.append(cls._create_heading(3, "❌ No se pudo completar la Tarea"))
+        
+        # 2. Summary
         panel_content.append(cls._create_paragraph([
-            cls._create_text("Acciones tomadas:")
+            cls._create_text(error_summary)
         ]))
 
-        # 4. Steps List
-        panel_content.append(cls._create_bullet_list(steps_taken))
+        # 3. Technical Detail Label
+        panel_content.append(cls._create_paragraph([
+            cls._create_text("Detalle del Error:", marks=[{"type": "strong"}])
+        ]))
+
+        # 4. Technical Detail Code Block
+        panel_content.append(cls._create_code_block(str(technical_detail)))
 
         root_content = [
             cls._create_panel("error", panel_content)
         ]
-        
         return cls._create_doc(root_content)
 
     @classmethod
     def build_success_panel(cls, title: str, summary: str, links: Dict[str, str]) -> Dict[str, Any]:
-        """
-        Builds a success panel ADF document.
-        """
         panel_content = []
         
         # 1. Heading

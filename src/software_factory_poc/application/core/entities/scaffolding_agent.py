@@ -32,7 +32,7 @@ class ScaffoldingAgent:
         self._knowledge_url = self.DEFAULT_KNOWLEDGE_URL
 
     def execute_mission(self, request: ScaffoldingRequest) -> Dict[str, str]:
-        logger.info(f"Starting mission for {request.issue_key}")
+        logger.info(f"Starting scaffolding task for {request.issue_key}")
         knowledge = self.knowledge_port.get_knowledge(self._knowledge_url)
         prompt = self.prompt_builder.build_prompt(request.raw_instruction, knowledge)
         

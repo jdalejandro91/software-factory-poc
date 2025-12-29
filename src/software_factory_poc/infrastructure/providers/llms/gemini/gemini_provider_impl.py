@@ -38,7 +38,18 @@ class GeminiProviderImpl(LlmProvider):
 
     async def _call(self, request: LlmRequest) -> LlmResponse:
         try:
-            resp = await self.client.models.generate_content(**self.request_mapper.to_kwargs(request))
+            # 1. Prepare payload
+            kwargs = self.request_mapper.to_kwargs(request)
+            
+            # 2. Debug Log
+            prompt_content = kwargs.get("contents", "NO_CONTENT")
+            logging.getLogger(__name__).info(
+                f"\n💎 [GEMINI PROMPT SENDING] ({request.model.name}):\n"
+                f"--- BEGIN PROMPT ---\n{prompt_content}\n--- END PROMPT ---\n"
+            )
+            
+            # 3. Execute
+            resp = await self.client.models.generate_content(**kwargs)
         except Exception as exc:
             raise self._map_error(exc)
         return self.response_mapper.to_domain(request.model.name, resp)
