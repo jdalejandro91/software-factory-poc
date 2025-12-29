@@ -21,11 +21,60 @@ jobs:
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-      - name: Extract Secrets from Env File
+      - name: Extract Secrets and Config
+        shell: python
         run: |
-          echo "${{ secrets.PROD_ENV_FILE }}" | base64 -d > .env
-          echo "EC2_HOST=$(grep EC2_HOST .env | cut -d= -f2)" >> $GITHUB_ENV
-          echo "EC2_USER=$(grep EC2_USER .env | cut -d= -f2)" >> $GITHUB_ENV
+          import os
+          import base64
+
+          # 1. Decodificar el secreto
+          encoded_env = os.environ.get("PROD_ENV_FILE_CONTENT", "")
+          if not encoded_env:
+              print("::error::PROD_ENV_FILE secret is empty!")
+              exit(1)
+          
+          try:
+              decoded_bytes = base64.b64decode(encoded_env)
+              env_content = decoded_bytes.decode('utf-8')
+          except Exception as e:
+              print(f"::error::Failed to decode base64: {e}")
+              exit(1)
+
+          # 2. Guardar .env para enviarlo luego
+          with open(".env", "w") as f:
+              f.write(env_content)
+              # Asegurar variable crítica para Docker
+              if "PYTHONPATH=" not in env_content:
+                  f.write("\nPYTHONPATH=src\n")
+          
+          # 3. Parsear host y user robustamente
+          ec2_host = ""
+          ec2_user = ""
+          
+          for line in env_content.splitlines():
+              line = line.strip()
+              if not line or line.startswith("#"): continue
+              if "=" in line:
+                  key, value = line.split("=", 1)
+                  key = key.strip()
+                  value = value.strip().strip("'").strip('"') # Limpiar comillas
+                  
+                  if key == "EC2_HOST":
+                      ec2_host = value
+                  elif key == "EC2_USER":
+                      ec2_user = value
+
+          if not ec2_host or not ec2_user:
+              print("::error::EC2_HOST or EC2_USER not found in PROD_ENV_FILE")
+              exit(1)
+          
+          # 4. Exportar a GITHUB_ENV
+          with open(os.environ['GITHUB_ENV'], 'a') as env_file:
+              env_file.write(f"EC2_HOST={ec2_host}\n")
+              env_file.write(f"EC2_USER={ec2_user}\n")
+
+        env:
+          PROD_ENV_FILE_CONTENT: ${{ secrets.PROD_ENV_FILE }}
 
       - name: Deploy to EC2
         run: |
@@ -71,6 +120,11 @@ jobs:
             echo "🔄 Reiniciando contenedores..."
             docker compose down || true
             docker compose up -d --build --remove-orphans
+            
+            # Asegurar persistencia ante reinicios
+            chmod +x scripts/install_systemd_service.sh
+            ./scripts/install_systemd_service.sh
+            # Fin persistencia
             
             echo "✅ Despliegue completado."
             docker compose ps

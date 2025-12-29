@@ -25,4 +25,4 @@ services:
     command: uvicorn src.software_factory_poc.main:app --host 0.0.0.0 --port 8000 --reload
     
     # Política de reinicio (si falla, intenta levantar de nuevo)
-    restart: on-failure
+    restart: unless-stopped
