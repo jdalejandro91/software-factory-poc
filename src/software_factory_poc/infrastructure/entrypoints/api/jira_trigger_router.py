@@ -1,6 +1,7 @@
 from functools import lru_cache
 
 from fastapi import APIRouter, Depends, HTTPException, Security, status
+from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
 
 from software_factory_poc.application.usecases.knowledge.architecture_knowledge_service import (
@@ -180,5 +181,13 @@ def trigger_scaffold(
             branch_name="generated-code-in-logs"
         )
     except Exception as e:
-        logger.exception(f"Error processing jira request: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error processing jira request for {issue_key}: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "message": "Scaffolding mission failed",
+                "detail": str(e),
+                "issue_key": issue_key
+            }
+        )
