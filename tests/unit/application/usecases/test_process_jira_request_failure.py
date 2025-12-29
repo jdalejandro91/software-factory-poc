@@ -46,9 +46,9 @@ def test_execute_handles_exception_and_attempts_rollback():
     error_call_args = mock_jira.add_comment.call_args_list[-1] # Last call
     msg_content = error_call_args[0][1]
     
-    assert "⚠️ <b>Interrupción del Scaffolding</b>" in msg_content
+    assert "{panel:title=❌ Misión Fallida" in msg_content
     assert "Model Overload" in msg_content
-    assert "To Do" in msg_content
+    assert "Se intentó revertir la tarea" in msg_content
     
     # 3. Rollback transition
     mock_jira.transition_issue.assert_called_with("TEST-123", "To Do")

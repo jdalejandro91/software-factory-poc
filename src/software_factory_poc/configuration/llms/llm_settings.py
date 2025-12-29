@@ -5,6 +5,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class LlmSettings(BaseSettings):
     # LLM Config
     openai_api_key: SecretStr | None = None
+    deepseek_api_key: SecretStr | None = None
+    gemini_api_key: SecretStr | None = None
+    anthropic_api_key: SecretStr | None = None
     llm_allowed_models: list[str] = Field(
         default=[
             "openai:gpt-4-turbo",

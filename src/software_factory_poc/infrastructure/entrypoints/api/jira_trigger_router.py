@@ -183,10 +183,11 @@ def trigger_scaffold(
     except Exception as e:
         logger.error(f"Error processing jira request for {issue_key}: {e}", exc_info=True)
         return JSONResponse(
-            status_code=500,
+            status_code=200,
             content={
                 "status": "error",
-                "message": "Scaffolding mission failed",
+                "message": "Scaffolding execution failed",
+                "error_type": type(e).__name__,
                 "detail": str(e),
                 "issue_key": issue_key
             }

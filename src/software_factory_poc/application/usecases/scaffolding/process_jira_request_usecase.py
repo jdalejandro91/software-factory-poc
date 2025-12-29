@@ -75,18 +75,26 @@ class ProcessJiraRequestUseCase:
             # Step 5: Error Handling & Rollback
             logger.exception(f"Mission failed for {issue_key}")
             
-            error_msg = (
-                "⚠️ <b>Interrupción del Scaffolding</b>\n\n"
-                "El agente encontró un problema técnico y no pudo completar la misión.\n\n"
-                "Status: ❌ Fallido\n"
-                f"Error: {str(e)}\n\n"
-                ">> La tarea ha sido devuelta a \"To Do\" para su revisión."
-            )
+            error_msg = f"""
+{{panel:title=❌ Misión Fallida|borderStyle=dashed|borderColor=#ff0000|titleBGColor=#ffe7e7|bgColor=#fff0f0}}
+El agente de Scaffolding encontró un error irrecuperable.
+
+*Razón Técnica:* {str(e)}
+
+*Acciones:*
+* Se intentó revertir la tarea a estado inicial.
+* Por favor revisa los logs o intenta de nuevo más tarde.
+{{panel}}
+"""
             
             try:
                 self.jira_provider.add_comment(issue_key, error_msg)
+            except Exception as comment_error:
+                logger.error(f"Failed to add error comment: {comment_error}")
+
+            try:
                 self.jira_provider.transition_issue(issue_key, "To Do")
-            except Exception as inner_e:
-                logger.error(f"Failed to report error to Jira: {inner_e}")
+            except Exception as transition_error:
+                logger.warning(f"Failed to rollback issue state: {transition_error}")
             
             raise e

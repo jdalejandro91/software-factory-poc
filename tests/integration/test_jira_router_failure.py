@@ -41,11 +41,12 @@ def test_jira_router_returns_json_error():
         response = client.post("/api/v1/jira-webhook", json=payload, headers=headers)
         
         # Assert
-        assert response.status_code == 500
+        assert response.status_code == 200
         data = response.json()
         
         assert data["status"] == "error"
-        assert data["message"] == "Scaffolding mission failed"
+        assert data["message"] == "Scaffolding execution failed"
+        assert data["error_type"] == "Exception"
         assert data["detail"] == "System Failure Simulation"
         assert data["issue_key"] == "KAN-FAIL"
         

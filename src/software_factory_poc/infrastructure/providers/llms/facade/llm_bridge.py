@@ -24,6 +24,51 @@ from software_factory_poc.infrastructure.providers.llms.openai.mappers.openai_re
 from software_factory_poc.infrastructure.providers.llms.openai.openai_provider_impl import (
     OpenAiProvider,
 )
+from software_factory_poc.infrastructure.providers.llms.deepseek.clients.deepseek_client_factory import (
+    DeepSeekClientFactory,
+)
+from software_factory_poc.infrastructure.providers.llms.deepseek.clients.deepseek_config import (
+    DeepSeekConfig,
+)
+from software_factory_poc.infrastructure.providers.llms.deepseek.mappers.deepseek_request_mapper import (
+    DeepSeekRequestMapper,
+)
+from software_factory_poc.infrastructure.providers.llms.deepseek.mappers.deepseek_response_mapper import (
+    DeepSeekResponseMapper,
+)
+from software_factory_poc.infrastructure.providers.llms.deepseek.deepseek_provider_impl import (
+    DeepSeekProvider,
+)
+from software_factory_poc.infrastructure.providers.llms.gemini.clients.gemini_client_factory import (
+    GeminiClientFactory,
+)
+from software_factory_poc.infrastructure.providers.llms.gemini.clients.gemini_config import (
+    GeminiConfig,
+)
+from software_factory_poc.infrastructure.providers.llms.gemini.mappers.gemini_request_mapper import (
+    GeminiRequestMapper,
+)
+from software_factory_poc.infrastructure.providers.llms.gemini.mappers.gemini_response_mapper import (
+    GeminiResponseMapper,
+)
+from software_factory_poc.infrastructure.providers.llms.gemini.gemini_provider_impl import (
+    GeminiProvider,
+)
+from software_factory_poc.infrastructure.providers.llms.anthropic.clients.anthropic_client_factory import (
+    AnthropicClientFactory,
+)
+from software_factory_poc.infrastructure.providers.llms.anthropic.clients.anthropic_config import (
+    AnthropicConfig,
+)
+from software_factory_poc.infrastructure.providers.llms.anthropic.mappers.anthropic_request_mapper import (
+    AnthropicRequestMapper,
+)
+from software_factory_poc.infrastructure.providers.llms.anthropic.mappers.anthropic_response_mapper import (
+    AnthropicResponseMapper,
+)
+from software_factory_poc.infrastructure.providers.llms.anthropic.anthropic_provider_impl import (
+    AnthropicProvider,
+)
 from software_factory_poc.infrastructure.providers.llms.gateway.llm_gateway import LlmGateway
 from software_factory_poc.infrastructure.providers.llms.gateway.model_allowlist import ModelAllowlist
 from software_factory_poc.infrastructure.observability.logging.correlation_id_context import CorrelationIdContext
@@ -85,6 +130,42 @@ def _build_providers(settings: LlmSettings, retry: RetryPolicy, correlation: Cor
             retry=retry, 
             request_mapper=OpenAiRequestMapper(), 
             response_mapper=OpenAiResponseMapper(), 
+            correlation=correlation
+        )
+
+    if settings.deepseek_api_key:
+        api_key = settings.deepseek_api_key.get_secret_value()
+        config = DeepSeekConfig(api_key=api_key)
+        client = DeepSeekClientFactory(config).create()
+        providers[ProviderName.DEEPSEEK] = DeepSeekProvider(
+            client=client,
+            retry=retry,
+            request_mapper=DeepSeekRequestMapper(),
+            response_mapper=DeepSeekResponseMapper(),
+            correlation=correlation
+        )
+
+    if settings.gemini_api_key:
+        api_key = settings.gemini_api_key.get_secret_value()
+        config = GeminiConfig(api_key=api_key)
+        client = GeminiClientFactory(config).create()
+        providers[ProviderName.GEMINI] = GeminiProvider(
+            client=client,
+            retry=retry,
+            request_mapper=GeminiRequestMapper(),
+            response_mapper=GeminiResponseMapper(),
+            correlation=correlation
+        )
+
+    if settings.anthropic_api_key:
+        api_key = settings.anthropic_api_key.get_secret_value()
+        config = AnthropicConfig(api_key=api_key)
+        client = AnthropicClientFactory(config).create()
+        providers[ProviderName.ANTHROPIC] = AnthropicProvider(
+            client=client,
+            retry=retry,
+            request_mapper=AnthropicRequestMapper(),
+            response_mapper=AnthropicResponseMapper(),
             correlation=correlation
         )
         

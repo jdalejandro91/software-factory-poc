@@ -27,7 +27,7 @@ class RetryPolicy:
 
     async def run(self, fn: Callable[[], Awaitable[_T]]) -> _T:
         try:
-            return await self._retrying().call(fn)
+            return await self._retrying()(fn)
         except RetryError as err:
             raise err.last_attempt.result()  # type: ignore[misc]
 
