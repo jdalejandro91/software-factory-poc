@@ -171,16 +171,24 @@ def trigger_scaffold(
     
     # Filter Logic: Only process if transitioning to Processing State
     processing_state = settings.workflow_state_processing
+    logger.info(f"Esperando transición a estado: '{processing_state}'")
+    
     is_start_event = False
     
     if payload.changelog:
+        logger.info(f"Analizando Changelog para {issue_key}: {payload.changelog.model_dump()}")
         for item in payload.changelog.items:
-            if item.field == "status" and item.toString == processing_state:
-                is_start_event = True
-                break
+            if item.field == "status":
+                to_val = item.toString or ""
+                logger.info(f"Transición detectada: '{item.fromString}' -> '{to_val}'")
+                
+                # Comparación flexible (Case insensitive)
+                if to_val.strip().lower() == processing_state.strip().lower():
+                    is_start_event = True
+                    break
     
     if not is_start_event:
-        logger.info(f"Ignorando evento Jira para {issue_key}: No es una transición a '{processing_state}'.")
+        logger.warning(f"⛔ IGNORADO: El evento de {issue_key} no es una transición explícita a '{processing_state}'.")
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content={

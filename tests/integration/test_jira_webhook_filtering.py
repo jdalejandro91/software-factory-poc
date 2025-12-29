@@ -107,3 +107,36 @@ def test_jira_webhook_accepted_if_transition_to_processing():
     # Wait, add_task(usecase.execute, request)
     # verify call
     mock_usecase.execute.assert_called_once()
+
+def test_jira_webhook_accepted_case_insensitive():
+    mock_usecase.execute.reset_mock()
+    
+    payload = {
+        "webhookEvent": "jira:issue_updated",
+        "timestamp": 123456789,
+        "issue": {
+            "key": "KAN-102",
+            "fields": {
+                "summary": "Case Insensitive Test",
+                "project": {"key": "KAN", "name": "Project"}
+            }
+        },
+        "changelog": {
+            "id": "102",
+            "items": [
+                {
+                    "field": "status", 
+                    "fromString": "Por hacer",
+                    "toString": "en curso " # <--- Mixed case / whitespace
+                }
+            ]
+        }
+    }
+    
+    headers = {"X-API-Key": "test-secret"}
+    response = client.post("/api/v1/jira-webhook", json=payload, headers=headers)
+    
+    assert response.status_code == 202
+    data = response.json()
+    assert data["status"] == "accepted"
+    mock_usecase.execute.assert_called_once()
