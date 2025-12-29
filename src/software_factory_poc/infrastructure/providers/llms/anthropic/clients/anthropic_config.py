@@ -9,7 +9,7 @@ from software_factory_poc.application.core.exceptions.configuration_error import
 @dataclass(frozen=True, slots=True)
 class AnthropicConfig:
     api_key: str
-    timeout_s: float = 30.0
+    timeout_s: float = 120.0
     max_retries: int = 0
 
     @staticmethod
@@ -17,5 +17,5 @@ class AnthropicConfig:
         key = os.getenv(f"{prefix}API_KEY")
         if not key:
             raise ConfigurationError(f"{prefix}API_KEY is required")
-        timeout = float(os.getenv(f"{prefix}TIMEOUT_S", "30.0"))
+        timeout = float(os.getenv(f"{prefix}TIMEOUT_S", "120.0"))
         return AnthropicConfig(api_key=key, timeout_s=timeout)

@@ -29,14 +29,23 @@ class ScaffoldingContractParserService:
         cleaned_text = text.replace("\r\n", "\n")
 
         block_content = self._extract_block(cleaned_text)
-        if not block_content:
-            # Log crítico para debug con preview
-            logger.warning(f"Failed to find block. Content preview: {cleaned_text[:200]!r}")
-            raise ContractParseError(
-                "Could not find contract block. Use Markdown code blocks (```) or Jira Wiki blocks ({code})."
-            )
+        
+        # Determine what content to parse: Block content if found, else raw text (fallback)
+        content_to_parse = block_content if block_content else cleaned_text
 
-        data = self._parse_structure(block_content)
+        try:
+            data = self._parse_structure(content_to_parse)
+        except ContractParseError:
+            # If parsing failed and we didn't find a block explicitly, 
+            # we assume the user intended to provide a block but failed delimiters,
+            # OR the raw text was not a valid contract.
+            # We revert to the original error about missing blocks for clarity in Jira context.
+            if not block_content:
+                logger.warning(f"Failed to find block and raw text is not valid contract. Content preview: {cleaned_text[:200]!r}")
+                raise ContractParseError(
+                    "Could not find contract block (or valid raw YAML). Use Markdown code blocks (```) or Jira Wiki blocks ({code})."
+                )
+            raise
         
         try:
             return ScaffoldingContractModel(**data)

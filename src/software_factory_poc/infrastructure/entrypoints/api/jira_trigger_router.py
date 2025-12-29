@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from fastapi import APIRouter, Depends, HTTPException, Security, status
+from fastapi import APIRouter, Depends, HTTPException, Security, status, BackgroundTasks
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
 
@@ -157,38 +157,28 @@ def get_usecase(settings: Settings = Depends(get_settings)) -> ProcessJiraReques
     
     return ProcessJiraRequestUseCase(agent, jira_provider, gitlab_provider)
 
-@router.post("/jira-webhook", response_model=ArtifactResultModel, dependencies=[Depends(verify_api_key)])
+
+
+@router.post("/jira-webhook", status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(verify_api_key)])
 def trigger_scaffold(
     payload: JiraWebhookDTO,
+    background_tasks: BackgroundTasks,
     usecase: ProcessJiraRequestUseCase = Depends(get_usecase)
 ):
     issue_key = payload.issue.key
     event_type = payload.webhook_event or "unknown"
     
-    logger.info(f"Processing webhook for {issue_key}")
+    logger.info(f"Received webhook for {issue_key}. Queuing background task.")
     
     mapper = JiraMapper()
     request = mapper.map_webhook_to_command(payload)
     
-    try:
-        code_result = usecase.execute(request)
-        # For now, we return success with a placeholder URL, as we only generated code string.
-        return ArtifactResultModel(
-            run_id="sync-run",
-            status=ArtifactRunStatusEnum.COMPLETED,
-            issue_key=issue_key,
-            mr_url="http://not-implemented-yet.com",
-            branch_name="generated-code-in-logs"
-        )
-    except Exception as e:
-        logger.error(f"Error processing jira request for {issue_key}: {e}", exc_info=True)
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "error",
-                "message": "Scaffolding execution failed",
-                "error_type": type(e).__name__,
-                "detail": str(e),
-                "issue_key": issue_key
-            }
-        )
+    # Run usecase in background
+    # Note: ProcessJiraRequestUseCase.execute handles its own errors and notifications.
+    background_tasks.add_task(usecase.execute, request)
+    
+    return {
+        "status": "accepted",
+        "message": "Scaffolding request queued. Check Jira for updates.",
+        "issue_key": issue_key
+    }

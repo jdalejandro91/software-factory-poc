@@ -7,6 +7,8 @@ from software_factory_poc.infrastructure.observability.logger_factory_service im
 
 logger = build_logger(__name__)
 
+from software_factory_poc.application.core.services.scaffolding_contract_parser_service import ScaffoldingContractParserService
+
 @dataclass
 class ProcessJiraRequestUseCase:
     agent: ScaffoldingAgent
@@ -28,8 +30,19 @@ class ProcessJiraRequestUseCase:
             
             # Step 3: Persistence (GitLab)
             branch_name = f"feature/{issue_key}-scaffolding"
-            project_path = request.project_key # Assuming project_key maps to path or ID logic needed
             
+            # Resolve Project Path from Contract
+            parser = ScaffoldingContractParserService()
+            contract = parser.parse(request.raw_instruction)
+            project_path = contract.gitlab.project_path
+            
+            if not project_path:
+                # Fallback to Jira project key if not in contract (or raise error if mandatory)
+                # But contract validation should handle it.
+                # If parsed model returns None, we use request.project_key ?
+                # User says: "use that value". 
+                project_path = request.project_key
+
             # Resolve ID if needed, strict DDD usually implies ID in request or separate resolution service
             # For now relying on provider to handle resolution or passed ID
             # Re-reading GitLabProvider: resolve_project_id(project_path)

@@ -74,7 +74,18 @@ def test_jira_scaffolding_flow_end_to_end():
             "key": "KAN-123",
             "fields": {
                 "summary": "Implement Shopping Cart Feature",
-                "description": "Please create the following: \n```scaffolding\nCreate a Python shopping cart with add_item method.\n```\nThanks.",
+                "description": """
+Please create:
+```scaffolding
+version: '1.0'
+template: python-api-v1
+target:
+  gitlab_project_path: 'mock-group/mock-project'
+parameters:
+  service_name: 'shopping-cart-service'
+```
+Instruction: Create a Python shopping cart with add_item method.
+""",
                 "project": {
                     "key": "KAN",
                     "name": "Kanban Project"
@@ -90,15 +101,17 @@ def test_jira_scaffolding_flow_end_to_end():
 
     response = client.post("/api/v1/jira-webhook", json=payload, headers=headers)
 
-    assert response.status_code == 200
+    assert response.status_code == 202
     data = response.json()
-    assert data["status"] == "COMPLETED"
+    assert data["status"] == "accepted"
     
     # Verifications
     prompt = mock_llm.last_prompt
     
-    # 1. Mapper Verification: Prompt contains instruction
-    assert "Create a Python shopping cart" in prompt
+    # 1. Mapper Verification: Prompt contains instruction (YAML block)
+    # Since JiraMapper extracts only the block, we verity the YAML content is present.
+    assert "service_name: 'shopping-cart-service'" in prompt
+    assert "mock-group/mock-project" in prompt
     
     # 2. Adapter Verification: Prompt contains Architecture Text
     assert "Shopping Cart Architecture (Modular Monolith)" in prompt
