@@ -111,10 +111,10 @@ jobs:
             fi
 
             # Actualizar código
-            echo "📥 Bajando cambios de \$BRANCH..."
-            git fetch origin \$BRANCH
-            git checkout \$BRANCH
-            git reset --hard origin/\$BRANCH
+            echo "📥 Bajando cambios de $BRANCH..."
+            git fetch origin $BRANCH
+            git checkout $BRANCH
+            git reset --hard origin/$BRANCH
 
             # Despliegue
             echo "🔄 Reiniciando contenedores..."
