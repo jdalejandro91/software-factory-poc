@@ -43,5 +43,12 @@ class ConfluenceProviderImpl(ConfluenceProvider):
              raise ConfluenceIntegrationError(f"HTTP error {e.response.status_code} from Confluence: {str(e)}") from e
 
     def _clean_html(self, html_content: str) -> str:
+        if not html_content:
+            return ""
         soup = BeautifulSoup(html_content, "html.parser")
-        return soup.get_text(separator="\n").strip()
+        text = soup.get_text(separator="\n")
+        
+        # Eliminar saltos de línea excesivos
+        import re
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        return text.strip()

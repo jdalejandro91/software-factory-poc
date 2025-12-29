@@ -47,7 +47,7 @@ class ProcessJiraRequestUseCase:
             if self.gitlab_provider.branch_exists(project_id, branch_name):
                 logger.info(f"Branch {branch_name} already exists. Skipping LLM generation.")
                 info_msg = JiraAdfBuilder.build_info_panel(
-                    title="ℹ️ Rama Existente Detectada",
+                    title="Rama Existente Detectada",
                     details=f"La rama '{branch_name}' ya existe en el repositorio. Se asume que el trabajo fue generado previamente. La tarea pasará a revisión."
                 )
                 self.jira_provider.add_comment(issue_key, info_msg)
@@ -84,7 +84,7 @@ class ProcessJiraRequestUseCase:
             # Step 6: Notify Completion & Success Transition
             links = {"🔗 Ver Merge Request": mr_url}
             success_msg = JiraAdfBuilder.build_success_panel(
-                title="✅ Tarea Completada",
+                title="Tarea Completada",
                 summary="El scaffolding ha sido generado correctamente.",
                 links=links
             )

@@ -138,12 +138,6 @@ from software_factory_poc.infrastructure.providers.llms.llm_gateway_adapter impo
 from software_factory_poc.application.core.entities.scaffolding_agent import ScaffoldingAgent
 
 def get_usecase(settings: Settings = Depends(get_settings)) -> ProcessJiraRequestUseCase:
-    # Adapters
-    kb_adapter = ConfluenceMockAdapter()
-    
-    llm_bridge = LlmBridge.from_settings(settings)
-    llm_adapter = LlmGatewayAdapter(llm_bridge)
-
     # Providers
     jira_http = JiraHttpClient(settings)
     jira_provider = JiraProviderImpl(jira_http)
@@ -151,6 +145,17 @@ def get_usecase(settings: Settings = Depends(get_settings)) -> ProcessJiraReques
     gitlab_http = GitLabHttpClient(settings)
     payload_builder = GitLabPayloadBuilderService()
     gitlab_provider = GitLabProviderImpl(gitlab_http, payload_builder)
+
+    # Knowledge (REAL)
+    confluence_http = ConfluenceHttpClient(settings)
+    confluence_provider = ConfluenceProviderImpl(confluence_http)
+    
+    from software_factory_poc.infrastructure.providers.knowledge.confluence_service_adapter import ConfluenceServiceAdapter
+    kb_adapter = ConfluenceServiceAdapter(confluence_provider, settings)
+    
+    # LLM
+    llm_bridge = LlmBridge.from_settings(settings)
+    llm_adapter = LlmGatewayAdapter(llm_bridge)
     
     # Agent
     agent = ScaffoldingAgent(llm_gateway=llm_adapter, knowledge_port=kb_adapter)
