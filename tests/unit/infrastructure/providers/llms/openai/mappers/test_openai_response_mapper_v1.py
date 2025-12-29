@@ -34,14 +34,29 @@ def test_to_domain_raises_error_on_empty_content(mapper):
     mock_response = MagicMock()
     mock_choice = MagicMock()
     mock_choice.message.content = None
-    mock_choice.finish_reason = "length"
-    mock_response.choices = [mock_choice]
     
+    # helper for clean setup
+    def setup_reason(reason):
+        mock_choice.finish_reason = reason
+        mock_response.choices = [mock_choice]
+    
+    # Test length
+    setup_reason("length")
     with pytest.raises(ValueError) as exc:
         mapper.to_domain("gpt-4", mock_response)
-    
-    assert "OpenAI returned empty content" in str(exc.value)
-    assert "length" in str(exc.value)
+    assert "Max tokens exceeded" in str(exc.value)
+
+    # Test content_filter
+    setup_reason("content_filter")
+    with pytest.raises(ValueError) as exc:
+         mapper.to_domain("gpt-4", mock_response)
+    assert "content_filter triggered" in str(exc.value)
+
+    # Test unknown
+    setup_reason("unknown")
+    with pytest.raises(ValueError) as exc:
+         mapper.to_domain("gpt-4", mock_response)
+    assert "OpenAI returned empty content. Finish reason: unknown" in str(exc.value)
 
 def test_to_domain_raises_error_on_structure_mismatch(mapper):
     # Simulate a response that doesn't follow SDK v1 structure

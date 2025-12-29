@@ -19,6 +19,10 @@ class OpenAiResponseMapper:
             
             if not content:
                 finish_reason = getattr(choice, 'finish_reason', 'unknown')
+                if finish_reason == "content_filter":
+                    raise ValueError("OpenAI validation failed: content_filter triggered. Response blocked for security.")
+                if finish_reason == "length":
+                    raise ValueError("OpenAI validation failed: Max tokens exceeded (length). Incomplete JSON.")
                 raise ValueError(f"OpenAI returned empty content. Finish reason: {finish_reason}")
             
             # Sanitization: Strip markdown code blocks if present
