@@ -25,13 +25,11 @@ class ProcessJiraRequestUseCase:
         
         # Determine Lifecycle States from Config
         STATE_INITIAL = self.settings.workflow_state_initial
-        STATE_PROCESSING = self.settings.workflow_state_processing
         STATE_SUCCESS = self.settings.workflow_state_success
         
         try:
-            # Step 1: Notify Start & Move to Processing
+            # Step 1: Notify Start
             self.jira_provider.add_comment(issue_key, "🤖 Iniciando misión de scaffolding...")
-            self.jira_provider.transition_issue(issue_key, STATE_PROCESSING)
             
             # Step 2: Parsing & Setup (Fail Fast)
             parser = ScaffoldingContractParserService()

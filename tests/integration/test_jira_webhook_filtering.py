@@ -16,7 +16,7 @@ def setup_filtering_overrides():
     def get_settings_override():
         s = Settings()
         s.jira_webhook_secret = SecretStr("test-secret")
-        s.workflow_state_processing = "En curso"
+        # s.workflow_state_processing = "En curso"  <-- Removed
         return s
 
     def override_get_usecase_fn():
@@ -57,13 +57,13 @@ def test_jira_webhook_ignored_if_no_transition_to_processing():
     headers = {"X-API-Key": "test-secret"}
     response = client.post("/api/v1/jira-webhook", json=payload, headers=headers)
     
-    assert response.status_code == 200 # Still returns 200/202 to satisfy Jira
+    assert response.status_code == 202
     data = response.json()
-    assert data["status"] == "ignored"
-    assert "Not a transition to En curso" in data["message"]
+    assert data["status"] == "accepted"
+    assert "Request queued" in data["message"]
     
-    # Usecase should NOT be called
-    mock_usecase.execute.assert_not_called()
+    # Usecase SHOULD be called now (Confianza ciega)
+    mock_usecase.execute.assert_called_once()
 
 def test_jira_webhook_accepted_if_transition_to_processing():
     mock_usecase.execute.reset_mock()

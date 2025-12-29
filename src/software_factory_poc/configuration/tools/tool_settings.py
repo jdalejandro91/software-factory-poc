@@ -22,7 +22,6 @@ class ToolSettings(BaseSettings):
     
     # Jira Workflow Configuration (Localized for current project)
     workflow_state_initial: str = Field(default="Por hacer", description="Initial/Rollback state name")
-    workflow_state_processing: str = Field(default="En curso", description="State during active processing")
     workflow_state_success: str = Field(default="In Review", description="Success/Final state name")
 
     # GitLab Config
