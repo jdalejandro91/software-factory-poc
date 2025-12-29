@@ -10,6 +10,7 @@ class GenerationConfig:
     temperature: float | None = None
     top_p: float | None = None
     seed: int | None = None
+    json_mode: bool = False
     stop: Sequence[str] | None = None
 
     def __post_init__(self) -> None:

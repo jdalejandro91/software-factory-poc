@@ -33,6 +33,9 @@ class DeepSeekRequestMapper:
         return {k: v for k, v in base.items() if v is not None}
 
     def _output(self, request: LlmRequest) -> Mapping[str, Any]:
+        if request.generation.json_mode:
+             return {"response_format": {"type": "json_object"}}
+             
         if request.output is None or request.output.format is OutputFormat.TEXT:
             return {}
         return {"response_format": {"type": "json_object"}}

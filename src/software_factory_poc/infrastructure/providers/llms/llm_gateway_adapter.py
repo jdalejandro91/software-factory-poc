@@ -32,10 +32,13 @@ class LlmGatewayAdapter(LLMGatewayPort):
             provider = ProviderName.OPENAI  # Default
 
         # Construct the formal LLM Request object
+        # Heuristic: Enable JSON mode if "JSON" matches in prompt (case insensitive)
+        json_mode = "json" in prompt.lower()
+        
         request = LlmRequest(
             model=ModelId(provider=provider, name=model),
             messages=(Message(role=MessageRole.USER, content=prompt),),
-            generation=GenerationConfig(temperature=0.0)
+            generation=GenerationConfig(temperature=0.0, json_mode=json_mode)
         )
         
         try:

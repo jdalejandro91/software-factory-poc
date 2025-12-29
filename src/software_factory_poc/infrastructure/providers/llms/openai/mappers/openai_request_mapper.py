@@ -32,6 +32,8 @@ class OpenAiRequestMapper:
         return {k: v for k, v in {"max_output_tokens": g.max_output_tokens, "temperature": g.temperature, "top_p": g.top_p, "seed": g.seed, "stop": g.stop}.items() if v is not None}
 
     def _output_kwargs(self, request: LlmRequest) -> Mapping[str, Any]:
+        if request.generation.json_mode:
+            return {"response_format": {"type": "json_object"}}
         if request.output is None:
             return {}
         fmt = request.output.format

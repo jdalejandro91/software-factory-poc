@@ -118,5 +118,9 @@ Instruction: Create a Python shopping cart with add_item method.
     assert "Cart Entity" in prompt
     
     # 3. Agent Verification: Constructed structure
-    assert "INPUT CONTEXT:" in prompt
-    assert "USER REQUEST:" in prompt
+    assert "INPUT CONTEXT (Architecture Pattern):" in prompt
+    assert "USER REQUEST (Contains 'template' and 'parameters'):" in prompt
+    
+    # 4. Prompt Hardening Verification
+    assert "CRITICAL RULES FOR GENERATION:" in prompt
+    assert "ONE-SHOT EXAMPLE (Expected Behavior for a NestJS request):" in prompt

@@ -33,8 +33,20 @@ class GeminiRequestMapper:
             return None
         base = {"max_output_tokens": request.generation.max_output_tokens, "temperature": request.generation.temperature, "top_p": request.generation.top_p, "seed": request.generation.seed}
         cfg = {k: v for k, v in base.items() if v is not None}
+        if request.generation.json_mode:
+            cfg["response_mime_type"] = "application/json"
+            
         if request.output is None or request.output.format is OutputFormat.TEXT:
             return types.GenerateContentConfig(**cfg)
+        # Verify no conflict if json_mode set and output set (output overrides or crash?)
+        # For this POC, we assume json_mode is used without complex output constraints or we pop it?
+        # If output constraints are used, they define mime type in _output_cfg.
+        # We should NOT include it in cfg if we go to _output_cfg path, or remove it.
+        # But _output_cfg returns 'response_mime_type'.
+        # So we should be careful.
+        if "response_mime_type" in cfg:
+             del cfg["response_mime_type"]
+             
         return types.GenerateContentConfig(**cfg, **self._output_cfg(request, types))
 
     def _output_cfg(self, request: LlmRequest, types: Any) -> Mapping[str, Any]:
