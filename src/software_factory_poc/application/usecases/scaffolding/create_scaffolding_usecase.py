@@ -57,6 +57,7 @@ class CreateScaffoldingUseCase:
             # knowledge_gateway = self.resolver.resolve_knowledge() # Resolved later when needed
             
             # 4. Verificar si la rama ya existe
+            # Removing manual URL concatenation to support both IDs and raw paths
             project_identifier = request.repository_url or "unknown/repo"
             project_id = vcs_gateway.resolve_project_id(project_identifier)
             branch_name = f"feature/{request.issue_key}/scaffolding"

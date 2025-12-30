@@ -23,7 +23,7 @@ def test_build_error_panel_returns_correct_structure():
     
     # 1. Heading
     assert content[0]["type"] == "heading"
-    assert content[0]["content"][0]["text"] == "❌ No se pudo completar la Tarea"
+    assert content[0]["content"][0]["text"] == "No se pudo completar la Tarea"
     
     # 2. Error Summary
     assert content[1]["type"] == "paragraph"

@@ -37,7 +37,7 @@ class JiraAdfBuilder:
         panel_content = []
         
         # 1. Heading
-        panel_content.append(JiraAdfPrimitives.create_heading(3, "❌ No se pudo completar la Tarea"))
+        panel_content.append(JiraAdfPrimitives.create_heading(3, "No se pudo completar la Tarea"))
         
         # 2. Summary
         panel_content.append(JiraAdfPrimitives.create_paragraph([

@@ -44,7 +44,21 @@ class GitLabProviderImpl(GitLabProvider):
     def resolve_project_id(self, project_path: str) -> int:
         """
         Resolves a project path (group/project) to an numeric ID.
+        Robustly handles full URLs by stripping protocol and domain.
         """
+        # Sanitization: Strip scheme and domain if present
+        if "://" in project_path:
+            try:
+                parsed = urllib.parse.urlparse(project_path)
+                # Remove leading slash if present
+                project_path = parsed.path.lstrip("/")
+                # If path ends in .git, optional cleanup (though API often handles it, let's keep it simple)
+                if project_path.endswith(".git"):
+                    project_path = project_path[:-4]
+            except Exception:
+                # If parse fails, fallback to original string
+                pass
+
         self._logger.info(f"Resolving project ID for path: {project_path}")
         try:
             encoded_path = urllib.parse.quote(project_path, safe="")
