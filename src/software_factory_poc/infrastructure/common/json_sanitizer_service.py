@@ -1,6 +1,7 @@
-import re
 import logging
-from typing import Type, TypeVar, Any
+import re
+from typing import TypeVar
+
 from pydantic import BaseModel, ValidationError
 
 logger = logging.getLogger(__name__)
@@ -17,7 +18,7 @@ class SchemaValidationError(Exception):
 
 class JsonSanitizerService:
     @staticmethod
-    def extract_and_validate_json(text: str, model: Type[T]) -> T:
+    def extract_and_validate_json(text: str, model: type[T]) -> T:
         """
         Extracts JSON from a (potentially dirty) string and validates it against a Pydantic model.
         

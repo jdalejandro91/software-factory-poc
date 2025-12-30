@@ -1,17 +1,30 @@
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock
-from software_factory_poc.infrastructure.providers.llms.openai.openai_provider_impl import OpenAiProvider
-from software_factory_poc.application.core.entities.llm_request import LlmRequest
-from software_factory_poc.application.core.value_objects.generation_config import GenerationConfig
-from software_factory_poc.application.core.value_objects.output_format import OutputFormat
-from software_factory_poc.application.core.value_objects.model_id import ModelId
-from software_factory_poc.application.core.value_objects.message import Message
-from software_factory_poc.application.core.value_objects.message_role import MessageRole
-from software_factory_poc.application.core.value_objects.provider_name import ProviderName
-from software_factory_poc.infrastructure.providers.llms.openai.mappers.openai_request_mapper import OpenAiRequestMapper
-from software_factory_poc.infrastructure.providers.llms.openai.mappers.openai_response_mapper import OpenAiResponseMapper
-from software_factory_poc.infrastructure.observability.logging.correlation_id_context import CorrelationIdContext
+
+from software_factory_poc.application.core.domain.entities.llm.llm_request import LlmRequest
+from software_factory_poc.application.core.domain.value_objects.generation_config import (
+    GenerationConfig,
+)
+from software_factory_poc.application.core.domain.value_objects.message import Message
+from software_factory_poc.application.core.domain.value_objects.message_role import MessageRole
+from software_factory_poc.application.core.domain.value_objects.model_id import ModelId
+from software_factory_poc.application.core.domain.value_objects.output_format import OutputFormat
+from software_factory_poc.application.core.domain.configuration.llm_provider_type import LlmProviderType
 from software_factory_poc.infrastructure.common.retry.retry_policy import RetryPolicy
+from software_factory_poc.infrastructure.observability.logging.correlation_id_context import (
+    CorrelationIdContext,
+)
+from software_factory_poc.infrastructure.providers.llms.openai.mappers.openai_request_mapper import (
+    OpenAiRequestMapper,
+)
+from software_factory_poc.infrastructure.providers.llms.openai.mappers.openai_response_mapper import (
+    OpenAiResponseMapper,
+)
+from software_factory_poc.infrastructure.providers.llms.openai.openai_provider_impl import (
+    OpenAiProvider,
+)
+
 
 @pytest.mark.asyncio
 async def test_call_uses_chat_completions_create_with_json_mode():
@@ -35,7 +48,7 @@ async def test_call_uses_chat_completions_create_with_json_mode():
     
     # Request with json_mode=True
     request = LlmRequest(
-        model=ModelId(provider=ProviderName.OPENAI, name="gpt-4"),
+        model=ModelId(provider=LlmProviderType.OPENAI, name="gpt-4"),
         messages=(Message(role=MessageRole.USER, content="hello"),),
         generation=GenerationConfig(format=OutputFormat.JSON)
     )
@@ -71,7 +84,7 @@ async def test_call_uses_chat_completions_create_without_json_mode():
     
     # Request with json_mode=False
     request = LlmRequest(
-        model=ModelId(provider=ProviderName.OPENAI, name="gpt-4"),
+        model=ModelId(provider=LlmProviderType.OPENAI, name="gpt-4"),
         messages=(Message(role=MessageRole.USER, content="hello"),),
         generation=GenerationConfig(format=OutputFormat.TEXT)
     )

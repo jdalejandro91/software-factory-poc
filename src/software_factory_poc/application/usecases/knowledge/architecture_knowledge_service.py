@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import time
 
-from software_factory_poc.application.ports.tools.confluence_provider import ConfluenceProvider
-from software_factory_poc.configuration.tools.tool_settings import ToolSettings
+from software_factory_poc.application.core.ports.tools.confluence_provider import ConfluenceProvider
+from software_factory_poc.infrastructure.configuration.tool_settings import ToolSettings
 
 
 class ArchitectureKnowledgeService:

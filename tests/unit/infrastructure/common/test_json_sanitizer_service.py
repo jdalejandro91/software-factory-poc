@@ -1,10 +1,11 @@
 import pytest
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from src.software_factory_poc.infrastructure.common.json_sanitizer_service import (
-    JsonSanitizerService,
     JsonParsingError,
-    SchemaValidationError
+    JsonSanitizerService,
+    SchemaValidationError,
 )
+
 
 # Test Data Model
 class SampleModel(BaseModel):

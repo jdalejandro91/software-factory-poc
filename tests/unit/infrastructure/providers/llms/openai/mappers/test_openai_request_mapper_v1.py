@@ -1,13 +1,19 @@
+
 import pytest
-from unittest.mock import MagicMock
-from software_factory_poc.infrastructure.providers.llms.openai.mappers.openai_request_mapper import OpenAiRequestMapper
-from software_factory_poc.application.core.entities.llm_request import LlmRequest
-from software_factory_poc.application.core.value_objects.generation_config import GenerationConfig
-from software_factory_poc.application.core.value_objects.output_format import OutputFormat
-from software_factory_poc.application.core.value_objects.model_id import ModelId
-from software_factory_poc.application.core.value_objects.message import Message
-from software_factory_poc.application.core.value_objects.message_role import MessageRole
-from software_factory_poc.application.core.value_objects.provider_name import ProviderName
+
+from software_factory_poc.application.core.domain.entities.llm.llm_request import LlmRequest
+from software_factory_poc.application.core.domain.value_objects.generation_config import (
+    GenerationConfig,
+)
+from software_factory_poc.application.core.domain.value_objects.message import Message
+from software_factory_poc.application.core.domain.value_objects.message_role import MessageRole
+from software_factory_poc.application.core.domain.value_objects.model_id import ModelId
+from software_factory_poc.application.core.domain.value_objects.output_format import OutputFormat
+from software_factory_poc.application.core.domain.configuration.llm_provider_type import LlmProviderType
+from software_factory_poc.infrastructure.providers.llms.openai.mappers.openai_request_mapper import (
+    OpenAiRequestMapper,
+)
+
 
 @pytest.fixture
 def mapper():
@@ -15,7 +21,7 @@ def mapper():
 
 def test_to_kwargs_injects_json_instruction_if_missing(mapper):
     request = LlmRequest(
-        model=ModelId(provider=ProviderName.OPENAI, name="gpt-4"),
+        model=ModelId(provider=LlmProviderType.OPENAI, name="gpt-4"),
         messages=(Message(role=MessageRole.USER, content="Hello world"),),
         generation=GenerationConfig(format=OutputFormat.JSON)
     )
@@ -31,7 +37,7 @@ def test_to_kwargs_injects_json_instruction_if_missing(mapper):
 
 def test_to_kwargs_does_not_inject_if_json_keyword_present(mapper):
     request = LlmRequest(
-        model=ModelId(provider=ProviderName.OPENAI, name="gpt-4"),
+        model=ModelId(provider=LlmProviderType.OPENAI, name="gpt-4"),
         messages=(Message(role=MessageRole.USER, content="Please output JSON format"),),
         generation=GenerationConfig(format=OutputFormat.JSON)
     )
@@ -45,7 +51,7 @@ def test_to_kwargs_does_not_inject_if_json_keyword_present(mapper):
 
 def test_to_kwargs_text_format_no_response_format(mapper):
     request = LlmRequest(
-        model=ModelId(provider=ProviderName.OPENAI, name="gpt-4"),
+        model=ModelId(provider=LlmProviderType.OPENAI, name="gpt-4"),
         messages=(Message(role=MessageRole.USER, content="Hello"),),
         generation=GenerationConfig(format=OutputFormat.TEXT)
     )

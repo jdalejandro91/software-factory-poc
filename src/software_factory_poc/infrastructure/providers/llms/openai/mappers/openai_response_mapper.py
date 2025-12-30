@@ -4,10 +4,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from software_factory_poc.application.core.entities.llm_response import LlmResponse
-from software_factory_poc.application.core.value_objects.model_id import ModelId
-from software_factory_poc.application.core.value_objects.provider_name import ProviderName
-from software_factory_poc.application.core.value_objects.token_usage import TokenUsage
+from software_factory_poc.application.core.domain.entities.llm.llm_response import LlmResponse
+from software_factory_poc.application.core.domain.value_objects.model_id import ModelId
+from software_factory_poc.application.core.domain.configuration.llm_provider_type import LlmProviderType
+from software_factory_poc.application.core.domain.entities.llm.token_usage import TokenUsage
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,7 +35,7 @@ class OpenAiResponseMapper:
             payload = self._payload(response)
             usage = self._usage(response)
             
-            return LlmResponse(model=ModelId(provider=ProviderName.OPENAI, name=model_name), content=content, usage=usage, provider_payload=payload)
+            return LlmResponse(model=ModelId(provider=LlmProviderType.OPENAI, name=model_name), content=content, usage=usage, provider_payload=payload)
 
         except Exception as e:
             raise ValueError(f"Failed to map OpenAI response: {e}")

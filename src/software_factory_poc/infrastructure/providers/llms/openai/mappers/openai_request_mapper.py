@@ -4,10 +4,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from software_factory_poc.application.core.entities.llm_request import LlmRequest
-from software_factory_poc.application.core.value_objects.message import Message
-from software_factory_poc.application.core.value_objects.message_role import MessageRole
-from software_factory_poc.application.core.value_objects.output_format import OutputFormat
+from software_factory_poc.application.core.domain.entities.llm.llm_request import LlmRequest
+from software_factory_poc.application.core.domain.value_objects.message import Message
+from software_factory_poc.application.core.domain.value_objects.message_role import MessageRole
+from software_factory_poc.application.core.domain.value_objects.output_format import OutputFormat
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,7 +37,16 @@ class OpenAiRequestMapper:
 
     def _generation_kwargs(self, request: LlmRequest) -> Mapping[str, Any]:
         g = request.generation
-        return {k: v for k, v in {"max_output_tokens": g.max_output_tokens, "temperature": g.temperature, "top_p": g.top_p, "seed": g.seed, "stop": g.stop}.items() if v is not None}
+        # Mapeo explícito de dominio -> proveedor
+        params = {
+            "max_tokens": g.max_output_tokens,
+            "temperature": g.temperature,
+            "top_p": g.top_p,
+            "seed": g.seed,
+            "stop": g.stop
+        }
+        # Filtrar None
+        return {k: v for k, v in params.items() if v is not None}
 
     def _output_kwargs(self, request: LlmRequest) -> Mapping[str, Any]:
         # Use generation config property which checks format == JSON

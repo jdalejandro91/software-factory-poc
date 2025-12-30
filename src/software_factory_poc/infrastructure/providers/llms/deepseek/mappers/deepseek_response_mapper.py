@@ -4,10 +4,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from software_factory_poc.application.core.entities.llm_response import LlmResponse
-from software_factory_poc.application.core.value_objects.model_id import ModelId
-from software_factory_poc.application.core.value_objects.provider_name import ProviderName
-from software_factory_poc.application.core.value_objects.token_usage import TokenUsage
+from software_factory_poc.application.core.domain.entities.llm.llm_response import LlmResponse
+from software_factory_poc.application.core.domain.value_objects.model_id import ModelId
+from software_factory_poc.application.core.domain.configuration.llm_provider_type import LlmProviderType
+from software_factory_poc.application.core.domain.entities.llm.token_usage import TokenUsage
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,7 +17,7 @@ class DeepSeekResponseMapper:
         content = self._content(msg)
         reasoning = getattr(msg, "reasoning_content", None)
         usage = self._usage(response)
-        return LlmResponse(model=ModelId(provider=ProviderName.DEEPSEEK, name=model_name), content=content, usage=usage, provider_payload=self._payload(response), reasoning_content=reasoning)
+        return LlmResponse(model=ModelId(provider=LlmProviderType.DEEPSEEK, name=model_name), content=content, usage=usage, provider_payload=self._payload(response), reasoning_content=reasoning)
 
     def _message(self, response: Any) -> Any:
         choices = getattr(response, "choices", None) or []

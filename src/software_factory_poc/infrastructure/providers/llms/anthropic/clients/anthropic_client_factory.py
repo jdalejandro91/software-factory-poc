@@ -3,10 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from software_factory_poc.application.core.shared.dependency_guard import DependencyGuard
 from software_factory_poc.infrastructure.providers.llms.anthropic.clients.anthropic_config import (
     AnthropicConfig,
 )
-from software_factory_poc.application.core.shared.dependency_guard import DependencyGuard
 
 
 @dataclass(frozen=True, slots=True)
