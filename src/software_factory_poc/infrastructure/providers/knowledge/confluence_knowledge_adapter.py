@@ -18,18 +18,25 @@ class ConfluenceKnowledgeAdapter(KnowledgeGateway):
     def __init__(self, http_client: ConfluenceHttpClient):
         self.http_client = http_client
 
-    def retrieve_context(self, query: str) -> str:
+    def retrieve_context(self, criteria: dict) -> str:
         """
-        Retrieves Confluence page content.
-        Query can be a Page ID or a generic search query (simplified for this PoC).
-        Assumption: If query is numeric, it's an ID. Otherwise search.
+        Retrieves Confluence page content based on structured criteria.
+        Supported keys: 'page_id', 'query'.
         """
         try:
-            query = query.strip()
-            if query.isdigit():
-                return self._get_page_by_id(query)
+            if not criteria:
+                raise ValueError("No search criteria provided")
+
+            page_id = criteria.get("page_id")
+            text_query = criteria.get("query")
+
+            if page_id:
+                return self._get_page_by_id(page_id)
+            elif text_query:
+                return self._search_pages(text_query)
             else:
-                return self._search_pages(query)
+                logger.warning(f"No knowledge found for criteria: {criteria}")
+                return ""
         except Exception as e:
             # Map low level exceptions to ProviderError
             if hasattr(e, "status_code") and e.status_code == 404:

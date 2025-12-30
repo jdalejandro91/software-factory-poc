@@ -67,25 +67,24 @@ class CreateScaffoldingUseCase:
                 self.agent.report_existing_branch(task, branch_name, tracker_gateway)
                 return
 
-            # 5. Retrieve Context
+            # 5. Retrieve Context via Agent
             knowledge_gateway = self.resolver.resolve_knowledge()
-            # Hardcoded Page ID for PoC Context Stability - requested by architect
-            # Real implementation would search dynamically or use a config map
-            query = f"{request.technology_stack} {request.summary} page_id:3571713"
             
-            logger.info("Retrieving architectural context from Knowledge Gateway...")
-            context = knowledge_gateway.retrieve_context(query)
+            # Construir filtros de búsqueda basados en la configuración
+            # NO INCLUIR CREDENCIALES AQUÍ. El adaptador ya las tiene.
+            search_filters = {
+                "page_id": self.config.architecture_page_id,
+                "query": f"{request.technology_stack} {request.summary}" # Fallback opcional
+            }
             
-            print(f"\n🧠 [CORE:KNOWLEDGE] Received Context for Prompting:\n"
+            logger.info(f"Delegating knowledge search to Agent with filters: {search_filters}")
+            context = self.agent.search_knowledge(knowledge_gateway, search_filters)
+            
+            # Mantener el log de debug del contenido (Core)
+            print(f"\n🧠 [CORE:KNOWLEDGE] Received Context via Agent:\n"
                   f"--------------------------------------------------\n"
                   f"{context}\n"
                   f"--------------------------------------------------\n", flush=True)
-            
-            context_size = len(context)
-            logger.info(f"Confluence knowledge retrieved. Size: {context_size} chars.")
-            
-            if context_size < 100:
-                logger.warning("Suspiciously small knowledge context retrieved (<100 chars). Generation quality may be degraded.")
 
             # 6. Construir Prompt y Llamar LLM
             # prompt now returns a single string (System + User combined) or we can split if Gateway supports it.

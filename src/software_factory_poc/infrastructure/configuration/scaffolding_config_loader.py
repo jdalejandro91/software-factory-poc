@@ -55,12 +55,18 @@ class ScaffoldingConfigLoader:
             # 6. Secure Mode
             enable_secure = os.getenv("ENABLE_SECURE_MODE", "True").lower() == "true"
 
+            # 7. Architecture Page ID (Configuration Injection)
+            arch_page_id = ScaffoldingConfigLoader._get_value(
+                "SCAFFOLDING_ARCHITECTURE_PAGE_ID", "ARCHITECTURE_DOC_PAGE_ID", "3571713"
+            )
+
             return ScaffoldingAgentConfig(
                 vcs_provider=vcs_provider,
                 tracker_provider=tracker_provider,
                 knowledge_provider=knowledge_provider,
                 llm_model_priority=llm_priority_list,
                 work_dir=work_dir,
+                architecture_page_id=arch_page_id,
                 enable_secure_mode=enable_secure,
             )
         except Exception as e:

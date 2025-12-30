@@ -20,4 +20,5 @@ class ScaffoldingAgentConfig:
     knowledge_provider: KnowledgeProviderType
     llm_model_priority: list[ModelId]
     work_dir: Path
+    architecture_page_id: str
     enable_secure_mode: bool = True

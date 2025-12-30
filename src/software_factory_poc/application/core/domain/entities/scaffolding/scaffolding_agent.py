@@ -8,6 +8,11 @@ from software_factory_poc.application.core.domain.configuration.task_status impo
 from software_factory_poc.application.core.ports.gateways.task_tracker_gateway_port import TaskTrackerGatewayPort
 from software_factory_poc.application.core.domain.exceptions.domain_error import DomainError
 from software_factory_poc.application.core.domain.services.prompt_builder_service import PromptBuilderService
+import logging
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from software_factory_poc.application.core.ports.gateways.knowledge_gateway import KnowledgeGateway
 
 @dataclass
 class ScaffoldingAgent:
@@ -15,6 +20,23 @@ class ScaffoldingAgent:
     Domain Service / Aggregate responsible for Scaffolding business logic.
     Encapsulates how a Task reacts to events.
     """
+
+    def search_knowledge(self, gateway: "KnowledgeGateway", search_filters: dict) -> str:
+        """
+        Orchestrates knowledge retrieval via the gateway using specific filters.
+        """
+        # 1. Ejecutar búsqueda
+        context = gateway.retrieve_context(search_filters)
+
+        # 2. Validaciones de Dominio (Calidad del contexto)
+        if not context or len(context.strip()) == 0:
+            # No lanzamos error, pero retornamos un indicador claro para el prompt
+            return "No knowledge found."
+
+        if len(context) < 100:
+            logging.getLogger(__name__).warning("Suspiciously small knowledge context retrieved (<100 chars).")
+
+        return context
 
     def build_prompt(self, request: ScaffoldingRequest, context: str) -> str:
         """
