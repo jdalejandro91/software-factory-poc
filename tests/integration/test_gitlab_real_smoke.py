@@ -3,14 +3,15 @@ import uuid
 
 import pytest
 
-from software_factory_poc.configuration.main_settings import Settings
-from software_factory_poc.infrastructure.providers.tools.gitlab.clients.gitlab_http_client import (
+from software_factory_poc.infrastructure.configuration.tool_settings import ToolSettings
+from software_factory_poc.infrastructure.configuration.main_settings import Settings
+from software_factory_poc.infrastructure.providers.vcs.clients.gitlab_http_client import (
     GitLabHttpClient,
 )
-from software_factory_poc.infrastructure.providers.tools.gitlab.gitlab_provider_impl import (
+from software_factory_poc.infrastructure.providers.vcs.gitlab_provider_impl import (
     GitLabProviderImpl,
 )
-from software_factory_poc.infrastructure.providers.tools.gitlab.mappers.gitlab_payload_builder_service import (
+from software_factory_poc.infrastructure.providers.vcs.mappers.gitlab_payload_builder_service import (
     GitLabPayloadBuilderService,
 )
 

@@ -1,83 +1,58 @@
-# ARCHITECTURE.md — Arquitectura PoC (1 sprint)
+# Software Factory PoC — Architecture Documentation
 
-## 1) Objetivo arquitectónico
-Probar el flujo end-to-end, con código legible, contratos claros, idempotencia simple y evidencia mínima (`run_id`). :contentReference[oaicite:15]{index=15}
+## 1. Architectural Philosophy: Screaming Architecture (DDD)
+The project follows **Domain-Driven Design (DDD)** and **Clean Architecture** principles. The folder structure "screams" the intent of the application rather than the framework (FastAPI).
 
-## 2) Flujo end-to-end (secuencia)
-Trigger externo (ideal: Jira Automation) -> Servicio PoC:
-1) POST /jira/scaffold-trigger (issue_key)
-2) Jira read: get issue -> description + fields
-3) Parse & validate: extraer Scaffolding Contract desde descripción (bloque delimitado) + validación Pydantic
-4) Idempotencia: key = issue_key + contract_version + template_version
-   - Si existe: marcar DUPLICATE y comentar Jira con MR existente
-5) Policy checks (“reglas duras”)
-6) Render determinista desde plantilla local:
-   - template_id -> carpeta local
-   - render -> dict[path] = content
-   - validar expected_paths del manifest
-7) GitLab:
-   - create branch scaffold/<issueKey>-<slug>
-   - commit multi-file (acciones create)
-   - create MR (no merge)
-8) Jira write:
-   - add comment con MR link + resumen + próximos pasos
-9) Persistencia mínima:
-   - store idempotency key -> MR url
-   - store run_id -> resultado (status, errores) :contentReference[oaicite:16]{index=16}
+### Key Layers
+1.  **Application Core (`application/`)**:
+    *   **Domain Entities**: Pure Python objects representing business concepts (e.g., `ScaffoldingRequest`, `ScaffoldingAgent`).
+    *   **Use Cases**: High-level orchestrators containing business logic (e.g., `CreateScaffoldingUseCase`).
+    *   **Ports (Gateways)**: Interfaces defining contracts for external services (e.g., `VcsGateway`, `LLMGatewayPort`).
+    *   **Services**: Pure domain logic services (e.g., `PromptBuilderService`, `FileParsingService`).
 
-## 3) Reglas duras (obligatorias)
-Estas reglas viven como checks simples (PoC) antes de tocar GitLab:
-- Nunca commitear en main
-- Nunca hacer merge (solo MR)
-- Solo repos allowlisted
-- Solo templates allowlisted :contentReference[oaicite:17]{index=17}
+2.  **Infrastructure (`infrastructure/`)**:
+    *   **Adapters (Providers)**: Concrete implementations of Ports (e.g., `GitLabProviderImpl` implementing `VcsGateway`).
+    *   **Configuration**: Loaders and Pydantic Settings implementation.
+    *   **Entrypoints**: API routers (FastAPI) and CLI scripts.
+    *   **Resolution**: `ProviderResolver` (Factory) to wire adapters dynamically.
 
-## 4) Capas (dependencias permitidas)
-Regla: `api -> orchestration -> (integrations, templates, store, policy)`
+---
 
-- api
-  - SOLO HTTP (FastAPI): request/response y validación superficial
-  - NO lógica de negocio
+## 2. Core Orchestration Flow
+The central workflow is managed by the `CreateScaffoldingUseCase`:
 
-- orchestration
-  - Orquesta el flujo (use-case PoC)
-  - Decide orden de steps, manejo de errores y logging
+1.  **Resolver Wiring**: The `ProviderResolver` examines the configuration and instantiates the correct adapters (e.g., GitLab vs GitHub, OpenAI vs DeepSeek).
+2.  **Context Retrieval**: `KnowledgeGateway` fetches relevant docs/templates.
+3.  **Prompt Strategy**: `PromptBuilderService` constructs a context-aware prompt.
+4.  **LLM Generation**: `LLMGatewayPort` (Composite) executes the prompt, handling fallback logic if primary models fail.
+5.  **Parsing**: `FileParsingService` converts LLM response into virtual files.
+6.  **Action**: `VcsGateway` applies changes (Branch/Commit/MR) to the repository.
+7.  **Notification**: `TrackerGateway` updates the status in the task tracker (Jira).
 
-- contracts
-  - Define el contract de entrada y el resultado final (modelos Pydantic)
-  - Parser del bloque en Jira description
+---
 
-- policy
-  - Implementa checks “duros” PoC (allowlists, no-merge, no-writes a main)
+## 3. Interfaces (Ports)
+These interfaces isolate the core from external tools.
 
-- integrations
-  - Jira/GitLab clients (HTTP) + mappers/payload builders
-  - NO reglas de negocio
+-   **`VcsGateway`**: Contracts for `create_merge_request`.
+-   **`TrackerGateway`**: Contracts for `transition_task`, `comment_on_task`.
+-   **`KnowledgeGateway`**: Contracts for `retrieve_context`.
+-   **`LLMGatewayPort`**: Contracts for `generate_code`.
 
-- templates
-  - Registro de templates locales + manifest + renderer determinista
+---
 
-- store
-  - Persistencia mínima (archivo JSON) para idempotencia y resultados por run
+## 4. Configuration & Resolution
+The system is strictly configuration-driven via Environment Variables.
 
-- observability
-  - Logger consistente (run_id, step_name, issue_key) + redacción
+### Provider Resolution
+The `ProviderResolver` acts as the dependency injection root. It reads the `ScaffoldingAgentConfig` (loaded via `settings_loader.py`) and decides which concrete class to instantiate.
 
-- utils
-  - Helpers pequeños y testeables (time, slugify)
+**Example**:
+- If `VCS_PROVIDER=GITLAB` -> Instantiates `GitLabProviderImpl`.
+- If `KNOWLEDGE_PROVIDER=FILE_SYSTEM` -> Instantiates `FileSystemKnowledgeAdapter`.
 
-## 5) Manejo de fallos (filosofía PoC)
-- Si falla Jira read: FAILED y log; comentar Jira solo si es posible (depende del fallo).
-- Si contract inválido: FAILED, comentar Jira con lista de errores, no tocar GitLab. :contentReference[oaicite:18]{index=18}
-- Si falla GitLab: FAILED, comentar Jira con diagnóstico sin exponer secretos. :contentReference[oaicite:19]{index=19}
-- Si ya existía idempotencia key: DUPLICATE, comentar Jira con MR existente. :contentReference[oaicite:20]{index=20}
-
-## 6) Idempotencia (simple, suficiente para PoC)
-- Key: issue_key + contract_version + template_version
-- Store: archivo JSON (rápido para 1 sprint)
-- El key builder debe ser estable y testeable.
-
-## 7) Evidencia mínima
-- Todos los runs deben tener `run_id`
-- Logs estructurados por step (jira_read, contract_parse, policy, render, gitlab_branch, gitlab_commit, gitlab_mr, jira_comment)
-- Guardar resultado final por run_id (para demo y debugging)
+### Configuration Enums
+Supported values for configuration:
+-   **VCS**: `gitlab`
+-   **Tracker**: `jira`
+-   **LLM**: Priority list via `LLM_MODEL_PRIORITY` JSON (e.g., `openai`, `deepseek`).

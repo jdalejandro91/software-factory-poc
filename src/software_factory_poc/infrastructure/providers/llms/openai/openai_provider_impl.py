@@ -4,21 +4,22 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from software_factory_poc.application.core.entities.llm_request import LlmRequest
-from software_factory_poc.application.core.entities.llm_response import LlmResponse
-from software_factory_poc.application.core.exceptions.provider_error import ProviderError
-from software_factory_poc.application.core.value_objects.provider_name import ProviderName
-from software_factory_poc.application.ports.llms.llm_provider import LlmProvider
+from software_factory_poc.application.core.domain.entities.llm.llm_request import LlmRequest
+from software_factory_poc.application.core.domain.entities.llm.llm_response import LlmResponse
+from software_factory_poc.application.core.domain.exceptions.provider_error import ProviderError
+from software_factory_poc.application.core.domain.configuration.llm_provider_type import LlmProviderType
+from software_factory_poc.application.core.ports.llms.llm_provider import LlmProvider
+from software_factory_poc.infrastructure.common.retry.retry_policy import RetryPolicy
+from software_factory_poc.infrastructure.observability.logging.correlation_id_context import (
+    CorrelationIdContext,
+)
 from software_factory_poc.infrastructure.providers.llms.openai.mappers.openai_request_mapper import (
     OpenAiRequestMapper,
 )
 from software_factory_poc.infrastructure.providers.llms.openai.mappers.openai_response_mapper import (
     OpenAiResponseMapper,
 )
-from software_factory_poc.infrastructure.observability.logging.correlation_id_context import CorrelationIdContext
-from software_factory_poc.infrastructure.common.retry.retry_policy import RetryPolicy
 
-from openai import AsyncOpenAI
 
 @dataclass(frozen=True, slots=True)
 class OpenAiProvider(LlmProvider):
@@ -29,8 +30,8 @@ class OpenAiProvider(LlmProvider):
     correlation: CorrelationIdContext
 
     @property
-    def name(self) -> ProviderName:
-        return ProviderName.OPENAI
+    def name(self) -> LlmProviderType:
+        return LlmProviderType.OPENAI
 
     async def generate(self, request: LlmRequest) -> LlmResponse:
         cid = self.correlation.set(request.trace.correlation_id if request.trace else None)

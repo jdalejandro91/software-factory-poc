@@ -4,10 +4,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from software_factory_poc.application.core.entities.llm_response import LlmResponse
-from software_factory_poc.application.core.value_objects.model_id import ModelId
-from software_factory_poc.application.core.value_objects.provider_name import ProviderName
-from software_factory_poc.application.core.value_objects.token_usage import TokenUsage
+from software_factory_poc.application.core.domain.entities.llm.llm_response import LlmResponse
+from software_factory_poc.application.core.domain.value_objects.model_id import ModelId
+from software_factory_poc.application.core.domain.configuration.llm_provider_type import LlmProviderType
+from software_factory_poc.application.core.domain.entities.llm.token_usage import TokenUsage
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,7 +15,7 @@ class GeminiResponseMapper:
     def to_domain(self, model_name: str, response: Any) -> LlmResponse:
         text = self._text(response)
         usage = self._usage(response)
-        return LlmResponse(model=ModelId(provider=ProviderName.GEMINI, name=model_name), content=text, usage=usage, provider_payload=self._payload(response))
+        return LlmResponse(model=ModelId(provider=LlmProviderType.GEMINI, name=model_name), content=text, usage=usage, provider_payload=self._payload(response))
 
     def _text(self, response: Any) -> str:
         text = getattr(response, "text", None)

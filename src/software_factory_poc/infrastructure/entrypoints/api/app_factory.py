@@ -2,16 +2,18 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from software_factory_poc.configuration.main_settings import Settings
+from software_factory_poc.infrastructure.configuration.main_settings import Settings
 from software_factory_poc.infrastructure.entrypoints.api.health_router import (
     router as health_router,
 )
 from software_factory_poc.infrastructure.entrypoints.api.jira_trigger_router import (
     router as jira_router,
 )
-from software_factory_poc.infrastructure.observability.logger_factory_service import build_logger
+from software_factory_poc.infrastructure.observability.logger_factory_service import (
+    LoggerFactoryService,
+)
 
-logger = build_logger(__name__)
+logger = LoggerFactoryService.build_logger(__name__)
 
 def create_app(settings: Settings) -> FastAPI:
     app = FastAPI(title=settings.app_name)

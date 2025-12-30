@@ -1,9 +1,12 @@
 import time
-import pytest
 from unittest.mock import MagicMock
-from software_factory_poc.infrastructure.providers.knowledge.confluence_service_adapter import ConfluenceServiceAdapter
-from software_factory_poc.application.ports.tools.confluence_provider import ConfluenceProvider
-from software_factory_poc.configuration.tools.tool_settings import ToolSettings
+
+from software_factory_poc.application.core.ports.tools.confluence_provider import ConfluenceProvider
+from software_factory_poc.infrastructure.configuration.tool_settings import ToolSettings
+from software_factory_poc.infrastructure.providers.knowledge.confluence_service_adapter import (
+    ConfluenceServiceAdapter,
+)
+
 
 def test_get_knowledge_fetches_and_caches():
     # Arrange

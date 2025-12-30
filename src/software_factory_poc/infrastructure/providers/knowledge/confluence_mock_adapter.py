@@ -1,19 +1,26 @@
-from software_factory_poc.application.core.ports.knowledge_base_port import KnowledgeBasePort
-from software_factory_poc.infrastructure.providers.knowledge.architecture_constants import (
-    SHOPPING_CART_ARCHITECTURE,
-    DEFAULT_ARCHITECTURE,
+from software_factory_poc.application.core.ports.gateways.knowledge_gateway import KnowledgeGateway
+from software_factory_poc.infrastructure.observability.logger_factory_service import (
+    LoggerFactoryService,
 )
-from software_factory_poc.infrastructure.observability.logger_factory_service import build_logger
+from software_factory_poc.infrastructure.providers.knowledge.architecture_constants import (
+    DEFAULT_ARCHITECTURE,
+    SHOPPING_CART_ARCHITECTURE,
+)
 
-logger = build_logger(__name__)
+logger = LoggerFactoryService.build_logger(__name__)
 
-class ConfluenceMockAdapter(KnowledgeBasePort):
-    def get_knowledge(self, url: str) -> str:
-        logger.info(f"Fetching knowledge from Confluence: {url}")
+class ConfluenceMockAdapter(KnowledgeGateway):
+    def retrieve_context(self, query: str) -> str:
+        logger.info(f"Fetching context for query: {query}")
         
-        if "carrito-de-compra" in url:
+        query_lower = query.lower()
+        if "shopping cart" in query_lower or "carrito" in query_lower:
             logger.info("Match found: Shopping Cart Architecture")
             return SHOPPING_CART_ARCHITECTURE
             
         logger.info("No specific match found, returning default guidelines")
         return DEFAULT_ARCHITECTURE
+
+    # Legacy support if needed during transition (though mostly dead)
+    def get_knowledge(self, url: str) -> str:
+        return self.retrieve_context(url)

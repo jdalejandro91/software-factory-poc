@@ -1,38 +1,39 @@
-from typing import Optional
+
 from pydantic import BaseModel, Field
 
+
 class JiraUserDTO(BaseModel):
-    name: Optional[str] = None
-    display_name: Optional[str] = Field(None, alias="displayName")
-    active: Optional[bool] = None
+    name: str | None = None
+    display_name: str | None = Field(None, alias="displayName")
+    active: bool | None = None
 
 class JiraProjectDTO(BaseModel):
     key: str
-    name: Optional[str] = None
+    name: str | None = None
 
 class JiraIssueFieldsDTO(BaseModel):
-    summary: Optional[str] = None
-    description: Optional[str] = None
-    project: Optional[JiraProjectDTO] = None
+    summary: str | None = None
+    description: str | None = None
+    project: JiraProjectDTO | None = None
 
 class JiraIssueDTO(BaseModel):
-    id: Optional[str] = None
+    id: str | None = None
     key: str
-    fields: Optional[JiraIssueFieldsDTO] = None
+    fields: JiraIssueFieldsDTO | None = None
 
 class JiraChangelogItem(BaseModel):
-    field: Optional[str] = None
-    fieldtype: Optional[str] = None
-    fromString: Optional[str] = None
-    toString: Optional[str] = None
+    field: str | None = None
+    fieldtype: str | None = None
+    fromString: str | None = None
+    toString: str | None = None
 
 class JiraChangelog(BaseModel):
-    id: Optional[str] = None
+    id: str | None = None
     items: list[JiraChangelogItem] = []
 
 class JiraWebhookDTO(BaseModel):
-    webhook_event: Optional[str] = Field(None, alias="webhookEvent")
-    timestamp: Optional[int] = None
-    user: Optional[JiraUserDTO] = None
+    webhook_event: str | None = Field(None, alias="webhookEvent")
+    timestamp: int | None = None
+    user: JiraUserDTO | None = None
     issue: JiraIssueDTO
-    changelog: Optional[JiraChangelog] = None
+    changelog: JiraChangelog | None = None

@@ -5,8 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from software_factory_poc.configuration.main_settings import Settings
-from software_factory_poc.configuration.tools.tool_settings import JiraAuthMode
+# from software_factory_poc.configuration.main_settings import Settings
+from software_factory_poc.infrastructure.configuration.main_settings import Settings
+
+# from software_factory_poc.configuration.tools.tool_settings import JiraAuthMode
+from software_factory_poc.infrastructure.configuration.tool_settings import JiraAuthMode
 
 
 @pytest.fixture

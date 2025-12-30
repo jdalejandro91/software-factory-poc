@@ -1,91 +1,70 @@
-import os
+
+"""
+Script to simulate a Jira Webhook event triggering the new Clean Architecture Scaffolding Use Case.
+Usage: python scripts/simulate_jira_webhook.py
+"""
 import sys
 from pathlib import Path
-
-from fastapi.testclient import TestClient
 
 # Add src to path
 sys.path.append(str(Path(__file__).parent.parent / "src"))
 
-from software_factory_poc.api.app_factory import create_app
-from software_factory_poc.configuration.main_settings import Settings
+from software_factory_poc.application.core.domain.entities.scaffolding.scaffolding_request import (
+    ScaffoldingRequest,
+)
+from software_factory_poc.application.usecases.scaffolding.create_scaffolding_usecase import (
+    CreateScaffoldingUseCase,
+)
+from software_factory_poc.infrastructure.configuration.settings_loader import (
+    load_scaffolding_config,
+)
+from software_factory_poc.infrastructure.configuration.tool_settings import ToolSettings
+from software_factory_poc.infrastructure.observability.logger_factory_service import build_logger
+from software_factory_poc.infrastructure.resolution.provider_resolver import ProviderResolver
 
+# Setup Logging
+logger = build_logger("simulate_jira")
 
-def simulate():
-    # Mock env vars
-    os.environ["JIRA_BASE_URL"] = "https://mock-jira.com"
-    os.environ["JIRA_API_TOKEN"] = "mock-token"
-    os.environ["JIRA_USER_EMAIL"] = "mock@example.com"
-    os.environ["GITLAB_URL"] = "https://gitlab.com"
-    os.environ["GITLAB_TOKEN"] = "mock-token"
-
-    print("🚀 Simulating Real Jira Webhook...")
+def main():
+    logger.info("🚀 Starting Scaffolding Simulation...")
     
-    settings = Settings()
-    app = create_app(settings)
-    client = TestClient(app)
-    
-    URL = "/api/v1/jira-webhook"
-
-    payload = {
-      "webhookEvent": "jira:issue_created",
-      "issue_event_type_name": "issue_created",
-      "timestamp": 161234567890,
-      "user": {
-        "self": "https://jira.atlassian.com/rest/api/2/user?username=jdalejandro91",
-        "name": "jdalejandro91",
-        "displayName": "Juan Alejandro (DevSecOps)",
-        "active": True
-      },
-      "issue": {
-        "id": "10001",
-        "self": "https://jira.atlassian.com/rest/api/2/issue/10001",
-        "key": "POC-REAL-001",
-        "fields": {
-          "summary": "Scaffolding: Nuevo Servicio de Pagos",
-          "description": "Requerimiento de arquitectura.\n\n```scaffolding\nversion: \"1.0\"\ntemplate: \"corp_nodejs_api\"\ntarget:\n  gitlab_project_path: \"jdalejandro91-group/nodejs-test\"\n  branch_slug: \"feature/poc-real-001-billing-api-scaffold\"\nparameters:\n  service_name: \"billing-api\"\n  description: \"API core de facturación\"\n```",
-          "issuetype": {
-            "name": "Task",
-            "subtask": False
-          },
-          "project": {
-            "id": "10000",
-            "key": "POC",
-            "name": "Proof of Concept"
-          },
-          "status": {
-            "name": "To Do",
-            "statusCategory": {
-              "key": "new",
-              "name": "To Do"
-            }
-          }
-        }
-      }
-    }
-
-    print(f"📡 Sending Jira Webhook to {URL}...")
     try:
-        response = client.post(URL, json=payload)
-        print(f"Status Code: {response.status_code}")
-        print(f"Response Body: {response.text}")
+        # 1. Load Config
+        # Ensure env vars are loaded (python-dotenv usually handled by user or loaded here)
+        from dotenv import load_dotenv
+        load_dotenv()
         
-        if response.status_code == 200:
-            print("✅ SUCCESS: Webhook processed (Simulation passed).")
-            # We might see a "FAILED" status in the body due to GitLab mocking, 
-            # but if it's 200 OK from the endpoint, it means the orchestrator ran.
-            if "Skipping Jira Fetch" in response.text or "Using webhook payload" in response.text:
-                 # This log line won't appear in the HTTP response body but in the app logs.
-                 # The HTTP response usually contains the ArtifactResultModel.
-                 # We check if error_summary is NOT "Name or service not known" (which was the Jira DNS error).
-                 pass
-            exit(0)
-        else:
-            print(f"❌ FAILURE: Unexpected status code: {response.status_code}")
-            exit(1)
+        config = load_scaffolding_config()
+        tool_settings = ToolSettings()
+        
+        logger.info(f"Loaded Config: VCS={config.vcs_provider}, Tracker={config.tracker_provider}, LLM_Priority={len(config.llm_priority_list)}")
+        
+        # 2. Build Resolver
+        resolver = ProviderResolver(config, tool_settings)
+        
+        # 3. Instantiate Use Case
+        use_case = CreateScaffoldingUseCase(config, resolver)
+        
+        # 4. Prepare Request
+        request = ScaffoldingRequest(
+            issue_key="SIM-101",
+            raw_instruction="Create a simple Python Flask API with a hello world endpoint.",
+            technology_stack="Python/Flask",
+            repository_url="https://gitlab.com/simulate/repo",
+            project_id="123456",
+            summary="Simulation Task",
+            reporter="Simulated User"
+        )
+        
+        # 5. Execute
+        logger.info(f"Executing Use Case for {request.issue_key}...")
+        use_case.execute(request)
+        
+        logger.info("✅ Simulation Complete.")
+        
     except Exception as e:
-        print(f"❌ FAILURE: Exception: {e}")
-        exit(1)
+        logger.error(f"❌ Simulation Failed: {e}", exc_info=True)
+        sys.exit(1)
 
 if __name__ == "__main__":
-    simulate()
+    main()

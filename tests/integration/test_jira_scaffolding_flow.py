@@ -1,26 +1,32 @@
-import pytest
-from fastapi.testclient import TestClient
 from unittest.mock import MagicMock
 
-from software_factory_poc.main import app
-from software_factory_poc.infrastructure.entrypoints.api.jira_trigger_router import get_usecase
-from software_factory_poc.application.usecases.scaffolding.process_jira_request_usecase import ProcessJiraRequestUseCase
-from software_factory_poc.application.core.entities.scaffolding_agent import ScaffoldingAgent
-from software_factory_poc.infrastructure.providers.knowledge.confluence_mock_adapter import ConfluenceMockAdapter
-from software_factory_poc.infrastructure.providers.knowledge.architecture_constants import SHOPPING_CART_ARCHITECTURE
-from software_factory_poc.application.core.interfaces.llm_gateway import LLMGatewayPort
-from software_factory_poc.configuration.main_settings import Settings
-from software_factory_poc.application.ports.tools.jira_provider import JiraProvider
-from software_factory_poc.application.ports.tools.gitlab_provider import GitLabProvider
+import pytest
+from fastapi.testclient import TestClient
 
-from software_factory_poc.infrastructure.entrypoints.api.jira_trigger_router import get_settings
-from software_factory_poc.configuration.main_settings import Settings
+from software_factory_poc.application.core.domain.entities.scaffolding.scaffolding_agent import ScaffoldingAgent
+from software_factory_poc.application.core.ports.gateways.llm_gateway import LlmGateway
+from software_factory_poc.application.core.ports.tools.gitlab_provider import GitLabProvider
+from software_factory_poc.application.core.ports.tools.jira_provider import JiraProvider
+from software_factory_poc.application.usecases.scaffolding.create_scaffolding_usecase import (
+    CreateScaffoldingUseCase,
+)
+from software_factory_poc.infrastructure.configuration.main_settings import Settings
+from software_factory_poc.infrastructure.entrypoints.api.jira_trigger_router import (
+    get_settings,
+    get_usecase,
+)
+from software_factory_poc.infrastructure.providers.knowledge.confluence_mock_adapter import (
+    ConfluenceMockAdapter,
+)
+from software_factory_poc.infrastructure.resolution.provider_resolver import ProviderResolver
+from software_factory_poc.infrastructure.configuration.scaffolding_config_loader import ScaffoldingConfigLoader
+from software_factory_poc.main import app
 
 # ... imports ...
 
 
 
-class MockLLMGateway(LLMGatewayPort):
+class MockLLMGateway(LlmGateway):
     def __init__(self):
         self.last_prompt = ""
         self.last_model = ""
@@ -28,7 +34,8 @@ class MockLLMGateway(LLMGatewayPort):
     def generate_code(self, prompt: str, model: str) -> str:
         self.last_prompt = prompt
         self.last_model = model
-        return '{"src/shopping_cart.py": "class ShoppingCart: pass"}'
+        # Wrap in markdown for robust parsing
+        return '<<<FILE:src/shopping_cart.py>>>\nclass ShoppingCart: pass\n<<<END>>>'
 
 mock_llm = MockLLMGateway()
 
@@ -42,14 +49,13 @@ def setup_overrides():
         return s
 
     def override_get_usecase_fn():
-        # Use real Confluence Adapter to test integration
-        kb_adapter = ConfluenceMockAdapter()
-        
-        # Use Mock LLM
-        agent = ScaffoldingAgent(llm_gateway=mock_llm, knowledge_port=kb_adapter)
-        
         # Mock Providers
+        # We need a mock that satisfies TaskTrackerGatewayPort (transition_status)
         mock_jira = MagicMock(spec=JiraProvider)
+        # Manually attach the new interface method since spec=JiraProvider doesn't have it
+        mock_jira.transition_status = MagicMock()
+        mock_jira.add_comment = MagicMock()
+        
         mock_gitlab = MagicMock(spec=GitLabProvider)
         
         # Setup GitLab Mock return values to avoid failures
@@ -57,9 +63,18 @@ def setup_overrides():
         mock_gitlab.create_merge_request.return_value = {"web_url": "http://gitlab.mock/mr/1"}
         mock_gitlab.branch_exists.return_value = False # <--- Ensure standard flow proceeds
         
-        settings = Settings()
+        mock_resolver = MagicMock(spec=ProviderResolver)
+        mock_resolver.resolve_vcs.return_value = mock_gitlab
+        mock_resolver.resolve_tracker.return_value = mock_jira
+        mock_resolver.resolve_llm_gateway.return_value = mock_llm
         
-        return ProcessJiraRequestUseCase(agent=agent, jira_provider=mock_jira, gitlab_provider=mock_gitlab, settings=settings)
+        # Use real Mock Adapter for Knowledge
+        kb_adapter = ConfluenceMockAdapter()
+        mock_resolver.resolve_knowledge.return_value = kb_adapter
+        
+        config = ScaffoldingConfigLoader.load_config()
+        
+        return CreateScaffoldingUseCase(config=config, resolver=mock_resolver)
 
     app.dependency_overrides[get_settings] = get_settings_override
     app.dependency_overrides[get_usecase] = override_get_usecase_fn
@@ -153,4 +168,4 @@ Instruction: Create a Python shopping cart with add_item method.
     
     # 4. Prompt Hardening Verification
     assert "CRITICAL RULES FOR GENERATION:" in prompt
-    assert "ONE-SHOT EXAMPLE (Expected Behavior for a NestJS request):" in prompt
+    assert "ONE-SHOT EXAMPLE:" in prompt

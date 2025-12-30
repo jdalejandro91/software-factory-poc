@@ -6,8 +6,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from software_factory_poc.infrastructure.observability.logging.correlation_id_context import CorrelationIdContext
-from software_factory_poc.infrastructure.observability.logging.correlation_id_filter import CorrelationIdFilter
+from software_factory_poc.infrastructure.observability.logging.correlation_id_context import (
+    CorrelationIdContext,
+)
+from software_factory_poc.infrastructure.observability.logging.correlation_id_filter import (
+    CorrelationIdFilter,
+)
 
 
 @dataclass(frozen=True, slots=True)

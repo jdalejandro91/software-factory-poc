@@ -1,7 +1,12 @@
-import pytest
 from unittest.mock import MagicMock
-from software_factory_poc.infrastructure.providers.llms.openai.mappers.openai_response_mapper import OpenAiResponseMapper
-from software_factory_poc.application.core.value_objects.provider_name import ProviderName
+
+import pytest
+
+from software_factory_poc.application.core.domain.configuration.llm_provider_type import LlmProviderType
+from software_factory_poc.infrastructure.providers.llms.openai.mappers.openai_response_mapper import (
+    OpenAiResponseMapper,
+)
+
 
 @pytest.fixture
 def mapper():
@@ -18,7 +23,7 @@ def test_to_domain_valid_content(mapper):
     
     assert result.content == "Hello World"
     assert result.model.name == "gpt-4"
-    assert result.model.provider == ProviderName.OPENAI
+    assert result.model.provider == LlmProviderType.OPENAI
 
 def test_to_domain_strips_markdown_json(mapper):
     mock_response = MagicMock()

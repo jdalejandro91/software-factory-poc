@@ -1,6 +1,6 @@
 import uvicorn
 
-from software_factory_poc.configuration.main_settings import Settings
+from software_factory_poc.infrastructure.configuration.main_settings import Settings
 from software_factory_poc.infrastructure.entrypoints.api.app_factory import create_app
 
 

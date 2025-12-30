@@ -1,11 +1,13 @@
 import time
 
 from software_factory_poc.application.core.ports.knowledge_base_port import KnowledgeBasePort
-from software_factory_poc.application.ports.tools.confluence_provider import ConfluenceProvider
-from software_factory_poc.configuration.tools.tool_settings import ToolSettings
-from software_factory_poc.infrastructure.observability.logger_factory_service import build_logger
+from software_factory_poc.application.core.ports.tools.confluence_provider import ConfluenceProvider
+from software_factory_poc.infrastructure.configuration.tool_settings import ToolSettings
+from software_factory_poc.infrastructure.observability.logger_factory_service import (
+    LoggerFactoryService,
+)
 
-logger = build_logger(__name__)
+logger = LoggerFactoryService.build_logger(__name__)
 
 class ConfluenceServiceAdapter(KnowledgeBasePort):
     def __init__(self, provider: ConfluenceProvider, settings: ToolSettings):
