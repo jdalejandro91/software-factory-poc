@@ -182,4 +182,4 @@ class ScaffoldingConfigLoader:
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON for LLM_MODEL_PRIORITY: {json_str}")
             # Robust fallback
-            return [ModelId(provider=LlmProviderType.OPENAI, model_name="gpt-4-turbo")]
+            return [ModelId(provider=LlmProviderType.OPENAI, name="gpt-4-turbo")]
