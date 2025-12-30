@@ -163,9 +163,9 @@ Instruction: Create a Python shopping cart with add_item method.
     assert "Cart Entity" in prompt
     
     # 3. Agent Verification: Constructed structure
-    assert "INPUT CONTEXT (Architecture Pattern):" in prompt
-    assert "USER REQUEST (Contains 'technology_stack' and 'parameters'):" in prompt
+    assert "--- ARCHITECTURAL STANDARDS (RAG CONTEXT) ---" in prompt
+    assert "--- TASK INSTRUCTIONS ---" in prompt
     
     # 4. Prompt Hardening Verification
-    assert "CRITICAL RULES FOR GENERATION:" in prompt
-    assert "ONE-SHOT EXAMPLE:" in prompt
+    assert "--- CRITICAL OUTPUT RULES ---" in prompt
+    assert "--- EXAMPLE OUTPUT ---" in prompt

@@ -1,42 +1,72 @@
+from software_factory_poc.application.core.domain.entities.scaffolding.scaffolding_request import ScaffoldingRequest
+from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
+
+logger = LoggerFactoryService.build_logger(__name__)
+
 class PromptBuilderService:
+    """
+    Constructs the deterministic 'Super Prompt' for the LLM, integrating 
+    architectural context (RAG) and specific user instructions.
+    """
+
     @staticmethod
-    def build_system_prompt(technology_stack: str) -> str:
+    def build_scaffolding_prompt(request: ScaffoldingRequest, knowledge_context: str) -> str:
         """
-        Builds the system prompt/persona.
+        Builds the complete prompt string combining System Persona, Context, and Task.
+        Logs the full prompt for debugging purposes.
         """
-        return (
-            f"ACT AS: Senior Software Architect & Tech Lead.\n"
-            f"MISSION: Create a clean 'Skeleton Scaffolding' for a new software project based on the requested '{technology_stack}'.\n"
-            f"You are an expert in {technology_stack} ecosystem."
+        
+        # Validation / Diagnostics
+        if not knowledge_context or not knowledge_context.strip():
+            logger.warning(f"Generating prompt for {request.issue_key} WITHOUT Knowledge Context (Empty RAG).")
+            knowledge_context = "No specific architecture documentation provided. Use standard best practices."
+
+        # 1. System Persona & Role
+        system_section = (
+            f"ROLE: You are an Expert Software Architect specializing in {request.technology_stack}.\n"
+            f"MISSION: Create a production-ready 'Skeleton Scaffolding' for a project named '{request.issue_key}'.\n"
         )
 
-    @staticmethod
-    def build_user_prompt(request_instruction: str, context: str) -> str:
-        """
-        Builds the user prompt with context and instructions.
-        """
-        return PromptBuilderService._format_prompt_body(request_instruction, context)
+        # 2. Context (RAG)
+        context_section = (
+            f"--- ARCHITECTURAL STANDARDS (RAG CONTEXT) ---\n"
+            f"{knowledge_context}\n"
+            f"----------------------------------------------\n"
+        )
 
-    @staticmethod
-    def _format_prompt_body(instruction: str, knowledge_context: str) -> str:
-        parts = [
-            f"INPUT CONTEXT (Architecture Pattern):\n{knowledge_context}\n\n",
-            f"USER REQUEST (Contains 'technology_stack' and 'parameters'):\n{instruction}\n\n",
-            "CRITICAL RULES FOR GENERATION:\n",
-            "1. **Analyze the 'technology_stack' field** in the User Request. Use the best standard practices and folder structures for that specific framework (e.g., NestJS modules, SpringBoot packages).\n",
-            "2. **Configuration Files (FULL CONTENT)**: You MUST generate valid, complete content for all essential project configuration files. Examples: 'package.json', 'pom.xml', 'requirements.txt', 'Dockerfile', 'tsconfig.json', '.gitignore'. The project must be installable/buildable.\n",
-            "3. **Source Code Directories (DESCRIPTIVE ONLY)**: Do NOT generate business logic implementation files (no entities, no services code). Instead, create the directory structure and place a 'README.md' file inside each architectural folder (e.g., 'src/domain/README.md') describing what should go there.\n",
-            "4. **Root README**: Generate a professional 'README.md' at the root with project name, architecture overview, and setup commands.\n",
-            "5. **Output Format**: You must use strict code blocks with a special header for each file. Do NOT return a single JSON object. Use the format:\n",
-            "<<<FILE:path/to/file>>>\n",
-            "file content here...\n",
-            "<<<END>>>\n\n",
-            "ONE-SHOT EXAMPLE:\n",
-            "<<<FILE:src/main.py>>>\n",
-            "print('Hello')\n",
-            "<<<END>>>\n",
-            "<<<FILE:README.md>>>\n",
-            "# Demo\n",
-            "<<<END>>>"
-        ]
-        return "".join(parts)
+        # 3. Task & Restrictions
+        task_section = (
+            f"--- TASK INSTRUCTIONS ---\n"
+            f"Project Name: {request.issue_key}\n"
+            f"Tech Stack: {request.technology_stack}\n"
+            f"User Summary: {request.summary}\n"
+            f"Detailed Instructions: {request.raw_instruction}\n\n"
+            
+            f"--- CRITICAL OUTPUT RULES ---\n"
+            f"1. **Configuration Files**: Generate FULL content for gitignore, package.json/requirements.txt, Dockerfile, etc.\n"
+            f"2. **Structure Only**: Do NOT generate business logic. Create folders and place a 'README.md' inside each architectural layer explaining its purpose.\n"
+            f"3. **Format**: You MUST use the following format for every file. Do not use Markdown code blocks for the format itself.\n"
+            f"   <<<FILE:path/to/file.ext>>>\n"
+            f"   ...file content...\n"
+            f"   <<<END>>>\n"
+        )
+
+        # 4. One-Shot Example (to enforce format)
+        example_section = (
+            f"--- EXAMPLE OUTPUT ---\n"
+            f"<<<FILE:README.md>>>\n"
+            f"# Project {request.issue_key}\n"
+            f"Generated by Software Factory.\n"
+            f"<<<END>>>\n"
+            f"<<<FILE:src/main.py>>>\n"
+            f"print('Hello World')\n"
+            f"<<<END>>>\n"
+        )
+
+        # Combine
+        full_prompt = f"{system_section}\n{context_section}\n{task_section}\n{example_section}"
+
+        # 5. Debug Logging
+        logger.info(f"--- [DEBUG] FULL GENERATED PROMPT ({request.issue_key}) ---\n{full_prompt}\n--- [END PROMPT] ---")
+
+        return full_prompt

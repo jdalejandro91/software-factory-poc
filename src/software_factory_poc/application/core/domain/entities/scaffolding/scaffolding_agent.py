@@ -18,12 +18,9 @@ class ScaffoldingAgent:
 
     def build_prompt(self, request: ScaffoldingRequest, context: str) -> str:
         """
-        Builds the full prompt for the LLM.
+        Delegates to PromptBuilderService to construct the full LLM prompt.
         """
-        full_system_prompt = PromptBuilderService.build_system_prompt(request.technology_stack)
-        # We assume PromptBuilderService.build_user_prompt handles concatenation of instruction + context
-        full_user_prompt = PromptBuilderService.build_user_prompt(request.raw_instruction, context)
-        return f"{full_system_prompt}\n\n{full_user_prompt}"
+        return PromptBuilderService.build_scaffolding_prompt(request, context)
 
     def validate_files(self, files: list[object]) -> None:
         """
