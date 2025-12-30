@@ -31,10 +31,7 @@ from software_factory_poc.infrastructure.resolution.provider_resolver import Pro
 @pytest.fixture
 def dummy_config():
     return ScaffoldingAgentConfig(
-        llm_priority_list=[
-            ModelId(provider=LlmProviderType.OPENAI, name="gpt-4-test"),
-            ModelId(provider=LlmProviderType.DEEPSEEK, name="deepseek-test")
-        ],
+        llm_model_priority=[ModelId(provider=LlmProviderType.OPENAI, name="gpt-4")],
         vcs_provider=VcsProviderType.GITLAB,
         tracker_provider=TaskTrackerType.JIRA,
         knowledge_provider=KnowledgeProviderType.CONFLUENCE,
@@ -86,7 +83,7 @@ def test_use_case_initialization_and_execution_flow(dummy_config):
     from unittest.mock import ANY
     mock_llm.generate_code.assert_called_with(
         prompt=ANY, # Prompt uses keyword arg in code
-        model=dummy_config.llm_priority_list[0]     # Hint model object
+        model=dummy_config.llm_model_priority[0].name     # Hint model object
     )
     
     # Verify VCS was called
@@ -102,7 +99,7 @@ def test_use_case_initialization_and_execution_flow(dummy_config):
 def test_resolver_logic_fails_for_unsupported_provider():
     # Config with GITHUB (Not Implemented)
     config = ScaffoldingAgentConfig(
-        llm_priority_list=[],
+        llm_model_priority=[ModelId(provider=LlmProviderType.OPENAI, name="gpt-4")], # Updated instantiation
         vcs_provider=VcsProviderType.GITHUB, # Unsupported
         tracker_provider=TaskTrackerType.JIRA,
         knowledge_provider=KnowledgeProviderType.CONFLUENCE,

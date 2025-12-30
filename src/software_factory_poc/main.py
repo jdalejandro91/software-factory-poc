@@ -13,6 +13,11 @@ def dev():
     # This function is the entry point for the 'dev' script.
     # It initializes settings and runs the uvicorn server.
     settings = Settings()
+    try:
+        config = ScaffoldingConfigLoader.load_config()
+        logger.info(f"Boot Diagnostic - LLM Priority Loaded items: {len(config.llm_model_priority)}")
+    except Exception as e:
+        logger.error(f"Error loading scaffolding config: {e}")
     
     # Boot Diagnostics
     logger.info("Initializing Scaffolding Agent...")

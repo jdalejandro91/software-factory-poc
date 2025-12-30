@@ -61,6 +61,8 @@ class ConfluenceKnowledgeAdapter(KnowledgeGateway):
         return self._extract_text(results[0])
 
     def _extract_text(self, page_obj: Any) -> str:
+        logger.info(f"Analyzing Confluence response type: {type(page_obj)}")
+
         if not page_obj: 
             return ""
         
@@ -92,8 +94,10 @@ class ConfluenceKnowledgeAdapter(KnowledgeGateway):
                 logger.info(f"--- [DEBUG] Content extracted via path: {'.'.join(path)}")
                 return val
 
-        # Si llegamos aquí, falló. Imprimir estructura para debug.
-        keys_dump = list(page_obj.keys()) if isinstance(page_obj, dict) else "NotDict"
-        logger.warning(f"--- [DEBUG] FAILED TO EXTRACT CONTENT. Available keys top-level: {keys_dump}")
+        # Si llegamos aquí, falló la extracción inteligente.
+        # Imprimimos el objeto crudo para debug (limitado a 1000 chars)
+        raw_preview = str(page_obj)[:1000]
+        logger.warning(f"⚠️ CONFLUENCE EXTRACTION FAILED. Raw response preview: {raw_preview}")
+        
         # Retornamos string del objeto como fallback de última instancia
         return str(page_obj)

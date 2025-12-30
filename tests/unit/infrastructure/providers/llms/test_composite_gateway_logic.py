@@ -13,7 +13,7 @@ class TestCompositeGatewayLogic:
         # Priority list contains ModelId objects, NOT just Enums
         model_1 = ModelId(provider=LlmProviderType.OPENAI, name="gpt-4-custom")
         model_2 = ModelId(provider=LlmProviderType.DEEPSEEK, name="deepseek-coder")
-        mock_config.llm_priority_list = [model_1, model_2]
+        mock_config.llm_model_priority = [model_1, model_2]
 
         mock_openai_client = MagicMock()
         mock_deepseek_client = MagicMock()
@@ -38,7 +38,7 @@ class TestCompositeGatewayLogic:
         mock_config = MagicMock()
         model_1 = ModelId(provider=LlmProviderType.OPENAI, name="gpt-4-fail")
         model_2 = ModelId(provider=LlmProviderType.DEEPSEEK, name="deepseek-success")
-        mock_config.llm_priority_list = [model_1, model_2]
+        mock_config.llm_model_priority = [model_1, model_2]
 
         mock_openai = MagicMock()
         mock_deepseek = MagicMock()

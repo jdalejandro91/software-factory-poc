@@ -21,7 +21,7 @@ class TestCompositeGatewayRobustness:
         
         config = MagicMock()
         # Mixed list: [ModelId, Dict, Enum, Garbage]
-        config.llm_priority_list = [
+        config.llm_model_priority = [
             # 1. Invalid garbage (Should skip)
             "GarbageString",
             # 2. Dict with invalid provider (Should skip)
@@ -49,7 +49,7 @@ class TestCompositeGatewayRobustness:
         clients = {LlmProviderType.GEMINI: mock_client}
         
         config = MagicMock()
-        config.llm_priority_list = [
+        config.llm_model_priority = [
             {"provider": "gemini", "name": "gemini-pro"}
         ]
         

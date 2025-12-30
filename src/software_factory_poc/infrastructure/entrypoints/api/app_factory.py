@@ -16,6 +16,14 @@ from software_factory_poc.infrastructure.observability.logger_factory_service im
 logger = LoggerFactoryService.build_logger(__name__)
 
 def create_app(settings: Settings) -> FastAPI:
+    logger.info("--- BOOT DIAGNOSTICS ---")
+    logger.info(f"App Name: {settings.app_name}")
+    logger.info(f"Env: {settings.env}")
+    has_openai = bool(settings.llm_settings.openai_api_key)
+    has_deepseek = bool(settings.llm_settings.deepseek_api_key)
+    logger.info(f"LLM Keys Present: OpenAI={has_openai}, DeepSeek={has_deepseek}")
+    logger.info("------------------------")
+
     app = FastAPI(title=settings.app_name)
     
     @app.exception_handler(RequestValidationError)

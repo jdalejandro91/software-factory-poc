@@ -1,5 +1,6 @@
 from collections.abc import Mapping
 
+import logging
 from software_factory_poc.application.core.domain.configuration.llm_provider_type import LlmProviderType
 from software_factory_poc.application.core.ports.llms.llm_provider import LlmProvider
 from software_factory_poc.infrastructure.configuration.llm_settings import LlmSettings
@@ -80,13 +81,23 @@ class LlmProviderFactory:
     """
     
     @staticmethod
-    def build_providers(settings: LlmSettings, retry: RetryPolicy, correlation: CorrelationIdContext) -> Mapping[LlmProviderType, LlmProvider]:
+    def build_providers(settings: GenericSettings) -> dict[LlmProviderType, LlmGateway]:
+        """
+        Builds and returns a dictionary of enabled LLM providers based on settings.
+        """
+        # Debugging explicito de configuracion
+        logger = logging.getLogger(__name__)
+        
+        has_openai = bool(settings.openai_api_key)
+        has_deepseek = bool(settings.deepseek_api_key)
+        logger.info(f"Factory Config Check: OpenAI={has_openai}, DeepSeek={has_deepseek}")
+
+        providers: dict[LlmProviderType, LlmGateway] = {}
         logger.info("--- [DEBUG] LLM Provider Factory Initialization ---")
         logger.info(f"OpenAI Key Configured: {'YES' if settings.openai_api_key else 'NO'}")
         logger.info(f"DeepSeek Key Configured: {'YES' if settings.deepseek_api_key else 'NO'}")
         logger.info(f"Gemini Key Configured: {'YES' if settings.gemini_api_key else 'NO'}")
         logger.info(f"Anthropic Key Configured: {'YES' if settings.anthropic_api_key else 'NO'}")
-
         providers: dict[LlmProviderType, LlmProvider] = {}
         
         if settings.openai_api_key:

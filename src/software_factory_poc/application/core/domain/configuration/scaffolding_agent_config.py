@@ -18,6 +18,6 @@ class ScaffoldingAgentConfig:
     vcs_provider: VcsProviderType
     tracker_provider: TaskTrackerType
     knowledge_provider: KnowledgeProviderType
-    llm_priority_list: list[ModelId]
+    llm_model_priority: list[ModelId]
     work_dir: Path
     enable_secure_mode: bool = True

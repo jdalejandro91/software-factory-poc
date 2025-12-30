@@ -59,7 +59,7 @@ class ScaffoldingConfigLoader:
                 vcs_provider=vcs_provider,
                 tracker_provider=tracker_provider,
                 knowledge_provider=knowledge_provider,
-                llm_priority_list=llm_priority_list,
+                llm_model_priority=llm_priority_list,
                 work_dir=work_dir,
                 enable_secure_mode=enable_secure,
             )

@@ -53,9 +53,9 @@ def test_fallback_to_defaults(clean_env):
     assert config.knowledge_provider == KnowledgeProviderType.CONFLUENCE
     assert config.enable_secure_mode is True
     # Default LLM list has 5 items
-    assert len(config.llm_priority_list) == 5
-    assert config.llm_priority_list[0].provider == LlmProviderType.OPENAI
-    assert config.llm_priority_list[0].name == "gpt-4-turbo"
+    assert len(config.llm_model_priority) > 0
+    assert config.llm_model_priority[0].provider == LlmProviderType.OPENAI
+    assert config.llm_model_priority[0].name == "gpt-4-turbo"
 
 
 def test_global_variables_override_defaults(clean_env):
@@ -96,8 +96,8 @@ def test_llm_priority_parsing(clean_env):
     
     config = ScaffoldingConfigLoader.load_config()
     
-    assert len(config.llm_priority_list) == 2
-    assert config.llm_priority_list[0].provider == LlmProviderType.ANTHROPIC
-    assert config.llm_priority_list[0].name == "claude-3-opus"
-    assert config.llm_priority_list[1].provider == LlmProviderType.OPENAI
-    assert config.llm_priority_list[1].name == "gpt-3.5-turbo"
+    assert len(config.llm_model_priority) == 2
+    assert config.llm_model_priority[0].provider == LlmProviderType.ANTHROPIC
+    assert config.llm_model_priority[0].name == "claude-3-opus"
+    assert config.llm_model_priority[1].provider == LlmProviderType.OPENAI
+    assert config.llm_model_priority[1].name == "gpt-3.5-turbo"

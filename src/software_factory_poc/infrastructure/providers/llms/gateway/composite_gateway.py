@@ -1,4 +1,5 @@
 
+from typing import Any
 # Check which interface is actually used. Assuming LlmGatewayPort from interfaces based on imports.
 from software_factory_poc.application.core.domain.configuration.llm_provider_type import (
     LlmProviderType,
@@ -27,9 +28,16 @@ class CompositeLlmGateway(LlmGateway):
     ):
         self.config = config
         self.clients = clients
-        # Use config provided priority list, or fallback to known keys
-        self.priority_list: list[LlmProviderType] = config.llm_priority_list or list(clients.keys())
+        # Usar la lista de prioridad de la configuración (nombre correcto: llm_model_priority)
+        self.priority_list: list[Any] = config.llm_model_priority
+        
+        # Validación de seguridad
+        if not self.priority_list:
+            logger.warning("Priority list is empty in config! Fallback to available clients.")
+            self.priority_list = list(clients.keys())
 
+        logger.info(f"CompositeGateway loaded {len(self.priority_list)} priority items.")
+        
         registered_providers = [p.value for p in clients.keys()]
         logger.info(f"--- [DEBUG] CompositeGateway initialized with providers: {registered_providers}")
 

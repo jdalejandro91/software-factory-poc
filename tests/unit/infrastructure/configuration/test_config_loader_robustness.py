@@ -2,6 +2,7 @@
 import pytest
 import json
 from software_factory_poc.infrastructure.configuration.scaffolding_config_loader import ScaffoldingConfigLoader
+from software_factory_poc.application.core.domain.value_objects.model_id import ModelId
 
 class TestConfigLoaderRobustness:
     def test_parses_clean_json_list(self):

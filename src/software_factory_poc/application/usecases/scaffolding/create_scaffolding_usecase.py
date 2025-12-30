@@ -91,7 +91,7 @@ class CreateScaffoldingUseCase:
             logger.info("Generating code via LLM Gateway...")
             llm_response = llm_gateway.generate_code(
                 prompt=full_prompt,
-                model=self.config.llm_priority_list[0] if self.config.llm_priority_list else "gpt-4-turbo"
+                model=self.config.llm_model_priority[0].name if self.config.llm_model_priority else "gpt-4-turbo"
             )
 
             # 7. Parsing y Validación

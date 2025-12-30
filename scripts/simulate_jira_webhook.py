@@ -15,15 +15,15 @@ from software_factory_poc.application.core.domain.entities.scaffolding.scaffoldi
 from software_factory_poc.application.usecases.scaffolding.create_scaffolding_usecase import (
     CreateScaffoldingUseCase,
 )
-from software_factory_poc.infrastructure.configuration.settings_loader import (
-    load_scaffolding_config,
+from software_factory_poc.infrastructure.configuration.scaffolding_config_loader import (
+    ScaffoldingConfigLoader,
 )
 from software_factory_poc.infrastructure.configuration.tool_settings import ToolSettings
-from software_factory_poc.infrastructure.observability.logger_factory_service import build_logger
+from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 from software_factory_poc.infrastructure.resolution.provider_resolver import ProviderResolver
 
 # Setup Logging
-logger = build_logger("simulate_jira")
+logger = LoggerFactoryService.build_logger("simulate_jira")
 
 def main():
     logger.info("🚀 Starting Scaffolding Simulation...")
@@ -34,10 +34,10 @@ def main():
         from dotenv import load_dotenv
         load_dotenv()
         
-        config = load_scaffolding_config()
+        config = ScaffoldingConfigLoader.load_config()
         tool_settings = ToolSettings()
         
-        logger.info(f"Loaded Config: VCS={config.vcs_provider}, Tracker={config.tracker_provider}, LLM_Priority={len(config.llm_priority_list)}")
+        logger.info(f"Loaded Config: VCS={config.vcs_provider}, Tracker={config.tracker_provider}, LLM_Priority={len(config.llm_model_priority)}")
         
         # 2. Build Resolver
         resolver = ProviderResolver(config, tool_settings)
