@@ -32,37 +32,42 @@ class CompositeLlmGateway(LlmGateway):
 
     def generate_code(self, prompt: str, model: str) -> str:
         """
-        Generates code trying providers in order.
-        'model' arg might be a hint or ignored in favor of priority list iteration if the intention is fallback.
-        However, the interface asks for 'model'. 
-        If the requirement is "Fallback logic using priority list", we treat the list as the source of truth for *providers*.
-        The 'model' param in the interface might be specific to the underlying call.
-        
-        Strategy:
-        Iterate priority list (ProviderType).
-        Get client for provider.
-        Call client.generate_code(prompt, model).
+        Generates code trying providers in order defined by priority_list.
+        Each item in priority_list is expected to be a ModelId object.
         """
         
         last_exception = None
         
-        # We iterate over the providers configured in priority list
-        # We assume the 'model' string passed here is either generic or we rely on the provider's default 
-        # OR we need to map the generic requirement to the provider's specific model?
-        # For this scope, we will iterate the PROVIDERS.
-        
-        for provider_type in self.priority_list:
+        # Iteramos sobre objetos ModelId configurados
+        for model_entry in self.priority_list:
+            # 1. Extraer el Enum del proveedor para buscar el cliente
+            # model_entry is expected to be ModelId(provider=..., name=...)
+            # If for some reason it's a raw Enum (legacy config), we handle it? 
+            # User instruction says: "self.priority_list es una List[ModelId]"
+            
+            # Defensive check or just assume typed list as per instruction
+            if hasattr(model_entry, "provider"):
+                 provider_type = model_entry.provider
+                 target_model = model_entry.name
+            else:
+                 # Fallback if it actually is just an Enum (shouldn't happen with new config)
+                 provider_type = model_entry
+                 target_model = model 
+
             client = self.clients.get(provider_type)
+            
             if not client:
-                logger.warning(f"Provider {provider_type} in priority list but no client configured. Skipping.")
+                logger.warning(f"Client for provider {provider_type} not found in configured clients. Skipping.")
                 continue
 
             try:
-                logger.info(f"Attempting generic generation with provider: {provider_type}")
-                # We count tokens roughly here if needed or delegate
+                # 2. Usar el nombre específico del modelo definido en la config
+                logger.info(f"Using Provider: {provider_type.value} | Model: {target_model}")
+                
+                # We count tokens roughly here if needed
                 self._log_token_usage_estimate(prompt)
                 
-                return client.generate_code(prompt, model)
+                return client.generate_code(prompt, model=target_model)
                 
             except (RetryableError, LLMError) as e:
                 # 5xx, 429, or generic LLMError => Try next
@@ -71,7 +76,6 @@ class CompositeLlmGateway(LlmGateway):
                 continue
             except Exception as e:
                 # Unknown error => Fail fast or fallback?
-                # Usually safely fallback for robustness
                 logger.error(f"Provider {provider_type} failed with unexpected error: {e}. Falling back...", exc_info=True)
                 last_exception = e
                 continue

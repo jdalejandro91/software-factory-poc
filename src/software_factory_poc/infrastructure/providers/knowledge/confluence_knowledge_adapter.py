@@ -60,10 +60,31 @@ class ConfluenceKnowledgeAdapter(KnowledgeGateway):
     def _extract_text(self, page_obj: Any) -> str:
         # Helper to safely extract text from Confluence JSON response
         try:
+            # Handle List results (from Search)
+            if isinstance(page_obj, list):
+                if not page_obj:
+                    return "No content in list."
+                # Take first result
+                page_obj = page_obj[0]
+
+            if not isinstance(page_obj, dict):
+                 return str(page_obj)
+
             # Check structure based on common Atlassian API
-            body = page_obj.get("body", {})
-            storage = body.get("storage", {})
+            # Expected: { "body": { "storage": { "value": "<html>...</html>" } } }
+            body = page_obj.get("body")
+            if not body:
+                # Log debug, might be a summary object without body
+                # LoggerFactoryService not injected here directly, assuming usage of ProviderError or print for PoC
+                # But ideally we should log. Using print for now as logger isn't in __init__
+                return str(page_obj)
+
+            storage = body.get("storage")
+            if not storage:
+                 return str(page_obj)
+            
             value = storage.get("value", "")
             return value if value else str(page_obj)
+            
         except Exception:
             return str(page_obj) # Fallback to raw JSON string
