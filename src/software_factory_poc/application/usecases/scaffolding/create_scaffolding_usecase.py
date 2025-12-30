@@ -51,6 +51,9 @@ class CreateScaffoldingUseCase:
         try:
             # 3. GLOBAL TRY-CATCH: Cualquier fallo aquí será reportado
             
+            # Notificar inicio de tarea
+            self.agent.report_task_start(task, tracker_gateway)
+            
             # Resolve Adapters (Aquí fallará si GitHub no está implementado)
             vcs_gateway = self.resolver.resolve_vcs()
             llm_gateway = self.resolver.resolve_llm_gateway()
@@ -64,7 +67,14 @@ class CreateScaffoldingUseCase:
             
             if vcs_gateway.branch_exists(project_id, branch_name):
                 logger.info(f"Branch {branch_name} already exists. Skipping generation.")
-                self.agent.report_existing_branch(task, branch_name, tracker_gateway)
+
+                # Construir URL para GitLab/GitHub de forma robusta
+                base_repo = request.repository_url.replace(".git", "").rstrip("/")
+                # GitLab usa /-/tree/, GitHub usa /tree/
+                separator = "/-/tree/" if "gitlab" in base_repo else "/tree/"
+                branch_url = f"{base_repo}{separator}{branch_name}"
+
+                self.agent.report_existing_branch(task, branch_name, branch_url, tracker_gateway)
                 return
 
             # 5. Retrieve Context via Agent

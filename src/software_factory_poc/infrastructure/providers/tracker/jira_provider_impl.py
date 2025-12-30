@@ -87,15 +87,28 @@ class JiraProviderImpl(JiraProvider, TaskTrackerGatewayPort):
                     )
 
                 # Case 3: Info / Branch Exists
-                # "ℹ️ La rama {branch} ya existe. Se omite generación."
-                elif body.startswith("ℹ️"):
-                    match = re.search(r"rama (.+) ya existe", body)
-                    branch = match.group(1).strip() if match else "unknown"
-                    payload_body = JiraAdfBuilder.build_info_panel(
-                        title="Rama Existente Detectada",
-                        details=f"La rama '{branch}' ya existe. Se asume trabajo previo. Tarea a revisión.",
-                        links={} # Link to branch could be added if Agent provided URL, but simple text is fine.
-                    )
+                # Formato esperado: "ℹ️ BRANCH_EXISTS|branch_name|branch_url"
+                elif body.startswith("ℹ️ BRANCH_EXISTS|"):
+                    try:
+                        parts = body.split("|")
+                        # parts[0] es el prefijo, [1] nombre, [2] url
+                        branch_name = parts[1]
+                        branch_url = parts[2]
+
+                        payload_body = JiraAdfBuilder.build_info_panel(
+                            title="Rama Existente Detectada",
+                            details=f"La rama '{branch_name}' ya existe en el repositorio. "
+                                    f"Se asume que el trabajo fue generado previamente. "
+                                    f"La tarea pasará a revisión.",
+                            link_text="Ver Rama Existente",
+                            link_url=branch_url
+                        )
+                    except IndexError:
+                        # Fallback por si el formato falla
+                        payload_body = JiraAdfBuilder.build_info_panel(
+                            title="Rama Existente Detectada",
+                            details=f"La rama existe, pero no se pudo parsear la URL. Mensaje original: {body}"
+                        )
 
                 # Fallback: Standard Text
                 if not payload_body:

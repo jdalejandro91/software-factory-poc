@@ -71,10 +71,20 @@ class ScaffoldingAgent:
         gateway.add_comment(task.id, msg)
         gateway.transition_status(task.id, TaskStatus.TO_DO)
 
-    def report_existing_branch(self, task: Task, branch: str, gateway: TaskTrackerGatewayPort) -> None:
+    def report_existing_branch(self, task: Task, branch: str, branch_url: str, gateway: TaskTrackerGatewayPort) -> None:
         """
-        Reports that a branch already exists.
+        Reports that a branch already exists with a direct link.
+        Uses a structured format for the infrastructure adapter to parse.
         """
-        msg = f"ℹ️ La rama {branch} ya existe. Se omite generación."
+        # Formato interno: ℹ️ BRANCH_EXISTS|<nombre_rama>|<url_rama>
+        msg = f"ℹ️ BRANCH_EXISTS|{branch}|{branch_url}"
         gateway.add_comment(task.id, msg)
         gateway.transition_status(task.id, TaskStatus.IN_REVIEW)
+
+    def report_task_start(self, task: Task, gateway: TaskTrackerGatewayPort) -> None:
+        """
+        Reports that the scaffolding task is starting.
+        """
+        msg = "🤖 Iniciando tarea de scaffolding..."
+        gateway.add_comment(task.id, msg)
+        gateway.transition_status(task.id, TaskStatus.IN_PROGRESS)
