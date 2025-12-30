@@ -22,6 +22,7 @@ class ConfluenceKnowledgeAdapter(KnowledgeGateway):
         Assumption: If query is numeric, it's an ID. Otherwise search.
         """
         try:
+            query = query.strip()
             if query.isdigit():
                 return self._get_page_by_id(query)
             else:
