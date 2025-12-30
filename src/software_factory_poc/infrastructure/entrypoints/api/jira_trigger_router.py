@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Security, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Security, status, Request
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService 
@@ -43,11 +43,30 @@ def get_usecase(settings: Settings = Depends(get_settings)) -> CreateScaffolding
     )
 
 @router.post("/jira-webhook", status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(validate_api_key)])
-def trigger_scaffold(
-    payload: JiraWebhookDTO,
+async def trigger_scaffold(
+    request: Request,
     background_tasks: BackgroundTasks,
     usecase: CreateScaffoldingUseCase = Depends(get_usecase)
 ):
+    # 1. Observability: Log Raw Payload
+    body_bytes = await request.body()
+    try:
+        body_str = body_bytes.decode('utf-8')
+        logger.info(f"Incoming Jira Payload (Raw): {body_str}")
+    except Exception as e:
+        logger.warning(f"Could not decode payload: {e}")
+
+    # 2. Manual Parse
+    try:
+        payload = JiraWebhookDTO.model_validate_json(body_bytes)
+    except Exception as e:
+        logger.error(f"Failed to parse JiraWebhookDTO: {e}")
+        # Return 200 to act as ignored to stop Jira retries if malformed
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"status": "ignored", "message": "Malformed JSON", "error": str(e)}
+        )
+
     issue_key = payload.issue.key
     logger.info(f"Webhook received for {issue_key}. Processing with JiraPayloadMapper.")
     

@@ -44,4 +44,4 @@ def test_parse_invalid_yaml():
     text = f"{BLOCK_START}\n: invalid\n{BLOCK_END}"
     with pytest.raises(ContractParseError) as exc:
         parser.parse(text)
-    assert "Could not parse valid YAML" in str(exc.value)
+        assert "Could not find contract block" in str(exc.value)
