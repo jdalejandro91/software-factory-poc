@@ -6,6 +6,9 @@ from software_factory_poc.application.core.ports.gateways.knowledge_gateway impo
 from software_factory_poc.infrastructure.providers.knowledge.clients.confluence_http_client import (
     ConfluenceHttpClient,
 )
+from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
+
+logger = LoggerFactoryService.build_logger(__name__)
 
 
 class ConfluenceKnowledgeAdapter(KnowledgeGateway):
@@ -67,6 +70,16 @@ class ConfluenceKnowledgeAdapter(KnowledgeGateway):
                 # Take first result
                 page_obj = page_obj[0]
 
+            # Log de diagnóstico estructura
+            if isinstance(page_obj, dict):
+                logger.info(f"--- [DEBUG] Confluence Page Keys: {list(page_obj.keys())}")
+                if 'body' in page_obj:
+                     # Check if body is a dict before calling keys
+                     if isinstance(page_obj['body'], dict):
+                        logger.info(f"--- [DEBUG] Body Keys: {list(page_obj['body'].keys())}")
+                     else:
+                        logger.info(f"--- [DEBUG] Body found but is not dict: {type(page_obj['body'])}")
+
             if not isinstance(page_obj, dict):
                  return str(page_obj)
 
@@ -75,16 +88,21 @@ class ConfluenceKnowledgeAdapter(KnowledgeGateway):
             body = page_obj.get("body")
             if not body:
                 # Log debug, might be a summary object without body
-                # LoggerFactoryService not injected here directly, assuming usage of ProviderError or print for PoC
-                # But ideally we should log. Using print for now as logger isn't in __init__
+                logger.warning(f"--- [DEBUG] FAILED EXTRACTION (No Body). Raw Object: {str(page_obj)[:2000]}")
                 return str(page_obj)
 
             storage = body.get("storage")
             if not storage:
+                 logger.warning(f"--- [DEBUG] FAILED EXTRACTION (No Storage). Raw Object: {str(page_obj)[:2000]}")
                  return str(page_obj)
             
             value = storage.get("value", "")
+            
+            if not value:
+                 logger.warning(f"--- [DEBUG] FAILED EXTRACTION (No Value). Raw Object: {str(page_obj)[:2000]}")
+
             return value if value else str(page_obj)
             
-        except Exception:
+        except Exception as e:
+            logger.error(f"--- [DEBUG] EXCEPTION IN EXTRACTION: {e}. Raw Object: {str(page_obj)[:2000]}")
             return str(page_obj) # Fallback to raw JSON string

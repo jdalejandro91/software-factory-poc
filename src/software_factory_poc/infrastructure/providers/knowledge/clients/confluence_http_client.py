@@ -1,5 +1,8 @@
 import httpx
 from software_factory_poc.infrastructure.configuration.tool_settings import ToolSettings
+from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
+
+logger = LoggerFactoryService.build_logger(__name__)
 
 
 class ConfluenceHttpClient:
@@ -13,6 +16,7 @@ class ConfluenceHttpClient:
 
     def get(self, path: str, params: dict = None) -> httpx.Response:
         url = f"{self.base_url}/{path.lstrip('/')}"
+        logger.info(f"GET {url}")
         with httpx.Client(timeout=self.timeout) as client:
             return client.get(url, auth=self.auth, params=params)
 

@@ -30,6 +30,9 @@ class CompositeLlmGateway(LlmGateway):
         # Use config provided priority list, or fallback to known keys
         self.priority_list: list[LlmProviderType] = config.llm_priority_list or list(clients.keys())
 
+        registered_providers = [p.value for p in clients.keys()]
+        logger.info(f"--- [DEBUG] CompositeGateway initialized with providers: {registered_providers}")
+
     def generate_code(self, prompt: str, model: str) -> str:
         """
         Generates code trying providers in order defined by priority_list.
@@ -42,22 +45,20 @@ class CompositeLlmGateway(LlmGateway):
         for model_entry in self.priority_list:
             # 1. Extraer el Enum del proveedor para buscar el cliente
             # model_entry is expected to be ModelId(provider=..., name=...)
-            # If for some reason it's a raw Enum (legacy config), we handle it? 
-            # User instruction says: "self.priority_list es una List[ModelId]"
             
             # Defensive check or just assume typed list as per instruction
             if hasattr(model_entry, "provider"):
                  provider_type = model_entry.provider
                  target_model = model_entry.name
             else:
-                 # Fallback if it actually is just an Enum (shouldn't happen with new config)
+                 # Fallback if it actually is just an Enum
                  provider_type = model_entry
                  target_model = model 
 
             client = self.clients.get(provider_type)
             
             if not client:
-                logger.warning(f"Client for provider {provider_type} not found in configured clients. Skipping.")
+                logger.warning(f"Client for provider '{provider_type}' not found. Available: {list(self.clients.keys())}")
                 continue
 
             try:

@@ -69,6 +69,11 @@ from software_factory_poc.infrastructure.providers.llms.openai.openai_provider_i
 )
 
 
+from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
+
+logger = LoggerFactoryService.build_logger(__name__)
+
+
 class LlmProviderFactory:
     """
     Factory to build LLM Providers based on configuration.
@@ -76,6 +81,12 @@ class LlmProviderFactory:
     
     @staticmethod
     def build_providers(settings: LlmSettings, retry: RetryPolicy, correlation: CorrelationIdContext) -> Mapping[LlmProviderType, LlmProvider]:
+        logger.info("--- [DEBUG] LLM Provider Factory Initialization ---")
+        logger.info(f"OpenAI Key Configured: {'YES' if settings.openai_api_key else 'NO'}")
+        logger.info(f"DeepSeek Key Configured: {'YES' if settings.deepseek_api_key else 'NO'}")
+        logger.info(f"Gemini Key Configured: {'YES' if settings.gemini_api_key else 'NO'}")
+        logger.info(f"Anthropic Key Configured: {'YES' if settings.anthropic_api_key else 'NO'}")
+
         providers: dict[LlmProviderType, LlmProvider] = {}
         
         if settings.openai_api_key:
