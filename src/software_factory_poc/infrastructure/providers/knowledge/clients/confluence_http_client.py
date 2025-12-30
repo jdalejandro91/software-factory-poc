@@ -23,7 +23,7 @@ class ConfluenceHttpClient:
     def get_page(self, page_id: str) -> dict:
         """Obtiene el contenido de una página por su ID."""
         path = f"rest/api/content/{page_id}"
-        response = self.get(path, params={"expand": "body.storage"})
+        response = self.get(path, params={"expand": "body.storage,body.view"})
         response.raise_for_status()
         return response.json()
 
@@ -33,7 +33,7 @@ class ConfluenceHttpClient:
         cql_expression = f'text ~ "{query}"' if "=" not in query else query
         
         path = "rest/api/content/search"
-        response = self.get(path, params={"cql": cql_expression, "limit": 1, "expand": "body.storage"})
+        response = self.get(path, params={"cql": cql_expression, "limit": 1, "expand": "body.storage,body.view"})
         response.raise_for_status()
         data = response.json()
         return data.get("results", [])

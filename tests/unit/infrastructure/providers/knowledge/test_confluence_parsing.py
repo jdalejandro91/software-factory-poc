@@ -12,23 +12,24 @@ class TestConfluenceParsing:
             "title": "Page",
             "body": {
                 "storage": {
-                    "value": "<p>Content</p>",
+                    "value": "<p>Content needs to be longer than fifty characters to pass the new robustness check in the adapter.</p>",
                     "representation": "storage"
                 }
             }
         }
         
         result = adapter._extract_text(page_obj)
-        assert result == "<p>Content</p>"
+        assert result == "<p>Content needs to be longer than fifty characters to pass the new robustness check in the adapter.</p>"
 
     def test_extracts_first_from_list(self):
         adapter = ConfluenceKnowledgeAdapter(MagicMock())
         
+        long_text = "This text must be sufficiently long to be accepted by the extractor logic which filters short/noise content."
         page_list = [
             {
                 "body": {
                     "storage": {
-                        "value": "First Item"
+                        "value": long_text
                     }
                 }
             },
@@ -38,7 +39,7 @@ class TestConfluenceParsing:
         ]
         
         result = adapter._extract_text(page_list)
-        assert result == "First Item"
+        assert result == long_text
 
     def test_handles_missing_body_gracefully(self):
         adapter = ConfluenceKnowledgeAdapter(MagicMock())
@@ -54,4 +55,4 @@ class TestConfluenceParsing:
     def test_handles_empty_list(self):
          adapter = ConfluenceKnowledgeAdapter(MagicMock())
          result = adapter._extract_text([])
-         assert result == "No content in list."
+         assert result == ""

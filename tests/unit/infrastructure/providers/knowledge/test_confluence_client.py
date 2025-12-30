@@ -26,7 +26,7 @@ class TestConfluenceHttpClient:
         mock_get.assert_called_with(
             "https://wiki.example.com/rest/api/content/123",
             auth=("test@example.com", "secret"),
-            params={"expand": "body.storage"}
+            params={"expand": "body.storage,body.view"}
         )
 
     @patch('software_factory_poc.infrastructure.providers.knowledge.clients.confluence_http_client.httpx.Client')
@@ -49,4 +49,4 @@ class TestConfluenceHttpClient:
         call_args = mock_get.call_args
         params = call_args.kwargs['params']
         assert params['cql'] == 'text ~ "python architecture"'
-        assert params['expand'] == 'body.storage'
+        assert params['expand'] == 'body.storage,body.view'

@@ -61,48 +61,39 @@ class ConfluenceKnowledgeAdapter(KnowledgeGateway):
         return self._extract_text(results[0])
 
     def _extract_text(self, page_obj: Any) -> str:
-        # Helper to safely extract text from Confluence JSON response
-        try:
-            # Handle List results (from Search)
-            if isinstance(page_obj, list):
-                if not page_obj:
-                    return "No content in list."
-                # Take first result
-                page_obj = page_obj[0]
+        if not page_obj: 
+            return ""
+        
+        # Si es lista (resultado de búsqueda), tomar el primero
+        if isinstance(page_obj, list) and len(page_obj) > 0:
+            page_obj = page_obj[0]
+        
+        if not isinstance(page_obj, dict):
+            return str(page_obj)
 
-            # Log de diagnóstico estructura
-            if isinstance(page_obj, dict):
-                logger.info(f"--- [DEBUG] Confluence Page Keys: {list(page_obj.keys())}")
-                if 'body' in page_obj:
-                     # Check if body is a dict before calling keys
-                     if isinstance(page_obj['body'], dict):
-                        logger.info(f"--- [DEBUG] Body Keys: {list(page_obj['body'].keys())}")
-                     else:
-                        logger.info(f"--- [DEBUG] Body found but is not dict: {type(page_obj['body'])}")
+        # Rutas posibles en orden de preferencia (Storage es mejor para LLM)
+        candidates = [
+            ["body", "storage", "value"],  # Formato crudo
+            ["body", "view", "value"],     # Formato HTML renderizado
+            ["body", "editor", "value"],   # Formato editor (a veces)
+            ["excerpt"]                    # Resumen si todo falla
+        ]
 
-            if not isinstance(page_obj, dict):
-                 return str(page_obj)
-
-            # Check structure based on common Atlassian API
-            # Expected: { "body": { "storage": { "value": "<html>...</html>" } } }
-            body = page_obj.get("body")
-            if not body:
-                # Log debug, might be a summary object without body
-                logger.warning(f"--- [DEBUG] FAILED EXTRACTION (No Body). Raw Object: {str(page_obj)[:2000]}")
-                return str(page_obj)
-
-            storage = body.get("storage")
-            if not storage:
-                 logger.warning(f"--- [DEBUG] FAILED EXTRACTION (No Storage). Raw Object: {str(page_obj)[:2000]}")
-                 return str(page_obj)
+        for path in candidates:
+            val = page_obj
+            for key in path:
+                if isinstance(val, dict):
+                    val = val.get(key)
+                else:
+                    val = None
+                    break
             
-            value = storage.get("value", "")
-            
-            if not value:
-                 logger.warning(f"--- [DEBUG] FAILED EXTRACTION (No Value). Raw Object: {str(page_obj)[:2000]}")
+            if val and isinstance(val, str) and len(val.strip()) > 50:
+                logger.info(f"--- [DEBUG] Content extracted via path: {'.'.join(path)}")
+                return val
 
-            return value if value else str(page_obj)
-            
-        except Exception as e:
-            logger.error(f"--- [DEBUG] EXCEPTION IN EXTRACTION: {e}. Raw Object: {str(page_obj)[:2000]}")
-            return str(page_obj) # Fallback to raw JSON string
+        # Si llegamos aquí, falló. Imprimir estructura para debug.
+        keys_dump = list(page_obj.keys()) if isinstance(page_obj, dict) else "NotDict"
+        logger.warning(f"--- [DEBUG] FAILED TO EXTRACT CONTENT. Available keys top-level: {keys_dump}")
+        # Retornamos string del objeto como fallback de última instancia
+        return str(page_obj)

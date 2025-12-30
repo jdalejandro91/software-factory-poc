@@ -123,8 +123,17 @@ class ScaffoldingConfigLoader:
 
     @staticmethod
     def _parse_llm_priority(json_str: str) -> list[ModelId]:
+        # Pre-process cleanup for robust handling of shell quotes
+        clean_content = json_str.strip()
+        # Remove surrounding single quotes if present (e.g. "'[...]'" -> "[...]")
+        if clean_content.startswith("'") and clean_content.endswith("'"):
+            clean_content = clean_content[1:-1]
+        # Remove surrounding double quotes if present (e.g. '"[...]"' -> "[...]")
+        elif clean_content.startswith('"') and clean_content.endswith('"'):
+            clean_content = clean_content[1:-1]
+            
         try:
-            raw_list = json.loads(json_str)
+            raw_list = json.loads(clean_content)
             if not isinstance(raw_list, list):
                 # If parsing fails or not a list, revert to default? Or error?
                 # The requirements imply robust defaults.

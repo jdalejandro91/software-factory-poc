@@ -42,28 +42,53 @@ class CompositeLlmGateway(LlmGateway):
         last_exception = None
         
         # Iteramos sobre objetos ModelId configurados
-        for model_entry in self.priority_list:
-            # 1. Extraer el Enum del proveedor para buscar el cliente
-            # model_entry is expected to be ModelId(provider=..., name=...)
-            
-            # Defensive check or just assume typed list as per instruction
-            if hasattr(model_entry, "provider"):
-                 provider_type = model_entry.provider
-                 target_model = model_entry.name
-            else:
-                 # Fallback if it actually is just an Enum
-                 provider_type = model_entry
-                 target_model = model 
+        # Iteramos sobre objetos ModelId configurados
+        for item in self.priority_list:
+            provider_enum = None
+            model_name = None
 
-            client = self.clients.get(provider_type)
-            
-            if not client:
-                logger.warning(f"Client for provider '{provider_type}' not found. Available: {list(self.clients.keys())}")
+            # Caso 1: Es un objeto ModelId (Lo esperado)
+            if hasattr(item, "provider") and hasattr(item, "name"):
+                provider_enum = item.provider
+                model_name = item.name
+            # Caso 2: Es un diccionario (Pydantic a veces deja dicts)
+            elif isinstance(item, dict):
+                # Intentar extraer provider. Si falla, el log de advertencia abajo lo atrapará
+                provider_val = item.get("provider")
+                model_name = item.get("name")
+                
+                # Convertir a Enum si es string
+                if isinstance(provider_val, str):
+                    try:
+                        provider_enum = LlmProviderType(provider_val.lower())
+                    except ValueError:
+                        logger.warning(f"Invalid provider string in dict: {provider_val}")
+                        continue
+                elif isinstance(provider_val, LlmProviderType):
+                    provider_enum = provider_val
+
+            # Caso 3: Es solo el Enum (Configuración vieja)
+            elif isinstance(item, LlmProviderType):
+                provider_enum = item
+                model_name = model # Use global default from args if item has none
+
+            # Validación final antes de usar
+            if not provider_enum:
+                logger.warning(f"Skipping invalid priority item: {item} (Type: {type(item)})")
                 continue
+
+            # Buscar cliente
+            client = self.clients.get(provider_enum)
+            if not client:
+                logger.warning(f"Client for provider '{provider_enum}' not found. Available: {list(self.clients.keys())}")
+                continue
+            
+            # Target model logic replacement for downstream use
+            target_model = model_name if model_name else model
 
             try:
                 # 2. Usar el nombre específico del modelo definido en la config
-                logger.info(f"Using Provider: {provider_type.value} | Model: {target_model}")
+                logger.info(f"Using Provider: {provider_enum.value} | Model: {target_model}")
                 
                 # We count tokens roughly here if needed
                 self._log_token_usage_estimate(prompt)
@@ -72,12 +97,12 @@ class CompositeLlmGateway(LlmGateway):
                 
             except (RetryableError, LLMError) as e:
                 # 5xx, 429, or generic LLMError => Try next
-                logger.warning(f"Provider {provider_type} failed with recoverable error: {e}. Falling back...")
+                logger.warning(f"Provider {provider_enum} failed with recoverable error: {e}. Falling back...")
                 last_exception = e
                 continue
             except Exception as e:
                 # Unknown error => Fail fast or fallback?
-                logger.error(f"Provider {provider_type} failed with unexpected error: {e}. Falling back...", exc_info=True)
+                logger.error(f"Provider {provider_enum} failed with unexpected error: {e}. Falling back...", exc_info=True)
                 last_exception = e
                 continue
 
