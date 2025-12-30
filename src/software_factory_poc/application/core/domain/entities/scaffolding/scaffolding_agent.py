@@ -87,4 +87,3 @@ class ScaffoldingAgent:
         """
         msg = "🤖 Iniciando tarea de scaffolding..."
         gateway.add_comment(task.id, msg)
-        gateway.transition_status(task.id, TaskStatus.IN_PROGRESS)
