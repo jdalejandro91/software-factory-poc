@@ -100,8 +100,7 @@ class JiraProviderImpl(JiraProvider, TaskTrackerGatewayPort):
                             details=f"La rama '{branch_name}' ya existe en el repositorio. "
                                     f"Se asume que el trabajo fue generado previamente. "
                                     f"La tarea pasará a revisión.",
-                            link_text="Ver Rama Existente",
-                            link_url=branch_url
+                            links={"🔗 Ver Rama Existente": branch_url}
                         )
                     except IndexError:
                         # Fallback por si el formato falla
