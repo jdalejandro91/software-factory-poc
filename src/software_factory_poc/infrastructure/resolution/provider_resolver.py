@@ -19,7 +19,14 @@ from software_factory_poc.application.core.ports.gateways.llm_gateway import Llm
 from software_factory_poc.application.core.ports.gateways.knowledge_gateway import KnowledgeGateway
 from software_factory_poc.application.core.ports.gateways.tracker_gateway import TrackerGateway
 from software_factory_poc.application.core.ports.gateways.vcs_gateway import VcsGateway
-from software_factory_poc.infrastructure.configuration.tool_settings import ToolSettings
+from software_factory_poc.infrastructure.configuration.main_settings import Settings
+from software_factory_poc.infrastructure.common.retry.retry_policy import RetryPolicy
+from software_factory_poc.infrastructure.observability.logging.correlation_id_context import (
+    CorrelationIdContext,
+)
+from software_factory_poc.infrastructure.providers.llms.facade.llm_provider_factory import (
+    LlmProviderFactory,
+)
 from software_factory_poc.infrastructure.providers.knowledge.clients.confluence_http_client import (
     ConfluenceHttpClient,
 )
@@ -54,10 +61,10 @@ class ProviderResolver:
     Factory responsible for resolving and instantiating the correct infrastructure adapters
     based on the domain configuration.
     """
-    def __init__(self, config: ScaffoldingAgentConfig, settings: ToolSettings | None = None):
+    def __init__(self, config: ScaffoldingAgentConfig, settings: Settings | None = None):
         self.config = config
-        # Fallback only if needed, ideally injected
-        self.settings = settings or ToolSettings() 
+        # Global settings (secrets, api keys, etc)
+        self.settings = settings or Settings()
 
     def resolve_vcs(self) -> VcsGateway:
         """
@@ -110,15 +117,14 @@ class ProviderResolver:
         """
         Resolves the configured LLM Composite Gateway.
         """
-        clients: dict[LlmProviderType, LlmGateway] = {}
+        # 1. Prepare dependencies for Factory
+        correlation = CorrelationIdContext()
+        # Default retry policy of 3 attempts with exponential backoff
+        retry = RetryPolicy(max_attempts=3) 
         
-        # 1. OpenAI (Placeholder for future wiring)
-        if self.settings and hasattr(self.settings, 'openai_api_key') and self.settings.openai_api_key:
-             # Ideally we use Settings injection here properly
-             
-             # Note: We likely need a bridge or adapter if OpenAiProviderImpl implements old LlmProvider interface
-             # and we need LlmGateway. P8 plan mentioned this.
-             # Assuming 'LlmGatewayAdapter' exists to bridge legacy Provider -> New Port
-             pass
-             
+        # 2. Build Providers via Factory
+        # self.settings inherits from LlmSettings, so it works directly
+        clients = LlmProviderFactory.build_providers(self.settings, retry, correlation)
+        
+        # 3. Return Composite Gateway
         return CompositeLlmGateway(self.config, clients)

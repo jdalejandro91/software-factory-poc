@@ -31,10 +31,12 @@ def get_usecase(settings: Settings = Depends(get_settings)) -> CreateScaffolding
     scaffolding_config = ScaffoldingConfigLoader.load_config()
     
     # 2. Infra Resolver (The "Switch")
-    from software_factory_poc.infrastructure.configuration.tool_settings import ToolSettings
-    tool_settings = ToolSettings()
+    # settings is already injected by global dependency `get_settings` if we used it, 
+    # but here we instantiate a specific one or use the one passed via args (?)
+    # The `get_usecase` depends on `get_settings`, so we have `settings` in args.
     
-    resolver = ProviderResolver(scaffolding_config, tool_settings)
+    # Use the injected settings which contains environment variables loaded once
+    resolver = ProviderResolver(scaffolding_config, settings)
     
     # 3. Use Case
     return CreateScaffoldingUseCase(

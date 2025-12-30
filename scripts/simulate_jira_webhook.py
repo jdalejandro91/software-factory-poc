@@ -35,12 +35,13 @@ def main():
         load_dotenv()
         
         config = ScaffoldingConfigLoader.load_config()
-        tool_settings = ToolSettings()
+        from software_factory_poc.infrastructure.configuration.main_settings import Settings
+        settings = Settings()
         
         logger.info(f"Loaded Config: VCS={config.vcs_provider}, Tracker={config.tracker_provider}, LLM_Priority={len(config.llm_model_priority)}")
         
         # 2. Build Resolver
-        resolver = ProviderResolver(config, tool_settings)
+        resolver = ProviderResolver(config, settings)
         
         # 3. Instantiate Use Case
         use_case = CreateScaffoldingUseCase(config, resolver)

@@ -81,7 +81,8 @@ class LlmProviderFactory:
     """
     
     @staticmethod
-    def build_providers(settings: GenericSettings) -> dict[LlmProviderType, LlmGateway]:
+    @staticmethod
+    def build_providers(settings: LlmSettings, retry: RetryPolicy, correlation: CorrelationIdContext) -> dict[LlmProviderType, LlmProvider]:
         """
         Builds and returns a dictionary of enabled LLM providers based on settings.
         """
