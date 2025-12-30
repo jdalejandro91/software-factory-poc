@@ -113,6 +113,7 @@ jobs:
             # Actualizar código
             echo "📥 Bajando cambios de $BRANCH..."
             git fetch origin $BRANCH
+            git clean -fd
             git checkout $BRANCH
             git reset --hard origin/$BRANCH
 
