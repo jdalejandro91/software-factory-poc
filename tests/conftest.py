@@ -1,11 +1,13 @@
-import pytest
+import os
 import shutil
 import tempfile
-import os
 from pathlib import Path
-from unittest.mock import MagicMock
 
-from software_factory_poc.config.settings_pydantic import Settings, JiraAuthMode
+import pytest
+
+from software_factory_poc.configuration.main_settings import Settings
+from software_factory_poc.configuration.tools.tool_settings import JiraAuthMode
+
 
 @pytest.fixture
 def temp_workspace():
@@ -24,7 +26,12 @@ def settings(temp_workspace):
         gitlab_token="mock_gl_token",
         runtime_data_dir=temp_workspace / "runtime_data",
         template_catalog_root=temp_workspace / "templates",
-        app_name="TestPoC"
+        app_name="TestPoC",
+        openai_api_key="mock_openai_key",
+        confluence_base_url="https://confluence.example.com",
+        confluence_user_email="mock@confluence.com",
+        confluence_api_token="mock_confluence_token",
+        jira_webhook_secret="mock_secret"
     )
 
 @pytest.fixture

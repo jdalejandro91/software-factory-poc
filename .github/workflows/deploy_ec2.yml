@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - master
+      - 'feature/*'
 
 jobs:
   deploy:
@@ -20,53 +21,110 @@ jobs:
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-      - name: Create .env file from Secret
+      - name: Extract Secrets and Config
+        shell: python
         run: |
-          # AHORA: Decodificamos el Base64 para recuperar el archivo original intacto
-          echo "${{ secrets.PROD_ENV_FILE }}" | base64 -d > .env.production
+          import os
+          import base64
+
+          # 1. Decodificar el secreto
+          encoded_env = os.environ.get("PROD_ENV_FILE_CONTENT", "")
+          if not encoded_env:
+              print("::error::PROD_ENV_FILE secret is empty!")
+              exit(1)
+          
+          try:
+              decoded_bytes = base64.b64decode(encoded_env)
+              env_content = decoded_bytes.decode('utf-8')
+          except Exception as e:
+              print(f"::error::Failed to decode base64: {e}")
+              exit(1)
+
+          # 2. Guardar .env para enviarlo luego
+          with open(".env", "w") as f:
+              f.write(env_content)
+              # Asegurar variable crítica para Docker
+              if "PYTHONPATH=" not in env_content:
+                  f.write("\nPYTHONPATH=src\n")
+          
+          # 3. Parsear host y user robustamente
+          ec2_host = ""
+          ec2_user = ""
+          
+          for line in env_content.splitlines():
+              line = line.strip()
+              if not line or line.startswith("#"): continue
+              if "=" in line:
+                  key, value = line.split("=", 1)
+                  key = key.strip()
+                  value = value.strip().strip("'").strip('"') # Limpiar comillas
+                  
+                  if key == "EC2_HOST":
+                      ec2_host = value
+                  elif key == "EC2_USER":
+                      ec2_user = value
+
+          if not ec2_host or not ec2_user:
+              print("::error::EC2_HOST or EC2_USER not found in PROD_ENV_FILE")
+              exit(1)
+          
+          # 4. Exportar a GITHUB_ENV
+          with open(os.environ['GITHUB_ENV'], 'a') as env_file:
+              env_file.write(f"EC2_HOST={ec2_host}\n")
+              env_file.write(f"EC2_USER={ec2_user}\n")
+
+        env:
+          PROD_ENV_FILE_CONTENT: ${{ secrets.PROD_ENV_FILE }}
 
       - name: Deploy to EC2
         run: |
-          # 1. Definir variables de conexión
-          USER="${{ secrets.EC2_USER }}"
-          HOST="${{ secrets.EC2_HOST }}"
+          # 1. Variables de conexión (desde GITHUB_ENV)
+          USER="$EC2_USER"
+          HOST="$EC2_HOST"
           KEY="-i ~/.ssh/id_rsa"
           OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
           TARGET_DIR="/home/$USER/software-factory-poc"
+          BRANCH="${{ github.ref_name }}"
 
-          # 2. Asegurar que la carpeta existe antes de copiar nada
+          # 2. Asegurar que la carpeta existe
           ssh $OPTS $KEY $USER@$HOST "mkdir -p $TARGET_DIR"
 
-          # 3. Copiar el archivo .env al servidor (Inyección de Secretos)
+          # 3. Copiar el archivo .env al servidor
           echo "🔐 Enviando configuración de entorno (.env)..."
-          scp $OPTS $KEY .env.production $USER@$HOST:$TARGET_DIR/.env
+          scp $OPTS $KEY .env $USER@$HOST:$TARGET_DIR/.env
 
           # 4. Ejecutar el despliegue
-          ssh $OPTS $KEY $USER@$HOST << 'EOF'
+          ssh $OPTS $KEY $USER@$HOST << EOF
             set -e
-            PROJECT_DIR="$HOME/software-factory-poc"
+            PROJECT_DIR="\$HOME/software-factory-poc"
             REPO_URL="https://github.com/jdalejandro91/software-factory-poc.git"
             
-            cd "$PROJECT_DIR"
+            cd "\$PROJECT_DIR"
             
             # Auto-healing del repo
             if [ ! -d ".git" ]; then
                 echo "⚠️ Repo no detectado o corrupto. Clonando de nuevo..."
                 cd ..
                 rm -rf software-factory-poc
-                git clone "$REPO_URL" software-factory-poc
+                git clone "\$REPO_URL" software-factory-poc
                 cd software-factory-poc
             fi
 
             # Actualizar código
-            echo "📥 Bajando cambios..."
-            git fetch origin main
-            git reset --hard origin/main
+            echo "📥 Bajando cambios de $BRANCH..."
+            git fetch origin $BRANCH
+            git checkout $BRANCH
+            git reset --hard origin/$BRANCH
 
             # Despliegue
             echo "🔄 Reiniciando contenedores..."
             docker compose down || true
             docker compose up -d --build --remove-orphans
+            
+            # Asegurar persistencia ante reinicios
+            chmod +x scripts/install_systemd_service.sh
+            ./scripts/install_systemd_service.sh
+            # Fin persistencia
             
             echo "✅ Despliegue completado."
             docker compose ps

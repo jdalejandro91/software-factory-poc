@@ -1,29 +1,32 @@
 import pytest
-from software_factory_poc.contracts.scaffolding_contract_parser_service import (
-    ScaffoldingContractParserService,
-    ContractParseError,
-    BLOCK_START,
+
+from software_factory_poc.application.core.services.scaffolding_contract_parser_service import (
     BLOCK_END,
+    BLOCK_START,
+    ContractParseError,
+    ScaffoldingContractParserService,
 )
+
 
 def test_parse_valid_contract():
     parser = ScaffoldingContractParserService()
     text = f"""
 Title
 {BLOCK_START}
-contract_version: "1"
-template_id: "corp_nodejs_api"
-service_slug: "my-svc"
-gitlab:
-    project_id: 10
-vars:
-    service_name: "My Service"
+version: "1"
+technology_stack: "corp_nodejs_api"
+target:
+  project_id: 10
+parameters:
+  service_name: "My Service"
 {BLOCK_END}
 Footer
 """
     contract = parser.parse(text)
-    assert contract.template_id == "corp_nodejs_api"
-    assert contract.service_slug == "my-svc"
+    assert contract.contract_version == "1"
+    assert contract.technology_stack == "corp_nodejs_api"
+    # Service slug derived from parameters service_name
+    assert contract.service_slug == "My Service"
     assert contract.gitlab.project_id == 10
 
 def test_parse_missing_block():
