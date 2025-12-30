@@ -52,9 +52,11 @@ class OpenAiProvider(LlmProvider):
             import json
             msgs = kwargs.get("messages", [])
             debug_payload = json.dumps(msgs, indent=2, ensure_ascii=False)
-            logging.getLogger(__name__).info(
-                f"\n🚀 [OPENAI PROMPT SENDING] ({request.model.name}):\n{debug_payload}\n"
-            )
+            debug_payload = json.dumps(msgs, indent=2, ensure_ascii=False)
+            
+            print(f"\n🚀 [INFRA:LLM-SEND] Sending to {self.name.value.upper()}:\n"
+                  f"{debug_payload}\n"
+                  f"Config: {kwargs.get('max_tokens')}, {kwargs.get('temperature')}\n", flush=True)
 
             # 4. Llamada Oficial SDK v1
             # logging.debug(f"OpenAI Payload: {kwargs}") # Descomentar para debug local

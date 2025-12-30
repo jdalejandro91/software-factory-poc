@@ -45,10 +45,9 @@ class GeminiProviderImpl(LlmProvider):
             
             # 2. Debug Log
             prompt_content = kwargs.get("contents", "NO_CONTENT")
-            logging.getLogger(__name__).info(
-                f"\n💎 [GEMINI PROMPT SENDING] ({request.model.name}):\n"
-                f"--- BEGIN PROMPT ---\n{prompt_content}\n--- END PROMPT ---\n"
-            )
+            prompt_content = kwargs.get("contents", "NO_CONTENT")
+            print(f"\n🚀 [INFRA:LLM-SEND] Sending to {self.name.value.upper()}:\n"
+                  f"--- BEGIN PROMPT ---\n{prompt_content}\n--- END PROMPT ---\n", flush=True)
             
             # 3. Execute
             resp = await self.client.models.generate_content(**kwargs)

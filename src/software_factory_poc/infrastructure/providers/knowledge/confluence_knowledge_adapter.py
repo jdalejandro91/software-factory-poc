@@ -92,6 +92,7 @@ class ConfluenceKnowledgeAdapter(KnowledgeGateway):
             
             if val and isinstance(val, str) and len(val.strip()) > 50:
                 logger.info(f"--- [DEBUG] Content extracted via path: {'.'.join(path)}")
+                logger.info(f"🔎 [INFRA:CONFLUENCE] Text extracted (Length: {len(val)}). Preview: {val[:200]!r}...")
                 return val
 
         # Si llegamos aquí, falló la extracción inteligente.

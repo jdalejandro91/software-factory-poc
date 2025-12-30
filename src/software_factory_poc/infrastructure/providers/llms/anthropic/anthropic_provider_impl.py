@@ -40,7 +40,23 @@ class AnthropicProviderImpl(LlmProvider):
 
     async def _call(self, request: LlmRequest) -> LlmResponse:
         try:
-            resp = await self.client.messages.create(**self.request_mapper.to_kwargs(request))
+            kwargs = self.request_mapper.to_kwargs(request)
+            
+            # --- LOG DE VERDAD ÚLTIMA ---
+            import json
+            try:
+                msgs = kwargs.get("messages", [])
+                system = kwargs.get("system", "")
+                debug_payload = f"System: {system}\nMessages:\n{json.dumps(msgs, indent=2, ensure_ascii=False)}"
+            except:
+                debug_payload = str(kwargs)
+
+            print(f"\n🚀 [INFRA:LLM-SEND] Sending to {self.name.value.upper()}:\n"
+                  f"{debug_payload}\n"
+                  f"Config: {kwargs.get('max_tokens')}, {kwargs.get('temperature')}\n", flush=True)
+            # ---------------------------
+
+            resp = await self.client.messages.create(**kwargs)
         except Exception as exc:
             raise self._map_error(exc)
         return self.response_mapper.to_domain(request.model.name, resp)

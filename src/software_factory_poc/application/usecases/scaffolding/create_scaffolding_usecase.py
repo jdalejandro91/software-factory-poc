@@ -76,6 +76,11 @@ class CreateScaffoldingUseCase:
             logger.info("Retrieving architectural context from Knowledge Gateway...")
             context = knowledge_gateway.retrieve_context(query)
             
+            print(f"\n🧠 [CORE:KNOWLEDGE] Received Context for Prompting:\n"
+                  f"--------------------------------------------------\n"
+                  f"{context}\n"
+                  f"--------------------------------------------------\n", flush=True)
+            
             context_size = len(context)
             logger.info(f"Confluence knowledge retrieved. Size: {context_size} chars.")
             
