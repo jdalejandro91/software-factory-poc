@@ -30,16 +30,14 @@ class ReasoningAgentAdapter(ReasoningAgent):
         prompt = PromptBuilderService.build_scaffolding_prompt(request, context)
         
         # 2. Call LLM
-        model = self.model_name
-        
-        llm_response = self.llm_gateway.generate_code(prompt=prompt, model=model)
+        llm_response = self.llm_gateway.generate_code(prompt=prompt, model=self.model_name)
         
         # 3. Parse Response
         files = FileParsingService.parse_llm_response(llm_response)
         
         # 4. Validate
         if not files:
-            raise ValueError("Generated files list is empty.")
+            raise ValueError("Generated files list is empty. LLM failed to produce valid code blocks.")
             
         return files
 
@@ -48,10 +46,11 @@ class ResearchAgentAdapter(ResearchAgent):
         self.gateway = gateway
 
     def investigate(self, query: str, filters: Dict) -> str:
-        # Execute retrieve_context
-        context = self.gateway.retrieve_context({**filters, "query": query})
+        # Merge query into filters/criteria if needed, or pass as part of dict
+        # Typically gateway.retrieve_context takes a dict.
+        search_criteria = {**filters, "query": query}
+        context = self.gateway.retrieve_context(search_criteria)
         
-        # Validation warning (logic migrated)
         if not context or len(context) < 100:
              logger.warning(f"Context retrieval yielded empty or short result for query: {query}")
              
@@ -60,10 +59,9 @@ class ResearchAgentAdapter(ResearchAgent):
 class KnowledgeAgentAdapter(KnowledgeAgent):
     def __init__(self, gateway: KnowledgeGateway):
         self.gateway = gateway
-        
-    # New adapter
+
     def retrieve_similar_solutions(self, topic: str) -> str:
-        logger.info("RAG retrieval skipped (not configured)")
+        logger.info("Knowledge retrieval skipped (not configured yet).")
         return ""
 
 class VcsAgentAdapter(VcsAgent):
@@ -74,45 +72,48 @@ class VcsAgentAdapter(VcsAgent):
 
     def branch_exists(self, repo_url: str, branch_name: str) -> Optional[str]:
         project_identifier = repo_url or "unknown/repo"
+        # Cache project_id for later use in this session
         self.project_id = self.gateway.resolve_project_id(project_identifier)
         
         if self.gateway.branch_exists(self.project_id, branch_name):
-            # Reconstruct URL logic
+            # Construct URL manually for robustness
             base_repo = repo_url.replace(".git", "").rstrip("/")
+            # Initial simple heuristic for GitLab vs others
             separator = "/-/tree/" if "gitlab" in base_repo else "/tree/"
-            branch_url = f"{base_repo}{separator}{branch_name}"
-            return branch_url
+            return f"{base_repo}{separator}{branch_name}"
+            
         return None
 
     def prepare_workspace(self, repo_url: str, branch_name: str) -> None:
-        # Assuming branch_exists was called before to set project_id, 
-        # but to be safe we resolve again if needed or rely on flow order.
-        # The interface takes arguments, so we should use them.
-        project_identifier = repo_url or "unknown/repo"
-        self.project_id = self.gateway.resolve_project_id(project_identifier)
         self.branch_name = branch_name
+        project_identifier = repo_url or "unknown/repo"
+        if not self.project_id:
+             self.project_id = self.gateway.resolve_project_id(project_identifier)
         
         self.gateway.create_branch(self.project_id, branch_name)
 
-    def publish_changes(self, files: List[Any], message: str) -> str:
-        # 1. Convert files list to dict {path: content}
-        # Assuming files are FileContent objects or similar with path/content attributes
+    def publish_changes(self, files: List[FileContent], message: str) -> str:
+        # 1. Transform to dict {path: content}
         files_map = {f.path: f.content for f in files}
         
-        # 2. Commit
+        # 2. Commit Files
+        # Ensure we have project_id and branch_name set (prepare_workspace should have been called)
+        if not self.project_id or not self.branch_name:
+             raise ValueError("Workspace not prepared. project_id or branch_name missing.")
+
         self.gateway.commit_files(self.project_id, self.branch_name, files_map, f"feat: {message}")
         
-        # 3. Create MR
+        # 3. Create Merge Request
         mr_result = self.gateway.create_merge_request(
             project_id=self.project_id,
             source_branch=self.branch_name,
             target_branch="main",
             title=message,
-            description=f"Automated scaffolding.\n{message}"
+            description=f"Automated scaffolding.\n\n{message}"
         )
         
         # 4. Return URL
-        return mr_result.get("web_url", "URL not found")
+        return mr_result.get("web_url", "URL_NOT_FOUND")
 
 class ReporterAgentAdapter(ReporterAgent):
     def __init__(self, gateway: TaskTrackerGatewayPort):
@@ -134,5 +135,6 @@ class ReporterAgentAdapter(ReporterAgent):
         self.gateway.transition_status(task_id, TaskStatus.TO_DO)
 
     def announce_redundancy(self, task_id: str, resource_url: str) -> None:
+        # Format: ℹ️ BRANCH_EXISTS|generic|{url}
         self.gateway.add_comment(task_id, f"ℹ️ BRANCH_EXISTS|generic|{resource_url}")
         self.gateway.transition_status(task_id, TaskStatus.IN_REVIEW)
