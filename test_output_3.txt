@@ -1,0 +1,109 @@
+>>> BOOT DIAGNOSTICS START (Direct Env Check) <<<
+ENV: OPENAI_API_KEY                 = PRESENT (Len=164) RawStart='sk-pr...
+ENV: DEEPSEEK_API_KEY               = PRESENT (Len=27) RawStart='sk-xx...
+ENV: GEMINI_API_KEY                 = PRESENT (Len=39) RawStart='AIzaS...
+ENV: ANTHROPIC_API_KEY              = PRESENT (Len=26) RawStart='sk-an...
+ENV: SCAFFOLDING_LLM_MODEL_PRIORITY = PRESENT (Len=120) RawStart='["ope...
+ENV: VCS_PROVIDER                   = PRESENT (Len=6) RawStart='GITLA...
+ENV: TRACKER_PROVIDER               = PRESENT (Len=4) RawStart='JIRA'...
+>>> BOOT DIAGNOSTICS END <<<
+DEBUG: Test verification. MockLLM Global Instance ID: 281473415128624
+DEBUG: Prompt from mock_llm: ''
+FDEBUG: Extracting Context...
+DEBUG: Prompt length: 1098
+DEBUG: Generated Prompt: ROLE: You are an Expert Software Architect specializing in Python.
+MISSION: Create a production-read...
+DEBUG: Calling LLM Gateway with model gpt-4...
+DEBUG: LLM Response received.
+...
+=================================== FAILURES ===================================
+____________________ test_jira_scaffolding_flow_end_to_end _____________________
+
+    def test_jira_scaffolding_flow_end_to_end():
+        payload = {
+            "webhookEvent": "jira:issue_created",
+            "timestamp": 123456789,
+            "user": {
+                "name": "tester",
+                "displayName": "Integration Tester",
+                "active": True
+            },
+            "issue": {
+                "id": "1001",
+                "key": "KAN-123",
+                "fields": {
+                    "summary": "Implement Shopping Cart Feature",
+                    "description": """
+    Please create:
+    ```scaffolding
+    version: '1.0'
+    technology_stack: python-api-v1
+    target:
+      gitlab_project_path: 'mock-group/mock-project'
+    parameters:
+      service_name: 'shopping-cart-service'
+    ```
+    Instruction: Create a Python shopping cart with add_item method.
+    """,
+                    "project": {
+                        "key": "KAN",
+                        "name": "Kanban Project"
+                    }
+                }
+            },
+            "changelog": {
+                "id": "9999",
+                "items": [
+                    {
+                        "field": "status",
+                        "fieldtype": "jira",
+                        "fromString": "Por hacer",
+                        "toString": "En curso"
+                    }
+                ]
+            }
+        }
+    
+        # API Key from settings (default mock or env)
+        # Using default secret from Settings() if not set env
+        # Mock Env Vars for Settings
+        msg_env = {
+            "JIRA_WEBHOOK_SECRET": "test-secret",
+            "JIRA_USER_EMAIL": "test@example.com",
+            "JIRA_API_TOKEN": "token",
+            "JIRA_BASE_URL": "https://test.jira.com"
+        }
+        with pytest.MonkeyPatch.context() as mp:
+            for k, v in msg_env.items():
+                mp.setenv(k, v)
+    
+            settings = Settings()
+            headers = {"X-API-Key": "test-secret"}
+    
+            response = client.post("/api/v1/jira-webhook", json=payload, headers=headers)
+    
+        assert response.status_code == 202
+        data = response.json()
+        assert data["status"] == "accepted"
+    
+        # Verifications
+        print(f"DEBUG: Test verification. MockLLM Global Instance ID: {id(mock_llm)}")
+        prompt = mock_llm.last_prompt
+        print(f"DEBUG: Prompt from mock_llm: '{prompt}'")
+    
+        # 1. Mapper Verification: Prompt contains instruction (YAML block)
+        # Since JiraMapper extracts only the block, we verity the YAML content is present.
+>       assert "service_name: 'shopping-cart-service'" in prompt
+E       assert "service_name: 'shopping-cart-service'" in ''
+
+tests/integration/test_jira_scaffolding_flow.py:162: AssertionError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/_pytest/config/__init__.py:1428
+  /usr/local/lib/python3.12/site-packages/_pytest/config/__init__.py:1428: PytestConfigWarning: Unknown config option: asyncio_mode
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/integration/test_jira_scaffolding_flow.py::test_jira_scaffolding_flow_end_to_end
+1 failed, 3 passed, 1 warning in 0.21s

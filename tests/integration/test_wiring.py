@@ -36,7 +36,8 @@ def dummy_config():
         tracker_provider=TaskTrackerType.JIRA,
         knowledge_provider=KnowledgeProviderType.CONFLUENCE,
         enable_secure_mode=True,
-        work_dir=Path("/tmp/test")
+        work_dir=Path("/tmp/test"),
+        architecture_page_id="12345"
     )
 
 def test_use_case_initialization_and_execution_flow(dummy_config):
@@ -102,10 +103,11 @@ def test_resolver_logic_fails_for_unsupported_provider():
         llm_model_priority=[ModelId(provider=LlmProviderType.OPENAI, name="gpt-4")], # Updated instantiation
         vcs_provider=VcsProviderType.GITHUB, # Unsupported
         tracker_provider=TaskTrackerType.JIRA,
-        knowledge_provider=KnowledgeProviderType.CONFLUENCE,
-        enable_secure_mode=True,
-        work_dir=Path("/tmp")
-    )
+            knowledge_provider=KnowledgeProviderType.CONFLUENCE,
+            enable_secure_mode=True,
+            work_dir=Path("/tmp"),
+            architecture_page_id="12345"
+        )
     
     # We use a real resolver here (with mocked settings) to test the factory logic
     mock_settings = MagicMock()

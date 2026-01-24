@@ -1,6 +1,9 @@
 from unittest.mock import MagicMock
+import os
+import pytest
 
 import pytest
+from pathlib import Path
 from fastapi.testclient import TestClient
 
 from software_factory_poc.application.core.domain.entities.scaffolding.scaffolding_agent import ScaffoldingAgent
@@ -23,6 +26,8 @@ from software_factory_poc.infrastructure.configuration.scaffolding_config_loader
 from software_factory_poc.main import app
 
 # ... imports ...
+
+
 
 
 
