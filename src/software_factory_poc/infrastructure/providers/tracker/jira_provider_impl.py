@@ -15,6 +15,8 @@ from software_factory_poc.application.core.domain.configuration.task_tracker_typ
     TaskTrackerType,
 )
 from software_factory_poc.infrastructure.providers.tracker.dtos.jira_status_enum import JiraStatus
+import re
+from software_factory_poc.infrastructure.providers.tracker.mappers.jira_adf_builder import JiraAdfBuilder
 
 logger = LoggerFactoryService.build_logger(__name__)
 
@@ -48,103 +50,87 @@ class JiraProviderImpl(JiraProvider, TaskTrackerGatewayPort):
     def add_comment(self, issue_key: str, body: Any) -> dict[str, Any]:
         self._logger.info(f"Adding comment to Jira issue: {issue_key}")
         try:
-            payload = {}
-            if isinstance(body, dict):
-                payload = {"body": body}
-            elif isinstance(body, str):
-                # Smart Formatting: Check for semantic markers from ScaffoldingAgent
-                import re
-                from software_factory_poc.infrastructure.providers.tracker.mappers.jira_adf_builder import JiraAdfBuilder
-                
-                payload_body = None
-                
-                # Case 1: Success
-                # "✅ Scaffolding exitoso. MR: {mr_link}"
-                if body.startswith("✅"):
-                    match = re.search(r"MR: (.+)", body)
-                    mr_link = match.group(1).strip() if match else "#"
-                    payload_body = JiraAdfBuilder.build_success_panel(
-                        title="Tarea Completada",
-                        summary="El scaffolding ha sido generado correctamente.",
-                        links={"🔗 Ver Merge Request": mr_link}
-                    )
-
-                # Case 2: Failure
-                # "❌ Fallo en generación ({error_type}): {str(error)}"
-                elif body.startswith("❌"):
-                    # Extract error details
-                    try:
-                        parts = body.split(":", 1)
-                        summary = parts[0].replace("❌ ", "").strip()
-                        detail = parts[1].strip() if len(parts) > 1 else "Unknown error"
-                    except Exception:
-                        summary = "Fallo en generación"
-                        detail = body
-                        
-                    payload_body = JiraAdfBuilder.build_error_panel(
-                        error_summary="La ejecución se detuvo debido a un error.",
-                        technical_detail=f"{summary}\n{detail}"
-                    )
-
-                # Case 3: Info / Branch Exists
-                # Formato esperado: "ℹ️ BRANCH_EXISTS|branch_name|branch_url"
-                elif body.startswith("ℹ️ BRANCH_EXISTS|"):
-                    try:
-                        parts = body.split("|")
-                        # parts[0] es el prefijo, [1] nombre, [2] url
-                        branch_name = parts[1]
-                        branch_url = parts[2]
-
-                        payload_body = JiraAdfBuilder.build_info_panel(
-                            title="Rama Existente Detectada",
-                            details=f"La rama '{branch_name}' ya existe en el repositorio. "
-                                    f"Se asume que el trabajo fue generado previamente. "
-                                    f"La tarea pasará a revisión.",
-                            links={"🔗 Ver Rama Existente": branch_url}
-                        )
-                    except IndexError:
-                        # Fallback por si el formato falla
-                        payload_body = JiraAdfBuilder.build_info_panel(
-                            title="Rama Existente Detectada",
-                            details=f"La rama existe, pero no se pudo parsear la URL. Mensaje original: {body}"
-                        )
-
-                # Fallback: Standard Text
-                if not payload_body:
-                    payload_body = {
-                        "type": "doc",
-                        "version": 1,
-                        "content": [
-                            {
-                                "type": "paragraph",
-                                "content": [{"type": "text", "text": str(body)}]
-                            }
-                        ]
-                    }
-                
-                payload = {"body": payload_body}
-            else:
-                 # Fallback for other types
-                payload = {
-                    "body": {
-                        "type": "doc",
-                        "version": 1,
-                        "content": [
-                            {
-                                "type": "paragraph",
-                                "content": [{"type": "text", "text": str(body)}]
-                            }
-                        ]
-                    }
-                }
-            
+            payload = self._build_comment_payload(body)
             self._logger.debug(f"Sending comment payload to Jira: {payload}")
+            
             response = self.client.post(f"rest/api/3/issue/{issue_key}/comment", payload)
             response.raise_for_status()
             return response.json()
         except Exception as e:
              self._handle_error(e, f"add_comment({issue_key})")
              raise
+
+    def _build_comment_payload(self, body: Any) -> dict[str, Any]:
+        """
+        Constructs the Jira ADF payload.
+        Handles both raw dicts (pass-through) and strings (smart formatting for emojis).
+        """
+        if isinstance(body, dict):
+             return {"body": body}
+
+        # If it's not a dict, treat as string and format
+        text_body = str(body)
+        payload_body = None
+        
+        # Case 1: Success
+        if text_body.startswith("✅"):
+            match = re.search(r"MR: (.+)", text_body)
+            mr_link = match.group(1).strip() if match else "#"
+            payload_body = JiraAdfBuilder.build_success_panel(
+                title="Tarea Completada",
+                summary="El scaffolding ha sido generado correctamente.",
+                links={"🔗 Ver Merge Request": mr_link}
+            )
+
+        # Case 2: Failure
+        elif text_body.startswith("❌"):
+            try:
+                parts = text_body.split(":", 1)
+                summary = parts[0].replace("❌ ", "").strip()
+                detail = parts[1].strip() if len(parts) > 1 else "Unknown error"
+            except Exception:
+                summary = "Fallo en generación"
+                detail = text_body
+                
+            payload_body = JiraAdfBuilder.build_error_panel(
+                error_summary="La ejecución se detuvo debido a un error.",
+                technical_detail=f"{summary}\n{detail}"
+            )
+
+        # Case 3: Info / Branch Exists
+        elif text_body.startswith("ℹ️ BRANCH_EXISTS|"):
+            try:
+                parts = text_body.split("|")
+                branch_name = parts[1]
+                branch_url = parts[2]
+
+                payload_body = JiraAdfBuilder.build_info_panel(
+                    title="Rama Existente Detectada",
+                    details=f"La rama '{branch_name}' ya existe en el repositorio. "
+                            f"Se asume que el trabajo fue generado previamente. "
+                            f"La tarea pasará a revisión.",
+                    links={"🔗 Ver Rama Existente": branch_url}
+                )
+            except IndexError:
+                payload_body = JiraAdfBuilder.build_info_panel(
+                    title="Rama Existente Detectada",
+                    details=f"La rama existe, pero no se pudo parsear la URL. Mensaje original: {text_body}"
+                )
+
+        # Fallback: Standard Text
+        if not payload_body:
+            payload_body = {
+                "type": "doc",
+                "version": 1,
+                "content": [
+                    {
+                        "type": "paragraph",
+                        "content": [{"type": "text", "text": text_body}]
+                    }
+                ]
+            }
+        
+        return {"body": payload_body}
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
     def transition_issue(self, issue_key: str, transition_id: str) -> None:

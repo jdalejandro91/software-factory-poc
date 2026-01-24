@@ -1,5 +1,5 @@
 import logging
-from typing import Any, List, Optional, Dict
+from typing import List, Optional, Dict
 
 from software_factory_poc.application.core.domain.agents.capabilities.reasoning_agent import ReasoningAgent
 from software_factory_poc.application.core.domain.agents.capabilities.research_agent import ResearchAgent
