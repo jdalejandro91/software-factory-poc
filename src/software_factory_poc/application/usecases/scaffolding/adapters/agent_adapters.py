@@ -37,7 +37,7 @@ class ReasoningAgentAdapter(ReasoningAgent):
         
         # 4. Validate
         if not files:
-            raise ValueError("Generated files list is empty. LLM failed to produce valid code blocks.")
+            raise DomainError("El Agente de Razonamiento generó una respuesta vacía o con formato inválido. No se encontraron bloques <<<FILE:path>>>.")
             
         return files
 
