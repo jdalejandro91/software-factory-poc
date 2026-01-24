@@ -1,14 +1,18 @@
-from abc import ABC, abstractmethod
+from dataclasses import dataclass
+import logging
 
-class KnowledgeAgent(ABC):
-    """
-    Capability contract for Agents responsible for Information Retrieval (RAG/Knowledge Base).
-    Focuses on WHAT: retrieving existing known solutions or rules.
-    """
+from software_factory_poc.application.core.domain.agents.base_agent import BaseAgent
+from software_factory_poc.application.core.ports.gateways.knowledge_gateway import KnowledgeGateway
 
-    @abstractmethod
+logger = logging.getLogger(__name__)
+
+@dataclass
+class KnowledgeAgent(BaseAgent):
+    """
+    Agent responsible for retrieving similar existing solutions or historical data.
+    """
+    gateway: KnowledgeGateway
+
     def retrieve_similar_solutions(self, topic: str) -> str:
-        """
-        Retrieves similar solutions or architectural patterns related to a topic.
-        """
-        pass
+        logger.info("Knowledge retrieval skipped (not configured yet).")
+        return ""

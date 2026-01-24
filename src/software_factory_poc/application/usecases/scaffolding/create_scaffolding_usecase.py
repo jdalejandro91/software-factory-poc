@@ -7,8 +7,13 @@ from software_factory_poc.application.core.domain.entities.scaffolding.scaffoldi
     ScaffoldingRequest,
 )
 
-# Domain Orchestrator
+# Domain Agents (Concrete Orchestrator and Capabilities)
 from software_factory_poc.application.core.domain.agents.orchestrators.scaffolding_agent import ScaffoldingAgent
+from software_factory_poc.application.core.domain.agents.capabilities.reporter_agent import ReporterAgent
+from software_factory_poc.application.core.domain.agents.capabilities.vcs_agent import VcsAgent
+from software_factory_poc.application.core.domain.agents.capabilities.research_agent import ResearchAgent
+from software_factory_poc.application.core.domain.agents.capabilities.knowledge_agent import KnowledgeAgent
+from software_factory_poc.application.core.domain.agents.capabilities.reasoning_agent import ReasoningAgent
 
 # Domain Entity Config (Target for Orchestrator)
 from software_factory_poc.application.core.domain.entities.scaffolding.scaffolding_agent_config import (
@@ -18,15 +23,6 @@ from software_factory_poc.application.core.domain.entities.scaffolding.scaffoldi
 # Gateways
 from software_factory_poc.application.core.ports.gateways.task_tracker_gateway_port import (
     TaskTrackerGatewayPort,
-)
-
-# Interface Adapters
-from software_factory_poc.application.usecases.scaffolding.adapters.agent_adapters import (
-    ReasoningAgentAdapter,
-    ResearchAgentAdapter,
-    VcsAgentAdapter,
-    ReporterAgentAdapter,
-    KnowledgeAgentAdapter
 )
 
 from software_factory_poc.infrastructure.observability.logger_factory_service import (
@@ -40,7 +36,7 @@ logger = LoggerFactoryService.build_logger(__name__)
 class CreateScaffoldingUseCase:
     """
     Application Service (UseCase) responsible for wiring the Clean Architecture components.
-    It resolves infrastructure gateways, adapts them to domain interfaces, and hands control
+    It resolves infrastructure gateways, instantiates concrete Domain Agents, and hands control
     to the Domain Orchestrator.
     """
     def __init__(self, config: ScaffoldingAgentConfig, resolver: ProviderResolver):
@@ -69,17 +65,46 @@ class CreateScaffoldingUseCase:
             knowledge_gateway = self.resolver.resolve_knowledge()
             llm_gateway = self.resolver.resolve_llm_gateway()
             
-            # 2. Instantiate Interface Adapters (Injecting Gateways)
-            reporter = ReporterAgentAdapter(tracker_gateway)
-            vcs = VcsAgentAdapter(vcs_gateway)
-            researcher = ResearchAgentAdapter(knowledge_gateway)
-            knowledge = KnowledgeAgentAdapter(knowledge_gateway)
+            # 2. Instantiate Concrete Domain Agents
+            reporter = ReporterAgent(
+                name="Reporter", 
+                role="Communicator", 
+                goal="Report status to Issue Tracker", 
+                gateway=tracker_gateway
+            )
             
-            # Pass model configuration to the Reasoning Adapter
+            vcs = VcsAgent(
+                name="VcsManager",
+                role="VersionController",
+                goal="Manage branches and MRs",
+                gateway=vcs_gateway
+            )
+            
+            researcher = ResearchAgent(
+                name="Researcher",
+                role="Analyst",
+                goal="Investigate architectural standards",
+                gateway=knowledge_gateway
+            )
+            
+            knowledge = KnowledgeAgent(
+                name="KnowledgeMan",
+                role="Librarian",
+                goal="Retrieve similar solutions",
+                gateway=knowledge_gateway
+            )
+            
+            # Pass model configuration to the Reasoning Agent
             model_to_use = self.entity_config.model_name or "gpt-4-turbo"
-            reasoner = ReasoningAgentAdapter(llm_gateway, model_name=model_to_use)
+            reasoner = ReasoningAgent(
+                name="ArchitectAI",
+                role="Engineer",
+                goal="Generate scaffolding code",
+                llm_gateway=llm_gateway,
+                model_name=model_to_use
+            )
             
-            # 3. Instantiate Domain Orchestrator
+            # 3. Instantiate Domain Orchestrator (also an Agent)
             agent = ScaffoldingAgent(config=self.entity_config)
             
             # 4. Delegate to Orchestrator
@@ -100,7 +125,12 @@ class CreateScaffoldingUseCase:
             try:
                 # We resolve tracker again or use local variable if available to ensure freshness or availability
                 tracker_gateway = cast(TaskTrackerGatewayPort, self.resolver.resolve_tracker())
-                emergency_reporter = ReporterAgentAdapter(tracker_gateway)
+                emergency_reporter = ReporterAgent(
+                    name="EmergencyReporter",
+                    role="Communicator",
+                    goal="Report critical failure",
+                    gateway=tracker_gateway
+                )
                 emergency_reporter.announce_failure(request.issue_key, e)
             except Exception as report_error:
                 logger.error(f"Failed to report failure to tracker: {report_error}")

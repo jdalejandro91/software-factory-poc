@@ -14,13 +14,27 @@ from software_factory_poc.application.core.ports.gateways.dtos import FileConten
 
 logger = logging.getLogger(__name__)
 
+from software_factory_poc.application.core.domain.agents.base_agent import BaseAgent
+
 @dataclass
-class ScaffoldingAgent:
+class ScaffoldingAgent(BaseAgent):
     """
     Orchestrator Agent for Scaffolding Tasks.
     Coordinates the capabilities: Research -> Reasoning -> Knowledge -> VCS -> Reporting.
     """
     config: ScaffoldingAgentConfig
+    # Providing defaults to satisfy dataclass inheritance without changing __init__ signature excessively
+    # Note: In Python dataclasses, fields with defaults must follow fields without defaults.
+    # BaseAgent has no defaults. If we rely on dataclass generation, we'd need to pass name/role/goal.
+    # To avoid breaking callers, we'll assign them via field defaults or post_init, but strictly 
+    # the cleanest way while keeping @dataclass might be to use kw_only=True if allowed or manual init.
+    # Given constraints, we will convert this to a standard class inheriting from the dataclass to customize init,
+    # OR simpler: use default values for the base fields here if python allows overriding.
+    # Let's use the manual __init__ approach by removing @dataclass from this class but keeping inheritance.
+    
+    def __init__(self, config: ScaffoldingAgentConfig):
+        super().__init__(name="ScaffoldingAgent", role="Orchestrator", goal="Orchestrate scaffolding creation")
+        self.config = config
 
     def execute_flow(
         self,
@@ -35,30 +49,28 @@ class ScaffoldingAgent:
         Executes the scaffolding orchestration flow.
         """
         try:
-            # Step 1: Report Start
-            reporter.announce_start(request.issue_key)
+            self._announce_task_start(request, reporter)
             
-            # Step 2: Check Redundancy
-            if self._check_redundancy(request, vcs, reporter):
+            if self._verify_redundancy(request, vcs, reporter):
                 return
+
+            research_context = self._conduct_research(request, researcher)
+            knowledge_context = self._consult_knowledge_base(request, knowledge)
+            full_context = self._consolidate_context(research_context, knowledge_context)
             
-            # Step 3 & 4: Gather Context (Research + Knowledge)
-            context = self._gather_context(request, researcher, knowledge)
+            artifacts = self._generate_code_artifacts(request, full_context, reasoner)
             
-            # Step 5: Reasoning (Generate Files)
-            files = self._perform_reasoning(request, context, reasoner)
+            mr_link = self._publish_to_vcs(request, artifacts, vcs)
             
-            # Step 6 & 7: Publish Results
-            mr_link = self._publish_results(request, files, vcs)
-            
-            # Step 8: Success
-            reporter.announce_completion(request.issue_key, mr_link)
-            logger.info(f"Scaffolding flow completed successfully. MR: {mr_link}")
+            self._finalize_task(request, mr_link, reporter)
 
         except Exception as e:
-            self._handle_failure(request.issue_key, e, reporter)
+            self._handle_error(request, e, reporter)
 
-    def _check_redundancy(self, request: ScaffoldingRequest, vcs: VcsAgent, reporter: ReporterAgent) -> bool:
+    def _announce_task_start(self, request: ScaffoldingRequest, reporter: ReporterAgent) -> None:
+        reporter.announce_start(request.issue_key)
+
+    def _verify_redundancy(self, request: ScaffoldingRequest, vcs: VcsAgent, reporter: ReporterAgent) -> bool:
         branch_name = f"feature/{request.issue_key}/scaffolding"
         existing_branch_url = vcs.branch_exists(request.repository_url, branch_name)
         
@@ -68,26 +80,26 @@ class ScaffoldingAgent:
             return True
         return False
 
-    def _gather_context(self, request: ScaffoldingRequest, researcher: ResearchAgent, knowledge: KnowledgeAgent) -> str:
-        # Step 3: Research
+    def _conduct_research(self, request: ScaffoldingRequest, researcher: ResearchAgent) -> str:
         search_filters = self.config.extra_params
         query = f"{request.technology_stack} {request.summary}"
         
         logger.info("Starting Research phase...")
-        research_context = researcher.investigate(query, search_filters)
+        return researcher.investigate(query, search_filters)
 
-        # Step 4: Knowledge
+    def _consult_knowledge_base(self, request: ScaffoldingRequest, knowledge: KnowledgeAgent) -> str:
         logger.info("Retrieving Knowledge/Similar Solutions...")
         params_block = request.raw_instruction or ""
-        knowledge_context = knowledge.retrieve_similar_solutions(params_block)
+        return knowledge.retrieve_similar_solutions(params_block)
 
-        return f"Research Findings:\n{research_context}\n\nKnowledge Base:\n{knowledge_context}"
+    def _consolidate_context(self, research: str, knowledge: str) -> str:
+        return f"Research Findings:\n{research}\n\nKnowledge Base:\n{knowledge}"
 
-    def _perform_reasoning(self, request: ScaffoldingRequest, context: str, reasoner: ReasoningAgent) -> List[FileContent]:
+    def _generate_code_artifacts(self, request: ScaffoldingRequest, context: str, reasoner: ReasoningAgent) -> List[FileContent]:
         logger.info("Generating Scaffolding (Reasoning phase)...")
         return reasoner.generate_scaffolding(request, context)
 
-    def _publish_results(self, request: ScaffoldingRequest, files: List[FileContent], vcs: VcsAgent) -> str:
+    def _publish_to_vcs(self, request: ScaffoldingRequest, files: List[FileContent], vcs: VcsAgent) -> str:
         branch_name = f"feature/{request.issue_key}/scaffolding"
         
         logger.info(f"Preparing workspace for {request.repository_url} on {branch_name}...")
@@ -96,8 +108,12 @@ class ScaffoldingAgent:
         logger.info("Publishing changes...")
         return vcs.publish_changes(files, f"Scaffolding for {request.issue_key}")
 
-    def _handle_failure(self, task_id: str, error: Exception, reporter: ReporterAgent) -> None:
+    def _finalize_task(self, request: ScaffoldingRequest, mr_link: str, reporter: ReporterAgent) -> None:
+        reporter.announce_completion(request.issue_key, mr_link)
+        logger.info(f"Scaffolding flow completed successfully. MR: {mr_link}")
+
+    def _handle_error(self, request: ScaffoldingRequest, error: Exception, reporter: ReporterAgent) -> None:
+        task_id = request.issue_key
         logger.error(f"Orchestration failed for {task_id}: {error}", exc_info=True)
         reporter.announce_failure(task_id, error)
-        # Re-raise to let upper layers (e.g. Workers) handle retry logic or DLQ
         raise error

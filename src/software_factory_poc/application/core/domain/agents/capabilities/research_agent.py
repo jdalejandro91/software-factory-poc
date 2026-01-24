@@ -1,16 +1,25 @@
-from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Dict
+import logging
 
-class ResearchAgent(ABC):
+from software_factory_poc.application.core.domain.agents.base_agent import BaseAgent
+from software_factory_poc.application.core.ports.gateways.knowledge_gateway import KnowledgeGateway
+
+logger = logging.getLogger(__name__)
+
+@dataclass
+class ResearchAgent(BaseAgent):
     """
-    Capability contract for Agents responsible for Active Investigation.
-    Focuses on WHAT: investigating a query to retrieve information.
+    Agent responsible for researching architectural standards and context.
     """
-    
-    @abstractmethod
+    gateway: KnowledgeGateway
+
     def investigate(self, query: str, filters: Dict) -> str:
-        """
-        Performs an investigation based on a query and filters (e.g. searching Confluence, Web).
-        Returns the findings as a string (context).
-        """
-        pass
+        # Merge query into filters/criteria
+        search_criteria = {**filters, "query": query}
+        context = self.gateway.retrieve_context(search_criteria)
+        
+        if not context or len(context) < 100:
+             logger.warning(f"Context retrieval yielded empty or short result for query: {query}")
+             
+        return context
