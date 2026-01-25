@@ -6,9 +6,9 @@ from .scaffolding_agent_config import ScaffoldingAgentConfig
 from .scaffolding_order import ScaffoldingOrder
 
 from software_factory_poc.application.core.domain.agents.reporter.reporter_agent import ReporterAgent
-from software_factory_poc.application.core.domain.agents.capabilities.vcs_agent import VcsAgent
-from software_factory_poc.application.core.domain.agents.capabilities.research_agent import ResearchAgent
-from software_factory_poc.application.core.domain.agents.capabilities.knowledge_agent import KnowledgeAgent
+from software_factory_poc.application.core.domain.agents.vcs.vcs_agent import VcsAgent
+from software_factory_poc.application.core.domain.agents.research.research_agent import ResearchAgent
+from software_factory_poc.application.core.domain.agents.knowledge.knowledge_agent import KnowledgeAgent
 from software_factory_poc.application.core.domain.agents.reasoner.reasoner_agent import ReasonerAgent
 from software_factory_poc.application.core.ports.gateways.dtos import FileContent
 

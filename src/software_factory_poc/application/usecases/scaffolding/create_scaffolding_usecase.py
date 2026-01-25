@@ -10,9 +10,9 @@ from software_factory_poc.application.core.domain.agents.scaffolding.scaffolding
 # Domain Agents (Concrete Orchestrator and Capabilities)
 from software_factory_poc.application.core.domain.agents.scaffolding.scaffolding_agent import ScaffoldingAgent
 from software_factory_poc.application.core.domain.agents.reporter.reporter_agent import ReporterAgent
-from software_factory_poc.application.core.domain.agents.capabilities.vcs_agent import VcsAgent
-from software_factory_poc.application.core.domain.agents.capabilities.research_agent import ResearchAgent
-from software_factory_poc.application.core.domain.agents.capabilities.knowledge_agent import KnowledgeAgent
+from software_factory_poc.application.core.domain.agents.vcs.vcs_agent import VcsAgent
+from software_factory_poc.application.core.domain.agents.research.research_agent import ResearchAgent
+from software_factory_poc.application.core.domain.agents.knowledge.knowledge_agent import KnowledgeAgent
 from software_factory_poc.application.core.domain.agents.reasoner.reasoner_agent import ReasonerAgent
 
 # Domain Entity Config (Target for Orchestrator)
