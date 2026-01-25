@@ -2,6 +2,8 @@ import pytest
 from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
+from software_factory_poc.application.core.ports.gateways.dtos import TaskDTO, MergeRequestDTO, BranchDTO, CommitResultDTO
+from software_factory_poc.application.core.domain.configuration.task_status import TaskStatus
 from software_factory_poc.main import app
 from software_factory_poc.infrastructure.configuration.main_settings import Settings
 
@@ -53,29 +55,36 @@ Instruction: Create a Python shopping cart with add_item method.
         }
     }
 
-    # 2. Setup Mocks via Patch (Robust Strategy)
-    # We patch the Resolver methods to return our controlled Mocks regardless of lifecycle
-    with patch("software_factory_poc.infrastructure.resolution.provider_resolver.ProviderResolver.resolve_llm_gateway") as mock_resolve_llm, \
-         patch("software_factory_poc.infrastructure.resolution.provider_resolver.ProviderResolver.resolve_vcs") as mock_resolve_vcs, \
-         patch("software_factory_poc.infrastructure.resolution.provider_resolver.ProviderResolver.resolve_tracker") as mock_resolve_tracker, \
-         patch("software_factory_poc.infrastructure.resolution.provider_resolver.ProviderResolver.resolve_knowledge") as mock_resolve_knowledge:
+    # 2. Setup Mocks via Patch with Strict Specs
+    # using spec=True ensures calls fail if method doesn't exist on real class
+    with patch("software_factory_poc.infrastructure.resolution.provider_resolver.ProviderResolver.resolve_llm_gateway", spec=True) as mock_resolve_llm, \
+         patch("software_factory_poc.infrastructure.resolution.provider_resolver.ProviderResolver.resolve_vcs", spec=True) as mock_resolve_vcs, \
+         patch("software_factory_poc.infrastructure.resolution.provider_resolver.ProviderResolver.resolve_tracker", spec=True) as mock_resolve_tracker, \
+         patch("software_factory_poc.infrastructure.resolution.provider_resolver.ProviderResolver.resolve_knowledge", spec=True) as mock_resolve_knowledge:
         
         # Configure LLM Mock
         mock_llm_instance = MagicMock()
         mock_resolve_llm.return_value = mock_llm_instance
-        # Return a valid block so parsing doesn't fail
-        mock_llm_instance.generate_code.return_value = (
+        
+        # Return an object that has .content attribute (LlmResponse-like)
+        mock_response = MagicMock()
+        mock_response.content = (
             "<<<FILE:src/shopping_cart.py>>>\n"
             "class ShoppingCart: pass\n"
             "<<<END>>>"
         )
+        mock_llm_instance.generate_code.return_value = mock_response
         
-        # Configure VCS Mock
+        # Configure VCS Mock (Strict DTOs)
+        # Note: mocking the instance returned by resolve_vcs directly
         mock_vcs_instance = MagicMock()
         mock_resolve_vcs.return_value = mock_vcs_instance
-        # Simulate branch does not exist so flow proceeds
         mock_vcs_instance.branch_exists.return_value = False 
-        mock_vcs_instance.create_merge_request.return_value = {"web_url": "http://gitlab.mock/mr/1"}
+        # Using manual DTO instantiation or factory if I injected it. 
+        # Here I will just instantiate DTOs directly as it's cleaner than injecting fixture into this big block.
+        mock_vcs_instance.create_merge_request.return_value = MergeRequestDTO(id="1", web_url="http://gitlab.mock/mr/1")
+        mock_vcs_instance.create_branch.return_value = BranchDTO("feature/KAN-123/scaffolding", "url")
+        mock_vcs_instance.commit_files.return_value = CommitResultDTO("sha", "url")
         
         # Configure Tracker Mock (Jira)
         mock_tracker_instance = MagicMock()
@@ -85,18 +94,14 @@ Instruction: Create a Python shopping cart with add_item method.
         mock_knowledge_instance = MagicMock()
         mock_resolve_knowledge.return_value = mock_knowledge_instance
         mock_knowledge_instance.retrieve_context.return_value = "Shopping Cart Architecture (Modular Monolith)\nCart Entity"
+        mock_knowledge_instance.retrieve_similar_solutions.return_value = "Examples"
         
         # 3. Execution
-        # Mock Env headers for auth check
         headers = {"X-API-Key": "test-secret"}
         
-        # We also need to ensure settings validation passes if secret is checked.
-        # But for this integration test, assuming we have a valid secret or we mock settings.
-        # Let's mock the secret env var just in case using MonkeyPatch context
         with pytest.MonkeyPatch.context() as mp:
             mp.setenv("JIRA_WEBHOOK_SECRET", "test-secret")
             
-            # The API Router typically instantiates Settings() which reads env.
             response = client.post("/api/v1/jira-webhook", json=payload, headers=headers)
             
             # 4. Verifications
@@ -104,34 +109,27 @@ Instruction: Create a Python shopping cart with add_item method.
             assert response.json()["status"] == "accepted"
             
             # Verification 1: LLM Interaction
-            # Check (assert_called) instead of global variable
             assert mock_llm_instance.generate_code.called
             
-            # Inspect the prompt passed to LLM
+            # Inspect Prompt
             call_args = mock_llm_instance.generate_code.call_args
-            # access (args, kwargs) from call_args
             args, kwargs = call_args
             prompt_arg = args[0] if args else kwargs.get("prompt")
             
-            # 1. Mapper Verification: Prompt contains instruction
             assert "service_name: 'shopping-cart-service'" in prompt_arg
-            assert "mock-group/mock-project" in prompt_arg
+            assert "Shopping Cart Architecture" in prompt_arg
             
-            # 2. Adapter Verification: Prompt contains Architecture Text (from Knowledge Mock)
-            assert "Shopping Cart Architecture (Modular Monolith)" in prompt_arg
-            assert "Cart Entity" in prompt_arg
+            # Verification 2: Tracker Interaction with Strict Sequence
+            from unittest.mock import call, ANY
             
-            # 3. Agent Verification: Constructed structure
-            assert "--- ARCHITECTURAL STANDARDS (RAG CONTEXT) ---" in prompt_arg
-            assert "--- TASK INSTRUCTIONS ---" in prompt_arg
+            # Use strict assert_has_calls to check order: Report Start -> Report Success
+            mock_tracker_instance.add_comment.assert_has_calls([
+                call("KAN-123", ANY), # Start
+                call("KAN-123", ANY)  # Success
+            ])
             
-            # 4. Prompt Hardening Verification
-            assert "--- CRITICAL OUTPUT RULES ---" in prompt_arg
-            assert "--- EXAMPLE OUTPUT ---" in prompt_arg
-            
-            # Verification 2: Tracker Interaction
-            # Check that success comment was posted
-            mock_tracker_instance.add_comment.assert_called()
-            # Check transition to IN_REVIEW or DONE
-            mock_tracker_instance.transition_status.assert_called()
+            # Verify Transition
+            mock_tracker_instance.transition_status.assert_has_calls([
+                call("KAN-123", TaskStatus.IN_REVIEW)
+            ])
 

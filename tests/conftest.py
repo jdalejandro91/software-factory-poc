@@ -4,6 +4,34 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from unittest.mock import MagicMock
+from software_factory_poc.application.core.ports.gateways.dtos import TaskDTO, MergeRequestDTO, BranchDTO, CommitResultDTO, FileContentDTO
+from software_factory_poc.application.core.domain.agents.scaffolding.scaffolding_order import ScaffoldingOrder
+
+@pytest.fixture
+def mock_task_dto_factory():
+    def _create(id="KAN-1", title="Test Task", status="TO_DO"):
+        return TaskDTO(id=id, title=title, status=status, description="Desc")
+    return _create
+
+@pytest.fixture
+def mock_mr_dto_factory():
+    def _create(id="1", web_url="http://gitlab/mr/1", state="opened"):
+        return MergeRequestDTO(id=id, web_url=web_url, state=state)
+    return _create
+
+@pytest.fixture
+def mock_scaffolding_order_factory():
+    def _create(issue_key="TEST-123", summary="Summary", stack="python"):
+        return ScaffoldingOrder(
+            issue_key=issue_key,
+            raw_instruction="Instr",
+            summary=summary,
+            reporter="User",
+            repository_url="http://repo",
+            technology_stack=stack
+        )
+    return _create
 
 # from software_factory_poc.configuration.main_settings import Settings
 from software_factory_poc.infrastructure.configuration.main_settings import Settings

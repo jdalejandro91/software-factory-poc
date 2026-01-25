@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any
+from .dtos import BranchDTO, CommitResultDTO, MergeRequestDTO
 
 
 class VcsGateway(ABC):
@@ -9,7 +10,7 @@ class VcsGateway(ABC):
         pass
 
     @abstractmethod
-    def create_branch(self, project_id: int, branch_name: str, ref: str = "main") -> dict[str, Any]:
+    def create_branch(self, project_id: int, branch_name: str, ref: str = "main") -> BranchDTO:
         """Creates a new branch."""
         pass
 
@@ -19,7 +20,7 @@ class VcsGateway(ABC):
         pass
 
     @abstractmethod
-    def commit_files(self, project_id: int, branch_name: str, files_map: dict[str, str], commit_message: str) -> dict[str, Any]:
+    def commit_files(self, project_id: int, branch_name: str, files_map: dict[str, str], commit_message: str) -> CommitResultDTO:
         """Commits files to a branch."""
         pass
 
@@ -31,6 +32,6 @@ class VcsGateway(ABC):
         target_branch: str, 
         title: str, 
         description: str | None = None
-    ) -> dict[str, Any]:
+    ) -> MergeRequestDTO:
         """Creates a merge request."""
         pass

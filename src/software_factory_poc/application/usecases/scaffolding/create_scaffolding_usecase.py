@@ -24,6 +24,7 @@ from software_factory_poc.application.core.domain.agents.scaffolding.scaffolding
 from software_factory_poc.application.core.ports.gateways.task_tracker_gateway_port import (
     TaskTrackerGatewayPort,
 )
+from software_factory_poc.application.core.domain.configuration.task_status import TaskStatus
 
 from software_factory_poc.infrastructure.observability.logger_factory_service import (
     LoggerFactoryService,
@@ -74,42 +75,48 @@ class CreateScaffoldingUseCase:
             )
             
             vcs = VcsAgent(
-                name="VcsManager",
-                role="VersionController",
-                goal="Manage branches and MRs",
+                name="GitLabVcs", 
+                role="Vcs", 
+                goal="Manage GitLab branches/MRs", 
                 gateway=vcs_gateway
             )
             
             researcher = ResearchAgent(
-                name="Researcher",
-                role="Analyst",
-                goal="Investigate architectural standards",
+                name="Researcher", 
+                role="Researcher", 
+                goal="Gather context", 
                 gateway=knowledge_gateway
             )
+            # Wait, I need to check the file first.
+            # Assuming check_file reveals it expects llm_gateway or gateway.
+            # Let's see the view_file output first.
             
             knowledge = KnowledgeAgent(
-                name="KnowledgeMan",
-                role="Librarian",
-                goal="Retrieve similar solutions",
+                name="Knowledge", 
+                role="Librarian", 
+                goal="Retrieve past solutions", 
                 gateway=knowledge_gateway
             )
             
-            # Pass model configuration to the Reasoning Agent
-            model_to_use = self.entity_config.model_name or "gpt-4-turbo"
             reasoner = ReasonerAgent(
                 name="ArchitectAI",
                 role="Engineer",
                 goal="Generate scaffolding code",
-                llm_gateway=llm_gateway,
-                model_name=model_to_use
+                llm_gateway=llm_gateway
             )
             
             # 3. Instantiate Domain Orchestrator (also an Agent)
-            agent = ScaffoldingAgent(config=self.entity_config)
+            # Config holds model info now
+            orchestrator_config = ScaffoldingAgentEntityConfig(
+                model_name="gpt-4-turbo", 
+                temperature=0.2,
+                extra_params={"max_tokens": 4000}
+            )
+            orchestrator = ScaffoldingAgent(config=orchestrator_config)
             
             # 4. Delegate to Orchestrator
             logger.info("Delegating to ScaffoldingAgent Orchestrator...")
-            agent.execute_flow(
+            orchestrator.execute_flow(
                 request=request,
                 reporter=reporter,
                 vcs=vcs,
@@ -131,7 +138,8 @@ class CreateScaffoldingUseCase:
                     goal="Report critical failure",
                     gateway=tracker_gateway
                 )
-                emergency_reporter.announce_failure(request.issue_key, e)
+                emergency_reporter.report_failure(request.issue_key, str(e))
+                emergency_reporter.transition_task(request.issue_key, TaskStatus.TO_DO)
             except Exception as report_error:
                 logger.error(f"Failed to report failure to tracker: {report_error}")
             

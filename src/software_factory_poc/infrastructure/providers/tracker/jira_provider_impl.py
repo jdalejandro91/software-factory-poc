@@ -1,8 +1,8 @@
 from typing import Any
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from software_factory_poc.application.core.ports.tools.jira_provider import JiraProvider
 from software_factory_poc.application.core.ports.gateways.task_tracker_gateway_port import TaskTrackerGatewayPort
+from software_factory_poc.application.core.ports.gateways.dtos import TaskDTO
 from software_factory_poc.application.core.domain.configuration.task_status import TaskStatus
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 from software_factory_poc.infrastructure.providers.tracker.clients.jira_http_client import (
@@ -30,7 +30,7 @@ STATUS_MAPPING = {
 }
 
 
-class JiraProviderImpl(JiraProvider, TaskTrackerGatewayPort):
+class JiraProviderImpl(TaskTrackerGatewayPort):
     def __init__(self, http_client: JiraHttpClient):
         self.client = http_client
         self._logger = logger

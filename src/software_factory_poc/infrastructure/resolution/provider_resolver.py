@@ -51,6 +51,15 @@ from software_factory_poc.infrastructure.providers.vcs.clients.gitlab_http_clien
 from software_factory_poc.infrastructure.providers.vcs.gitlab_provider_impl import (
     GitLabProviderImpl,
 )
+from software_factory_poc.infrastructure.providers.vcs.services.gitlab_branch_service import (
+    GitLabBranchService,
+)
+from software_factory_poc.infrastructure.providers.vcs.services.gitlab_commit_service import (
+    GitLabCommitService,
+)
+from software_factory_poc.infrastructure.providers.vcs.services.gitlab_mr_service import (
+    GitLabMrService,
+)
 from software_factory_poc.infrastructure.providers.vcs.mappers.gitlab_payload_builder_service import (
     GitLabPayloadBuilderService,
 )
@@ -72,8 +81,19 @@ class ProviderResolver:
         """
         if self.config.vcs_provider == VcsProviderType.GITLAB:
             http_client = GitLabHttpClient(self.settings)
+            
+            # Instantiate Services
+            branch_service = GitLabBranchService(http_client)
             payload_builder = GitLabPayloadBuilderService()
-            return GitLabProviderImpl(http_client, payload_builder)
+            commit_service = GitLabCommitService(http_client, payload_builder)
+            mr_service = GitLabMrService(http_client)
+            
+            return GitLabProviderImpl(
+                branch_service=branch_service,
+                commit_service=commit_service,
+                mr_service=mr_service,
+                http_client=http_client
+            )
             
         elif self.config.vcs_provider == VcsProviderType.GITHUB:
             raise NotImplementedError("GitHub adapter is not yet implemented.")

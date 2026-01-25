@@ -28,7 +28,7 @@ class GitLabHttpClient:
         headers["PRIVATE-TOKEN"] = token
         return headers
 
-    def get(self, path: str, params: dict[str, Any] = None) -> httpx.Response:
+    def get(self, path: str, params: dict[str, Any] | None = None) -> httpx.Response:
         url = f"{self.base_url}/{path.lstrip('/')}"
         with httpx.Client() as client:
             return client.get(url, headers=self._get_headers(), params=params, timeout=10.0)

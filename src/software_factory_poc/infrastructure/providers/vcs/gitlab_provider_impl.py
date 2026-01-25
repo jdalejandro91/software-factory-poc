@@ -2,7 +2,8 @@ import urllib.parse
 from typing import Any
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-from software_factory_poc.application.core.ports.tools.gitlab_provider import GitLabProvider
+from software_factory_poc.application.core.ports.gateways.vcs_gateway import VcsGateway
+from software_factory_poc.application.core.ports.gateways.dtos import BranchDTO, CommitResultDTO, MergeRequestDTO
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 from software_factory_poc.infrastructure.providers.vcs.clients.gitlab_http_client import (
     GitLabHttpClient,
@@ -17,7 +18,7 @@ from software_factory_poc.infrastructure.providers.vcs.services.gitlab_commit_se
     GitLabCommitService,
 )
 from software_factory_poc.infrastructure.providers.vcs.services.gitlab_mr_service import (
-    GitLabMergeRequestService,
+    GitLabMrService,
 )
 from software_factory_poc.application.core.domain.exceptions.provider_error import ProviderError
 from software_factory_poc.application.core.domain.configuration.vcs_provider_type import VcsProviderType
@@ -25,27 +26,29 @@ from software_factory_poc.application.core.domain.configuration.vcs_provider_typ
 logger = LoggerFactoryService.build_logger(__name__)
 
 
-class GitLabProviderImpl(GitLabProvider):
+class GitLabProviderImpl(VcsGateway):
     def __init__(
-        self, 
-        http_client: GitLabHttpClient,
-        payload_builder: GitLabPayloadBuilderService
+        self,
+        branch_service: GitLabBranchService,
+        commit_service: GitLabCommitService,
+        mr_service: GitLabMrService,
+        http_client: GitLabHttpClient # Injecting client
     ):
-        self.client = http_client
-        self.payload_builder = payload_builder
         self._logger = logger
-        
+        self.client = http_client
+
         # Initialize internal services
-        self.branch_service = GitLabBranchService(http_client)
-        self.commit_service = GitLabCommitService(http_client, payload_builder)
-        self.mr_service = GitLabMergeRequestService(http_client)
+        self.branch_service = branch_service
+        self.commit_service = commit_service
+        self.mr_service = mr_service
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
-    def resolve_project_id(self, project_path: str) -> int:
+    def resolve_project_id(self, repo_url: str) -> int:
         """
         Resolves a project path (group/project) to an numeric ID.
         Robustly handles full URLs by stripping protocol and domain.
         """
+        project_path = repo_url
         # Sanitization: Strip scheme and domain if present
         if "://" in project_path:
             try:
@@ -97,10 +100,14 @@ class GitLabProviderImpl(GitLabProvider):
             raise
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
-    def create_branch(self, project_id: int, branch_name: str, ref: str = "main") -> dict[str, Any]:
+    def create_branch(self, project_id: int, branch_name: str, ref: str = "main") -> BranchDTO:
         self._logger.info(f"Creating branch: {branch_name} from {ref} (Project: {project_id})")
         try:
-            return self.branch_service.create_branch(project_id, branch_name, ref)
+            result = self.branch_service.create_branch(project_id, branch_name, ref)
+            return BranchDTO(
+                name=result.get("name", branch_name),
+                web_url=result.get("web_url", "")
+            )
         except Exception as e:
             self._handle_error(e, f"create_branch({branch_name})")
             raise
@@ -121,19 +128,28 @@ class GitLabProviderImpl(GitLabProvider):
         branch_name: str, 
         files_map: dict[str, str],
         commit_message: str
-    ) -> dict[str, Any]:
+    ) -> CommitResultDTO:
         self._logger.info(f"Committing {len(files_map)} files to {branch_name} (Project: {project_id})")
         try:
-            return self.commit_service.commit_files(project_id, branch_name, files_map, commit_message)
+            result = self.commit_service.commit_files(project_id, branch_name, files_map, commit_message)
+            return CommitResultDTO(
+                id=result.get("id", "unknown"),
+                web_url=result.get("web_url", "")
+            )
         except Exception as e:
             self._handle_error(e, f"commit_files(count={len(files_map)})")
             raise
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
-    def create_merge_request(self, project_id: int, source_branch: str, target_branch: str, title: str, description: str | None = None) -> dict[str, Any]:
+    def create_merge_request(self, project_id: int, source_branch: str, target_branch: str, title: str, description: str | None = None) -> MergeRequestDTO:
         self._logger.info(f"Creating MR: {source_branch} -> {target_branch} (Project: {project_id})")
         try:
-            return self.mr_service.create_merge_request(project_id, source_branch, target_branch, title, description)
+            result = self.mr_service.create_merge_request(project_id, source_branch, target_branch, title, description or "")
+            return MergeRequestDTO(
+                id=str(result.get("iid", result.get("id", "0"))),
+                web_url=result.get("web_url", ""),
+                state=result.get("state", "opened")
+            )
         except Exception as e:
             self._handle_error(e, "create_merge_request")
             raise
