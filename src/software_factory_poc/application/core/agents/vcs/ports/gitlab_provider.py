@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Optional
 
 
 from software_factory_poc.application.core.agents.vcs.ports.vcs_gateway import VcsGateway
@@ -35,7 +35,7 @@ class GitLabProvider(VcsGateway):
         source_branch: str, 
         target_branch: str, 
         title: str, 
-        description: str | None = None
+        description:Optional[ str] = None
     ) -> dict[str, Any]:
         """Creates a merge request."""
         pass

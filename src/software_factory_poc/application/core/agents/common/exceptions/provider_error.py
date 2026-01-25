@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Optional
 
 from dataclasses import dataclass
 
@@ -8,8 +9,8 @@ class ProviderError(InfraError):
     provider: str
     message: str
     retryable: bool = False
-    status_code: int | None = None
-    error_code: str | None = None
+    status_code:Optional[ int] = None
+    error_code:Optional[ str] = None
 
     def __str__(self) -> str:
         code = f" status={self.status_code}" if self.status_code is not None else ""

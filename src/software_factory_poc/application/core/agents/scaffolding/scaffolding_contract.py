@@ -1,7 +1,7 @@
 import re
 import json
 import yaml
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator, ValidationError
 
@@ -9,13 +9,13 @@ from software_factory_poc.application.core.agents.scaffolding.exceptions.contrac
 
 
 class GitLabTargetModel(BaseModel):
-    project_id: int | None = Field(None, description="Target GitLab project ID")
-    project_path: str | None = Field(None, description="Target GitLab project path (e.g. group/project)", alias="gitlab_project_path")
-    target_base_branch: str | None = Field(None, description="Base branch to branch off from (e.g. main)")
-    branch_slug: str | None = Field(None, description="Branch slug for the feature branch")
+    project_id:Optional[ int] = Field(None, description="Target GitLab project ID")
+    project_path:Optional[ str] = Field(None, description="Target GitLab project path (e.g. group/project)", alias="gitlab_project_path")
+    target_base_branch:Optional[ str] = Field(None, description="Base branch to branch off from (e.g. main)")
+    branch_slug:Optional[ str] = Field(None, description="Branch slug for the feature branch")
 
     @field_validator("project_id")
-    def validate_project_id(cls, v: int | None) -> int | None:
+    def validate_project_id(cls, v:Optional[ int]) ->Optional[ int]:
         if v is not None and v <= 0:
             raise ValueError("project_id must be positive")
         return v
@@ -28,7 +28,7 @@ class GitLabTargetModel(BaseModel):
 
 
 class JiraTargetModel(BaseModel):
-    comment_visibility: str | None = Field("public", description="e.g. 'public' or 'internal'")
+    comment_visibility:Optional[ str] = Field("public", description="e.g. 'public' or 'internal'")
 
 
 class ScaffoldingContractModel(BaseModel):
@@ -36,10 +36,10 @@ class ScaffoldingContractModel(BaseModel):
     technology_stack: str = Field(..., description="Target technology stack (e.g., 'TypeScript with NestJS')")
     
     # Optional logic: Derived from parameters.service_name if not strict
-    service_slug: str | None = Field(None, description="Slug for the new service, used in branch naming")
+    service_slug:Optional[ str] = Field(None, description="Slug for the new service, used in branch naming")
     
     gitlab: GitLabTargetModel = Field(..., alias="target")
-    jira: JiraTargetModel | None = Field(default=None)
+    jira:Optional[ JiraTargetModel] = Field(default=None)
     
     vars: dict[str, Any] = Field(default_factory=dict, description="Variables for template rendering", alias="parameters")
 
@@ -123,7 +123,7 @@ class ScaffoldingContractModel(BaseModel):
             ) from e
 
     @staticmethod
-    def _extract_block(text: str) -> str | None:
+    def _extract_block(text: str) ->Optional[ str]:
         """
         Extracts content from Markdown (```...```) or Jira ({code}...) blocks.
         """

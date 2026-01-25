@@ -1,3 +1,4 @@
+from typing import Optional
 try:
     from enum import StrEnum
 except ImportError:
@@ -18,9 +19,9 @@ class JiraSettings(BaseSettings):
     """
     base_url: str = Field(..., description="Jira Base URL")
     auth_mode: JiraAuthMode = Field(default=JiraAuthMode.CLOUD_API_TOKEN)
-    user_email: str | None = Field(default=None)
-    api_token: SecretStr | None = Field(default=None)
-    bearer_token: SecretStr | None = Field(default=None)
+    user_email:Optional[ str] = Field(default=None)
+    api_token:Optional[ SecretStr] = Field(default=None)
+    bearer_token:Optional[ SecretStr] = Field(default=None)
     webhook_secret: SecretStr = Field(..., description="Token to validate incoming Jira webhooks")
 
     def validate_credentials(self) -> None:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 
 from software_factory_poc.application.core.agents.reasoner.llm_response import LlmResponse
 from software_factory_poc.application.core.agents.common.value_objects.model_id import ModelId
@@ -40,7 +40,7 @@ class OpenAiResponseMapper:
         except Exception as e:
             raise ValueError(f"Failed to map OpenAI response: {e}")
 
-    def _usage(self, response: Any) -> TokenMetric | None:
+    def _usage(self, response: Any) ->Optional[ TokenMetric]:
         u = getattr(response, "usage", None)
         if u is None:
             return None

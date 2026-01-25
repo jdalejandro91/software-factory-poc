@@ -1,4 +1,4 @@
-from typing import cast, Any
+from typing import cast, Any, Optional
 
 from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import (
     ScaffoldingAgentConfig,
@@ -69,7 +69,7 @@ class CreateScaffoldingUseCase:
         except Exception as e:
             self._handle_critical_failure(request, e, reporter)
 
-    def _handle_critical_failure(self, request: ScaffoldingOrder, e: Exception, reporter: Any | None) -> None:
+    def _handle_critical_failure(self, request: ScaffoldingOrder, e: Exception, reporter:Optional[ Any]) -> None:
         logger.critical(f"Critical error during scaffolding flow for {request.issue_key}: {e}", exc_info=True)
         try:
             # Use existing reporter if available, otherwise resolve a fresh one

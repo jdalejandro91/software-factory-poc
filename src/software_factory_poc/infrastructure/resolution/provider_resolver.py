@@ -1,4 +1,4 @@
-from typing import cast
+from typing import cast, Optional
 from pathlib import Path
 
 from software_factory_poc.application.core.agents.reporter.reporter_agent import ReporterAgent
@@ -72,7 +72,7 @@ class ProviderResolver:
     Factory responsible for resolving and instantiating the correct infrastructure adapters
     based on the domain configuration.
     """
-    def __init__(self, config: ScaffoldingAgentConfig, app_config: AppConfig | None = None):
+    def __init__(self, config: ScaffoldingAgentConfig, app_config:Optional[ AppConfig] = None):
         self.config = config
         self.app_config = app_config or AppConfig()
         # Legacy settings for components not yet using AppConfig

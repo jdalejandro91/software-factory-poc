@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar
+from typing import Generic, TypeVar, Optional
 
 T = TypeVar("T")
 
@@ -12,7 +12,7 @@ class Repository(ABC, Generic[T]):
         pass
 
     @abstractmethod
-    def find_by_id(self, id: str) -> T | None:
+    def find_by_id(self, id: str) ->Optional[ T]:
         """Finds an entity by its ID."""
         pass
 

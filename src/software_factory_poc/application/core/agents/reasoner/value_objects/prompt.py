@@ -1,3 +1,4 @@
+from typing import Optional
 from dataclasses import dataclass
 
 
@@ -5,4 +6,4 @@ from dataclasses import dataclass
 class Prompt:
     system_message: str
     user_message: str
-    response_format_hints: str | None = None
+    response_format_hints:Optional[ str] = None

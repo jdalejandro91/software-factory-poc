@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Optional
 from software_factory_poc.application.core.agents.vcs.dtos.vcs_dtos import BranchDTO, CommitResultDTO, MergeRequestDTO
 
 
@@ -32,7 +32,7 @@ class VcsGateway(ABC):
         source_branch: str, 
         target_branch: str, 
         title: str, 
-        description: str | None = None
+        description:Optional[ str] = None
     ) -> MergeRequestDTO:
         """Creates a merge request."""
         pass

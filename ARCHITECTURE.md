@@ -1,58 +1,173 @@
+Aquí tienes la versión refinada y extendida de `ARCHITECTURE.md`. He reestructurado el documento para que funcione como un **Manual de Ingeniería "Antigravity"**, alineando estrictamente el código actual (Clean Architecture + DDD) con el flujo de negocio que has detallado.
+
+Este archivo ahora no solo describe *qué* es el sistema, sino *cómo* extenderlo respetando las reglas de juego.
+
+```markdown
 # Software Factory PoC — Architecture Documentation
 
 ## 1. Architectural Philosophy: Screaming Architecture (DDD)
-The project follows **Domain-Driven Design (DDD)** and **Clean Architecture** principles. The folder structure "screams" the intent of the application rather than the framework (FastAPI).
 
-### Key Layers
-1.  **Application Core (`application/`)**:
-    *   **Domain Entities**: Pure Python objects representing business concepts (e.g., `ScaffoldingRequest`, `ScaffoldingAgent`).
-    *   **Use Cases**: High-level orchestrators containing business logic (e.g., `CreateScaffoldingUseCase`).
-    *   **Ports (Gateways)**: Interfaces defining contracts for external services (e.g., `VcsGateway`, `LLMGatewayPort`).
-    *   **Services**: Pure domain logic services (e.g., `PromptBuilderService`, `FileParsingService`).
+El proyecto sigue estrictamente los principios de **Domain-Driven Design (DDD)** y **Clean Architecture**. La estructura de carpetas "grita" la intención del negocio (Scaffolding, Research, Reporting) en lugar del framework (FastAPI, HTTP).
 
-2.  **Infrastructure (`infrastructure/`)**:
-    *   **Adapters (Providers)**: Concrete implementations of Ports (e.g., `GitLabProviderImpl` implementing `VcsGateway`).
-    *   **Configuration**: Loaders and Pydantic Settings implementation.
-    *   **Entrypoints**: API routers (FastAPI) and CLI scripts.
-    *   **Resolution**: `ProviderResolver` (Factory) to wire adapters dynamically.
+### 1.1 The "Dependency Rule"
+La regla de oro es: **Las dependencias solo apuntan hacia adentro.**
+* `Infrastructure` -> conoce a -> `Application`
+* `Application (Use Cases)` -> conoce a -> `Domain (Agents/Entities)`
+* `Domain` -> **NO CONOCE A NADIE**. Solo define Interfaces (Ports).
 
----
+### 1.2 Directory Map (Screaming Structure)
 
-## 2. Core Orchestration Flow
-The central workflow is managed by the `CreateScaffoldingUseCase`:
+```text
+src/software_factory_poc/
+├── application/               # Lógica de Negocio Pura (Independiente de Frameworks)
+│   ├── core/                  # El "Corazón" del Dominio
+│   │   ├── agents/            # Agentes de Dominio (Expertos en una tarea)
+│   │   │   ├── scaffolding/   # Agente de creación de scaffoldings
+│   │   │   ├── reporter/      # Comunicador (Jira).
+│   │   │   ├── vcs/           # Controlador de Versiones (GitLab).
+│   │   │   ├── research/      # Investigador (Confluence/RAG).
+│   │   │   └── reasoner/      # Cerebro (LLM Wrapper).
+│   │   └── tools/             # Herramientas puras (Parsers, Builders).
+│   └── usecases/              # Casos de Uso: "Cables" que conectan Infra y Dominio.
+│
+├── infrastructure/            # El mundo "Sucio" (I/O, DB, API)
+│   ├── configuration/         # Configuración centralizada
+│   ├── entrypoints/           # API (FastAPI) y CLI.
+│   ├── providers/             # Implementaciones de Puertos (Adapters).
+│   │   ├── tracker/jira/      # Implementación real de Jira.
+│   │   ├── vcs/gitlab/        # Implementación real de GitLab.
+│   │   └── llms/              # Implementaciones de OpenAI, DeepSeek, etc.
+│   └── resolution/            # ProviderResolver (Fábrica de Inyección de Dependencias).
 
-1.  **Resolver Wiring**: The `ProviderResolver` examines the configuration and instantiates the correct adapters (e.g., GitLab vs GitHub, OpenAI vs DeepSeek).
-2.  **Context Retrieval**: `KnowledgeGateway` fetches relevant docs/templates.
-3.  **Prompt Strategy**: `PromptBuilderService` constructs a context-aware prompt.
-4.  **LLM Generation**: `LLMGatewayPort` (Composite) executes the prompt, handling fallback logic if primary models fail.
-5.  **Parsing**: `FileParsingService` converts LLM response into virtual files.
-6.  **Action**: `VcsGateway` applies changes (Branch/Commit/MR) to the repository.
-7.  **Notification**: `TrackerGateway` updates the status in the task tracker (Jira).
-
----
-
-## 3. Interfaces (Ports)
-These interfaces isolate the core from external tools.
-
--   **`VcsGateway`**: Contracts for `create_merge_request`.
--   **`TrackerGateway`**: Contracts for `transition_task`, `comment_on_task`.
--   **`KnowledgeGateway`**: Contracts for `retrieve_context`.
--   **`LLMGatewayPort`**: Contracts for `generate_code`.
+```
 
 ---
 
-## 4. Configuration & Resolution
-The system is strictly configuration-driven via Environment Variables.
+## 2. The Scaffolding Flow (Business Logic)
 
-### Provider Resolution
-The `ProviderResolver` acts as the dependency injection root. It reads the `ScaffoldingAgentConfig` (loaded via `settings_loader.py`) and decides which concrete class to instantiate.
+El flujo de negocio está centralizado en el `ScaffoldingAgent` (Dominio) pero orquestado inicialmente por el `CreateScaffoldingUseCase` (Aplicación).
 
-**Example**:
-- If `VCS_PROVIDER=GITLAB` -> Instantiates `GitLabProviderImpl`.
-- If `KNOWLEDGE_PROVIDER=FILE_SYSTEM` -> Instantiates `FileSystemKnowledgeAdapter`.
+### Phase 1: Initiation (Infrastructure -> Use Case)
 
-### Configuration Enums
-Supported values for configuration:
--   **VCS**: `gitlab`
--   **Tracker**: `jira`
--   **LLM**: Priority list via `LLM_MODEL_PRIORITY` JSON (e.g., `openai`, `deepseek`).
+1. **Trigger**: Jira envía un Webhook a `JiraTriggerRouter`.
+2. **Mapping**: `JiraPayloadMapper` convierte el JSON sucio de Jira en un `ScaffoldingOrder` (Dominio).
+3. **Wiring**: `CreateScaffoldingUseCase` usa el `ProviderResolver` para instanciar los agentes con sus implementaciones concretas (ej. `VcsAgent` con `GitLabProvider`).
+
+### Phase 2: Domain Orchestration (`ScaffoldingAgent.execute_flow`)
+
+El `ScaffoldingAgent` recibe a sus "subordinados" (Reporter, VCS, Researcher, Reasoner) y ejecuta el guion:
+
+4. **Report Start**: Invoca a `ReporterAgent` → "🤖 Iniciando tarea...".
+5. **Branch Validation**: Invoca a `VcsAgent` para verificar si la rama existe.
+* *Decision Point*: Si existe, reporta éxito (informativo) y **DETIENE** el flujo para evitar duplicados.
+
+
+6. **Research Context**: Invoca a `ResearchAgent`.
+* Este agente decide si busca en Confluence (RAG) o usa conocimiento base, usando `ResearchGateway`.
+
+
+7. **Prompt Engineering**: Usa su tool `ScaffoldingPromptBuilder` para mezclar la instrucción del usuario + contexto investigado + reglas de seguridad.
+8. **Reasoning (LLM)**: Invoca a `ReasonerAgent`.
+* El `ReasonerAgent` no sabe qué modelo usa; delega al `LlmGateway` (Infra) que maneja prioridades (ej. OpenAI falla -> DeepSeek).
+
+
+9. **Parsing**: Usa su tool `ArtifactParser` para convertir el texto del LLM en objetos `FileContentDTO`.
+10. **Branch Creation**: Invoca a `VcsAgent.create_branch`.
+11. **Commit**: Invoca a `VcsAgent.commit_files`.
+12. **Merge Request**: Invoca a `VcsAgent.create_merge_request`.
+13. **Final Report**: Invoca a `ReporterAgent` para notificar éxito ("✅ MR Created") y transicionar la tarea a `IN REVIEW`.
+
+---
+
+## 3. Extensibility Guide (For Antigravity)
+
+Esta sección define dónde y cómo agregar nueva funcionalidad sin romper la arquitectura.
+
+### Scenario A: Agregar una nueva capacidad al Agente (ej. "Security Scan")
+
+**Dónde:** `application/core/agents/security_scanner/`
+
+1. Definir el **Port** (Interfaz): `SecurityScannerGateway` (ej. `scan_code(files) -> Report`).
+2. Crear el **Agent**: `SecurityScannerAgent`.
+3. Implementar el **Provider** en Infra: `infrastructure/providers/security/sonarqube/`.
+4. Conectar en `ProviderResolver`.
+5. Agregar el paso en `ScaffoldingAgent.execute_flow`.
+
+### Scenario B: Cambiar de GitLab a GitHub
+
+**Dónde:** `infrastructure/providers/vcs/github/`
+
+1. **NO tocar el Dominio**: `VcsAgent` y `VcsGateway` no cambian.
+2. Crear `GitHubProviderImpl` que implemente `VcsGateway`.
+3. Actualizar `ProviderResolver` para que lea `VCS_PROVIDER=GITHUB` e instancie la nueva clase.
+
+### Scenario C: Mejorar el Prompt o el Parsing
+
+**Dónde:** `application/core/agents/scaffolding/tools/`
+
+1. Modificar `ScaffoldingPromptBuilder` para alterar cómo se le habla al LLM.
+2. Modificar `ArtifactParser` si cambia el formato de respuesta esperado (ej. de JSON a XML).
+
+* *Nota*: Estas son funciones puras, fáciles de testear unitariamente.
+
+### Scenario D: Agregar un nuevo LLM (ej. Claude 3.5)
+
+**Dónde:** `infrastructure/providers/llms/anthropic/`
+
+1. Implementar `LlmProvider` para Anthropic.
+2. Agregarlo al `LlmProviderFactory`.
+3. El `CompositeGateway` lo recogerá automáticamente basado en la configuración.
+
+---
+
+## 4. Key Rules for Agents
+
+### 4.1 Domain Agents (`application/core/agents/*`)
+
+* **Responsabilidad**: Solo lógica de negocio y coordinación.
+* **Prohibido**:
+* Importar librerías HTTP (`httpx`, `requests`).
+* Leer variables de entorno (`os.getenv`). Usar `Config` inyectada.
+* Conocer detalles de implementación (ej. "Jira API v3").
+
+
+* **Permitido**:
+* Usar `Tools` internas.
+* Llamar a métodos definidos en `Gateways` (Interfaces).
+
+
+
+### 4.2 Infrastructure Providers (`infrastructure/providers/*`)
+
+* **Responsabilidad**: Hablar con el mundo exterior y traducir al lenguaje del dominio.
+* **Prohibido**:
+* Tomar decisiones de negocio (ej. "Si falla el commit, crea un ticket"). Eso lo hace el Agente.
+
+
+* **Obligatorio**:
+* Implementar la interfaz del Gateway estrictamente.
+* Manejar excepciones de red y lanzar `ProviderError` (capturable por el dominio).
+
+
+
+---
+
+## 5. Configuration & Wiring (`ProviderResolver`)
+
+El sistema se ensambla dinámicamente en tiempo de ejecución.
+
+* **`ScaffoldingAgentConfig`**: Define *qué* queremos hacer (feature flags, timeouts).
+* **`AppConfig` (Settings)**: Define *credenciales* y *endpoints*.
+* **`ProviderResolver`**: Es el único lugar donde el código conoce las implementaciones concretas (`Impl`). Actúa como el "Mainboard" donde se conectan los componentes.
+
+### Ejemplo de Resolución:
+
+```python
+# ProviderResolver decide qué "cerebro" darle al agente
+def resolve_llm_gateway(self) -> LlmGateway:
+    # 1. Carga configs
+    # 2. Instancia CompositeLlmGateway
+    # 3. Inyecta OpenAI, DeepSeek, etc.
+    return CompositeLlmGateway(...)
+
+```

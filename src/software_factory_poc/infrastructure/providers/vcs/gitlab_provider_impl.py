@@ -1,5 +1,5 @@
 import urllib.parse
-from typing import Any
+from typing import Any, Optional
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from software_factory_poc.application.core.agents.vcs.ports.vcs_gateway import VcsGateway
@@ -80,7 +80,7 @@ class GitLabProviderImpl(VcsGateway):
             raise
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
-    def get_branch(self, project_id: int, branch_name: str) -> dict[str, Any] | None:
+    def get_branch(self, project_id: int, branch_name: str) ->Optional[ dict[str, Any]]:
         self._logger.info(f"Getting branch: {branch_name} (Project: {project_id})")
         try:
             return self.branch_service.get_branch(project_id, branch_name)
@@ -142,7 +142,7 @@ class GitLabProviderImpl(VcsGateway):
             raise
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
-    def create_merge_request(self, project_id: int, source_branch: str, target_branch: str, title: str, description: str | None = None) -> MergeRequestDTO:
+    def create_merge_request(self, project_id: int, source_branch: str, target_branch: str, title: str, description:Optional[ str] = None) -> MergeRequestDTO:
         self._logger.info(f"Creating MR: {source_branch} -> {target_branch} (Project: {project_id})")
         try:
             result = self.mr_service.create_merge_request(project_id, source_branch, target_branch, title, description or "")

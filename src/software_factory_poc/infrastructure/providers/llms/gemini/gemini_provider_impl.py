@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 
 from software_factory_poc.application.core.agents.reasoner.llm_request import LlmRequest
 from software_factory_poc.application.core.agents.reasoner.llm_response import LlmResponse
@@ -62,7 +62,7 @@ class GeminiProviderImpl(LlmProvider):
         retryable = self._is_retryable(exc, code)
         return ProviderError(provider=self.name, message=str(exc), retryable=retryable, status_code=code)
 
-    def _is_retryable(self, exc: Exception, code: int | None) -> bool:
+    def _is_retryable(self, exc: Exception, code:Optional[ int]) -> bool:
         if code in (429, 500, 502, 503, 504):
             return True
         name = type(exc).__name__.lower()

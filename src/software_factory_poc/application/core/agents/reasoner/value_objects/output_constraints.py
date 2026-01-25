@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Optional
 
 from dataclasses import dataclass
 
@@ -11,7 +12,7 @@ from software_factory_poc.application.core.agents.reasoner.value_objects.structu
 @dataclass(frozen=True)
 class OutputConstraints:
     format: OutputFormat
-    schema: StructuredOutputSchema | None = None
+    schema:Optional[ StructuredOutputSchema] = None
 
     def __post_init__(self) -> None:
         pass

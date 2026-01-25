@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Optional
 
 import time
 
@@ -12,7 +13,7 @@ class ArchitectureKnowledgeService:
         self.page_id = settings.architecture_doc_page_id
         
         # Simple in-memory cache
-        self._cache: str | None = None
+        self._cache:Optional[ str] = None
         self._cache_timestamp: float = 0.0
         self._cache_ttl_seconds: float = 300.0  # 5 minutes default
 

@@ -8,10 +8,10 @@ class LlmSettings(BaseSettings):
     """
     Settings for LLM Providers.
     """
-    openai_api_key: SecretStr | None = Field(default=None, alias="OPENAI_API_KEY")
-    deepseek_api_key: SecretStr | None = Field(default=None, alias="DEEPSEEK_API_KEY")
-    gemini_api_key: SecretStr | None = Field(default=None, alias="GEMINI_API_KEY")
-    anthropic_api_key: SecretStr | None = Field(default=None, alias="ANTHROPIC_API_KEY")
+    openai_api_key: Optional[SecretStr] = Field(default=None, alias="OPENAI_API_KEY")
+    deepseek_api_key: Optional[SecretStr] = Field(default=None, alias="DEEPSEEK_API_KEY")
+    gemini_api_key: Optional[SecretStr] = Field(default=None, alias="GEMINI_API_KEY")
+    anthropic_api_key: Optional[SecretStr] = Field(default=None, alias="ANTHROPIC_API_KEY")
     
     # Unified field: Upper uses allowed_models, Lower uses llm_allowed_models.
     # We prefer allowed_models but map both for safety or pick one.

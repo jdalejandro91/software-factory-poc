@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 import urllib.parse
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 from software_factory_poc.infrastructure.providers.vcs.clients.gitlab_http_client import GitLabHttpClient
@@ -10,7 +10,7 @@ class GitLabBranchService:
     def __init__(self, client: GitLabHttpClient):
         self.client = client
 
-    def get_branch(self, project_id: int, branch_name: str) -> dict[str, Any] | None:
+    def get_branch(self, project_id: int, branch_name: str) ->Optional[ dict[str, Any]]:
         """
         Checks if a branch exists. Returns branch info or None.
         """

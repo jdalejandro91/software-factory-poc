@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Optional
 
 from dataclasses import dataclass
 from uuid import uuid4
@@ -7,7 +8,7 @@ from uuid import uuid4
 @dataclass(frozen=True)
 class TraceContext:
     correlation_id: str
-    request_id: str | None = None
+    request_id:Optional[ str] = None
 
     @staticmethod
     def create() -> TraceContext:

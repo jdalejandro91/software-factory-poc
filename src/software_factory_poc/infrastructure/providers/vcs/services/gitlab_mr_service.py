@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 import httpx
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 from software_factory_poc.infrastructure.providers.vcs.clients.gitlab_http_client import GitLabHttpClient
@@ -10,7 +10,7 @@ class GitLabMrService:
     def __init__(self, client: GitLabHttpClient):
         self.client = client
 
-    def create_merge_request(self, project_id: int, source_branch: str, target_branch: str, title: str, description: str | None = None) -> dict[str, Any]:
+    def create_merge_request(self, project_id: int, source_branch: str, target_branch: str, title: str, description:Optional[ str] = None) -> dict[str, Any]:
         path = f"api/v4/projects/{project_id}/merge_requests"
         payload = {
             "source_branch": source_branch,
