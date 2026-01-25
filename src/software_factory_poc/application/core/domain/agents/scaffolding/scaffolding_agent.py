@@ -4,16 +4,16 @@ from typing import List
 
 from .scaffolding_agent_config import ScaffoldingAgentConfig
 from .scaffolding_order import ScaffoldingOrder
-from software_factory_poc.application.core.domain.configuration.task_status import TaskStatus
+from software_factory_poc.application.core.domain.agents.common.config.task_status import TaskStatus
 
 from software_factory_poc.application.core.domain.agents.reporter.reporter_agent import ReporterAgent
 from software_factory_poc.application.core.domain.agents.vcs.vcs_agent import VcsAgent
 from software_factory_poc.application.core.domain.agents.research.research_agent import ResearchAgent
-from software_factory_poc.application.core.domain.agents.knowledge.knowledge_agent import KnowledgeAgent
 from software_factory_poc.application.core.domain.agents.reasoner.reasoner_agent import ReasonerAgent
 from software_factory_poc.application.core.domain.agents.scaffolding.tools.scaffolding_prompt_builder import ScaffoldingPromptBuilder
 from software_factory_poc.application.core.domain.agents.scaffolding.tools.artifact_parser import ArtifactParser
-from software_factory_poc.application.core.ports.gateways.dtos import FileContentDTO, MergeRequestDTO
+from software_factory_poc.application.core.domain.agents.common.dtos.file_content_dto import FileContentDTO
+from software_factory_poc.application.core.domain.agents.vcs.dtos.vcs_dtos import MergeRequestDTO
 
 logger = logging.getLogger(__name__)
 
@@ -41,14 +41,13 @@ class ScaffoldingAgent(BaseAgent):
         vcs: VcsAgent,
         researcher: ResearchAgent,
         reasoner: ReasonerAgent,
-        knowledge: KnowledgeAgent
     ) -> None:
         """Executes the scaffolding orchestration flow."""
         try:
             if self._start_task_execution(request, reporter, vcs):
                 return
 
-            artifacts = self._generate_scaffolding_artifacts(request, researcher, reasoner, knowledge)
+            artifacts = self._generate_scaffolding_artifacts(request, researcher, reasoner)
             mr_link = self._apply_changes_to_vcs(request, vcs, artifacts)
             
             self._finalize_task_success(request, reporter, mr_link)
@@ -75,13 +74,12 @@ class ScaffoldingAgent(BaseAgent):
         request: ScaffoldingOrder, 
         researcher: ResearchAgent, 
         reasoner: ReasonerAgent, 
-        knowledge: KnowledgeAgent
     ) -> List[FileContentDTO]:
-        query = f"{request.technology_stack} {request.summary}"
-        research_ctx = researcher.investigate(query, self.config.extra_params)
-        knowledge_ctx = knowledge.retrieve_similar_solutions(request.raw_instruction or "")
+        query = f"Busca los lineamientos de arquitectura en la documentación oficial para la tecnología {request.technology_stack}"
+        research_ctx = researcher.investigate(query)
+        # Knowledge retrieval merged into research or just removed if redundant
         
-        full_context = f"Research:\n{research_ctx}\n\nKnowledge:\n{knowledge_ctx}"
+        full_context = f"Research:\n{research_ctx}"
         prompt = self.prompt_builder_tool.build_prompt(request, full_context)
         
         model_id = self.config.model_name or "gpt-4-turbo"

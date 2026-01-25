@@ -1,6 +1,6 @@
 from typing import cast
 
-from software_factory_poc.application.core.domain.configuration.scaffolding_agent_config import (
+from software_factory_poc.application.core.domain.agents.scaffolding.config.scaffolding_agent_config import (
     ScaffoldingAgentConfig,
 )
 from software_factory_poc.application.core.domain.agents.scaffolding.scaffolding_order import (
@@ -10,9 +10,8 @@ from software_factory_poc.application.core.domain.agents.scaffolding.scaffolding
 # Domain Agents (Concrete Orchestrator and Capabilities)
 from software_factory_poc.application.core.domain.agents.scaffolding.scaffolding_agent import ScaffoldingAgent
 from software_factory_poc.application.core.domain.agents.reporter.reporter_agent import ReporterAgent
-from software_factory_poc.application.core.domain.agents.vcs.vcs_agent import VcsAgent
+from software_factory_poc.application.core.domain.agents.vcs.ports.vcs_gateway import VcsGateway
 from software_factory_poc.application.core.domain.agents.research.research_agent import ResearchAgent
-from software_factory_poc.application.core.domain.agents.knowledge.knowledge_agent import KnowledgeAgent
 from software_factory_poc.application.core.domain.agents.reasoner.reasoner_agent import ReasonerAgent
 
 # Domain Entity Config (Target for Orchestrator)
@@ -21,10 +20,10 @@ from software_factory_poc.application.core.domain.agents.scaffolding.scaffolding
 )
 
 # Gateways
-from software_factory_poc.application.core.ports.gateways.task_tracker_gateway_port import (
-    TaskTrackerGatewayPort,
+from software_factory_poc.application.core.domain.agents.reporter.ports.task_tracker_gateway import (
+    TaskTrackerGateway,
 )
-from software_factory_poc.application.core.domain.configuration.task_status import TaskStatus
+from software_factory_poc.application.core.domain.agents.common.config.task_status import TaskStatus
 
 from software_factory_poc.infrastructure.observability.logger_factory_service import (
     LoggerFactoryService,
@@ -61,9 +60,10 @@ class CreateScaffoldingUseCase:
         
         try:
             # 1. Resolve Infrastructure Gateways
-            tracker_gateway = cast(TaskTrackerGatewayPort, self.resolver.resolve_tracker())
+            tracker_gateway = cast(TaskTrackerGateway, self.resolver.resolve_tracker())
             vcs_gateway = self.resolver.resolve_vcs()
-            knowledge_gateway = self.resolver.resolve_knowledge()
+            # knowledge_gateway removed, now part of research (or directly resolved as research_gateway)
+            research_gateway = self.resolver.resolve_research()
             llm_gateway = self.resolver.resolve_llm_gateway()
             
             # 2. Instantiate Concrete Domain Agents
@@ -85,18 +85,13 @@ class CreateScaffoldingUseCase:
                 name="Researcher", 
                 role="Researcher", 
                 goal="Gather context", 
-                gateway=knowledge_gateway
+                gateway=research_gateway
             )
             # Wait, I need to check the file first.
             # Assuming check_file reveals it expects llm_gateway or gateway.
             # Let's see the view_file output first.
             
-            knowledge = KnowledgeAgent(
-                name="Knowledge", 
-                role="Librarian", 
-                goal="Retrieve past solutions", 
-                gateway=knowledge_gateway
-            )
+            # Knowledge Agent is removed/merged into Research
             
             reasoner = ReasonerAgent(
                 name="ArchitectAI",
@@ -121,8 +116,7 @@ class CreateScaffoldingUseCase:
                 reporter=reporter,
                 vcs=vcs,
                 researcher=researcher,
-                reasoner=reasoner,
-                knowledge=knowledge
+                reasoner=reasoner
             )
 
         except Exception as e:
@@ -131,7 +125,7 @@ class CreateScaffoldingUseCase:
             # Best-effort failure reporting
             try:
                 # We resolve tracker again or use local variable if available to ensure freshness or availability
-                tracker_gateway = cast(TaskTrackerGatewayPort, self.resolver.resolve_tracker())
+                tracker_gateway = cast(TaskTrackerGateway, self.resolver.resolve_tracker())
                 emergency_reporter = ReporterAgent(
                     name="EmergencyReporter",
                     role="Communicator",

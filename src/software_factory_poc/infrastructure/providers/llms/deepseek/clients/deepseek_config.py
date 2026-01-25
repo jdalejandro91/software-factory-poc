@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from software_factory_poc.application.core.domain.exceptions.configuration_error import (
+from software_factory_poc.application.core.domain.agents.common.exceptions.configuration_error import (
     ConfigurationError,
 )
 

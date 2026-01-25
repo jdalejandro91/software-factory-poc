@@ -1,11 +1,12 @@
 from pathlib import Path
 
-from software_factory_poc.application.core.domain.exceptions.provider_error import ProviderError
-from software_factory_poc.application.core.domain.configuration.knowledge_provider_type import KnowledgeProviderType
-from software_factory_poc.application.core.ports.gateways.knowledge_gateway import KnowledgeGateway
+from software_factory_poc.application.core.domain.agents.common.exceptions.provider_error import ProviderError
+from software_factory_poc.application.core.domain.agents.research.config.research_provider_type import ResearchProviderType
+from software_factory_poc.application.core.domain.agents.research.ports.research_gateway import ResearchGateway
 
 
-class FileSystemKnowledgeAdapter(KnowledgeGateway):
+
+class FileSystemKnowledgeAdapter(ResearchGateway):
     """
     Adapter to retrieve knowledge (docs, templates) from the local filesystem.
     Useful for testing or local development mode.
@@ -21,7 +22,7 @@ class FileSystemKnowledgeAdapter(KnowledgeGateway):
         # Security check: prevent directory traversal
         if ".." in query or query.startswith("/"):
              raise ProviderError(
-                provider=KnowledgeProviderType.FILE_SYSTEM, # Or defining a generic FILE provider
+                provider=ResearchProviderType.FILE_SYSTEM, # Or defining a generic FILE provider
                 message=f"Invalid file query path: {query}. Traversal not allowed.",
                 retryable=False
             )
@@ -30,14 +31,14 @@ class FileSystemKnowledgeAdapter(KnowledgeGateway):
         
         if not target_file.exists():
              raise ProviderError(
-                provider=KnowledgeProviderType.FILE_SYSTEM,
+                provider=ResearchProviderType.FILE_SYSTEM,
                 message=f"File not found: {target_file}",
                 retryable=False
             )
             
         if not target_file.is_file():
              raise ProviderError(
-                provider=KnowledgeProviderType.FILE_SYSTEM,
+                provider=ResearchProviderType.FILE_SYSTEM,
                 message=f"Target is not a file: {target_file}",
                 retryable=False
             )
@@ -46,7 +47,7 @@ class FileSystemKnowledgeAdapter(KnowledgeGateway):
             return target_file.read_text(encoding="utf-8")
         except Exception as e:
             raise ProviderError(
-                provider=KnowledgeProviderType.FILE_SYSTEM,
+                provider=ResearchProviderType.FILE_SYSTEM,
                 message=f"Error reading file {target_file}: {e}",
                 retryable=True 
             )

@@ -6,7 +6,7 @@ from typing import Any
 
 from software_factory_poc.application.core.domain.agents.reasoner.llm_response import LlmResponse
 from software_factory_poc.application.core.domain.value_objects.model_id import ModelId
-from software_factory_poc.application.core.domain.configuration.llm_provider_type import LlmProviderType
+from software_factory_poc.application.core.domain.agents.common.config.llm_provider_type import LlmProviderType
 from software_factory_poc.application.core.domain.agents.reasoner.token_metric import TokenMetric
 
 

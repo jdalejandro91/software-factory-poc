@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 
-from software_factory_poc.application.core.ports.tools.confluence_provider import ConfluenceProvider
+from software_factory_poc.application.core.domain.agents.research.ports.confluence_provider import ConfluenceProvider
 from software_factory_poc.infrastructure.configuration.tool_settings import ToolSettings
 
 

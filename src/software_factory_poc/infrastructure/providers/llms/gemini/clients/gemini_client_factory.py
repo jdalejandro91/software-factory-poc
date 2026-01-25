@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from software_factory_poc.application.core.shared.dependency_guard import DependencyGuard
+from software_factory_poc.application.core.domain.agents.common.tools.dependency_guard import DependencyGuard
 from software_factory_poc.infrastructure.providers.llms.gemini.clients.gemini_config import (
     GeminiConfig,
 )

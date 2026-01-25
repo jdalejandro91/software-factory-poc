@@ -6,9 +6,9 @@ from typing import Any
 
 from software_factory_poc.application.core.domain.agents.reasoner.llm_request import LlmRequest
 from software_factory_poc.application.core.domain.agents.reasoner.llm_response import LlmResponse
-from software_factory_poc.application.core.domain.exceptions.provider_error import ProviderError
-from software_factory_poc.application.core.domain.configuration.llm_provider_type import LlmProviderType
-from software_factory_poc.application.core.ports.llms.llm_provider import LlmProvider
+from software_factory_poc.application.core.domain.agents.common.exceptions.provider_error import ProviderError
+from software_factory_poc.application.core.domain.agents.common.config.llm_provider_type import LlmProviderType
+from software_factory_poc.application.core.domain.agents.reasoner.ports.llm_provider import LlmProvider
 from software_factory_poc.infrastructure.common.retry.retry_policy import RetryPolicy
 from software_factory_poc.infrastructure.observability.logging.correlation_id_context import (
     CorrelationIdContext,

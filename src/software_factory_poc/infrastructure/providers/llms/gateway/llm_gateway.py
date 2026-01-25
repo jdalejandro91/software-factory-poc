@@ -5,11 +5,12 @@ from dataclasses import dataclass
 
 from software_factory_poc.application.core.domain.agents.reasoner.llm_request import LlmRequest
 from software_factory_poc.application.core.domain.agents.reasoner.llm_response import LlmResponse
-from software_factory_poc.application.core.domain.exceptions.configuration_error import (
+from software_factory_poc.application.core.domain.agents.common.exceptions.configuration_error import (
     ConfigurationError,
 )
-from software_factory_poc.application.core.domain.configuration.llm_provider_type import LlmProviderType
-from software_factory_poc.application.core.ports.llms.llm_provider import LlmProvider
+from software_factory_poc.application.core.domain.agents.common.config.llm_provider_type import LlmProviderType
+from software_factory_poc.application.core.domain.agents.reasoner.ports.llm_gateway import LlmGateway
+from software_factory_poc.application.core.domain.agents.reasoner.ports.llm_provider import LlmProvider
 from software_factory_poc.infrastructure.providers.llms.gateway.model_allowlist import (
     ModelAllowlist,
 )

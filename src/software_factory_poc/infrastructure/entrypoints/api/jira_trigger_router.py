@@ -12,6 +12,7 @@ from software_factory_poc.application.usecases.scaffolding.create_scaffolding_us
     CreateScaffoldingUseCase,
 )
 from software_factory_poc.infrastructure.configuration.main_settings import Settings
+from software_factory_poc.configuration.app_config import AppConfig
 from software_factory_poc.infrastructure.entrypoints.api.dtos.jira_webhook_dto import JiraWebhookDTO
 # from software_factory_poc.infrastructure.entrypoints.api.mappers.jira_mapper import JiraMapper # Legacy mapper removed/deprecated
 from software_factory_poc.infrastructure.entrypoints.api.mappers.jira_payload_mapper import JiraPayloadMapper
@@ -31,12 +32,13 @@ def get_usecase(settings: Settings = Depends(get_settings)) -> CreateScaffolding
     scaffolding_config = ScaffoldingConfigLoader.load_config()
     
     # 2. Infra Resolver (The "Switch")
-    # settings is already injected by global dependency `get_settings` if we used it, 
-    # but here we instantiate a specific one or use the one passed via args (?)
-    # The `get_usecase` depends on `get_settings`, so we have `settings` in args.
+    # Instantiate AppConfig (Centralized Configuration)
+    # Ideally should be done once via Depends(get_app_config) but for now local instantiation works 
+    # as it reads env vars efficiently (Pydantic caches/lazy loads if configured, or just fast enough).
+    app_config = AppConfig()
     
     # Use the injected settings which contains environment variables loaded once
-    resolver = ProviderResolver(scaffolding_config, settings)
+    resolver = ProviderResolver(scaffolding_config, app_config=app_config)
     
     # 3. Use Case
     return CreateScaffoldingUseCase(

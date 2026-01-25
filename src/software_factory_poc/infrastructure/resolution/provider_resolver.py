@@ -1,25 +1,27 @@
 from pathlib import Path
 
-from software_factory_poc.application.core.domain.configuration.knowledge_provider_type import (
-    KnowledgeProviderType,
+from software_factory_poc.application.core.domain.agents.research.config.research_provider_type import (
+    ResearchProviderType,
 )
-from software_factory_poc.application.core.domain.configuration.llm_provider_type import (
+from software_factory_poc.application.core.domain.agents.common.config.llm_provider_type import (
     LlmProviderType,
 )
-from software_factory_poc.application.core.domain.configuration.scaffolding_agent_config import (
+from software_factory_poc.application.core.domain.agents.scaffolding.config.scaffolding_agent_config import (
     ScaffoldingAgentConfig,
 )
-from software_factory_poc.application.core.domain.configuration.task_tracker_type import (
+from software_factory_poc.application.core.domain.agents.reporter.config.task_tracker_type import (
     TaskTrackerType,
 )
-from software_factory_poc.application.core.domain.configuration.vcs_provider_type import (
+from software_factory_poc.application.core.domain.agents.vcs.config.vcs_provider_type import (
     VcsProviderType,
 )
-from software_factory_poc.application.core.ports.gateways.llm_gateway import LlmGateway
-from software_factory_poc.application.core.ports.gateways.knowledge_gateway import KnowledgeGateway
-from software_factory_poc.application.core.ports.gateways.tracker_gateway import TrackerGateway
-from software_factory_poc.application.core.ports.gateways.vcs_gateway import VcsGateway
-from software_factory_poc.infrastructure.configuration.main_settings import Settings
+from software_factory_poc.application.core.domain.agents.reasoner.ports.llm_gateway import LlmGateway
+from software_factory_poc.application.core.domain.agents.research.ports.research_gateway import ResearchGateway
+from software_factory_poc.application.core.domain.agents.research.ports.research_gateway import ResearchGateway
+from software_factory_poc.application.core.domain.agents.reporter.ports.task_tracker_gateway import TaskTrackerGateway
+from software_factory_poc.application.core.domain.agents.vcs.ports.vcs_gateway import VcsGateway
+from software_factory_poc.infrastructure.configuration.main_settings import Settings # Legacy or remove
+from software_factory_poc.configuration.app_config import AppConfig
 from software_factory_poc.infrastructure.common.retry.retry_policy import RetryPolicy
 from software_factory_poc.infrastructure.observability.logging.correlation_id_context import (
     CorrelationIdContext,
@@ -27,6 +29,7 @@ from software_factory_poc.infrastructure.observability.logging.correlation_id_co
 from software_factory_poc.infrastructure.providers.llms.facade.llm_provider_factory import (
     LlmProviderFactory,
 )
+from software_factory_poc.infrastructure.providers.research.research_provider_factory import ResearchProviderFactory
 from software_factory_poc.infrastructure.providers.knowledge.clients.confluence_http_client import (
     ConfluenceHttpClient,
 )
@@ -70,10 +73,11 @@ class ProviderResolver:
     Factory responsible for resolving and instantiating the correct infrastructure adapters
     based on the domain configuration.
     """
-    def __init__(self, config: ScaffoldingAgentConfig, settings: Settings | None = None):
+    def __init__(self, config: ScaffoldingAgentConfig, app_config: AppConfig | None = None):
         self.config = config
-        # Global settings (secrets, api keys, etc)
-        self.settings = settings or Settings()
+        self.app_config = app_config or AppConfig()
+        # Legacy settings for components not yet using AppConfig
+        self.settings = Settings()
 
     def resolve_vcs(self) -> VcsGateway:
         """
@@ -101,7 +105,7 @@ class ProviderResolver:
         else:
             raise ValueError(f"Unsupported VCS Provider: {self.config.vcs_provider}")
 
-    def resolve_tracker(self) -> TrackerGateway:
+    def resolve_tracker(self) -> TaskTrackerGateway:
         """
         Resolves the configured Tracker provider.
         """
@@ -115,23 +119,17 @@ class ProviderResolver:
         else:
             raise ValueError(f"Unsupported Tracker Provider: {self.config.tracker_provider}")
 
-    def resolve_knowledge(self) -> KnowledgeGateway:
+    def resolve_research(self) -> ResearchGateway:
         """
-        Resolves the configured Knowledge provider.
+        Resolves the configured Research provider using ResearchProviderFactory.
         """
-        if self.config.knowledge_provider == KnowledgeProviderType.CONFLUENCE:
-             http_client = ConfluenceHttpClient(self.settings)
-             return ConfluenceKnowledgeAdapter(http_client)
-             
-        elif self.config.knowledge_provider == KnowledgeProviderType.FILE_SYSTEM:
-             # Use a default assets path relative to project root or config
-             # self.config.work_dir might be for output, let's look for assets/templates
-             # Assuming running from root:
-             assets_path = Path("assets") 
-             return FileSystemKnowledgeAdapter(assets_path)
-             
-        else:
-             raise ValueError(f"Unsupported Knowledge Provider: {self.config.knowledge_provider}")
+        return ResearchProviderFactory.build_research_gateway(self.app_config, self.config.research_provider)
+
+    def resolve_knowledge(self) -> ResearchGateway:
+        """
+        Deprecated: Use resolve_research. Kept for backward compatibility.
+        """
+        return self.resolve_research()
 
     def resolve_llm_gateway(self) -> LlmGateway:
         """

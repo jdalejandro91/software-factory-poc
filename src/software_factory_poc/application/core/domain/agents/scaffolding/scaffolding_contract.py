@@ -5,7 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator, ValidationError
 
-from software_factory_poc.application.core.domain.exceptions.contract_parse_error import ContractParseError
+from software_factory_poc.application.core.domain.agents.scaffolding.exceptions.contract_parse_error import ContractParseError
 
 
 class GitLabTargetModel(BaseModel):

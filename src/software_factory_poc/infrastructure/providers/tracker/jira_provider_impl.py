@@ -1,17 +1,17 @@
 from typing import Any
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from software_factory_poc.application.core.ports.gateways.task_tracker_gateway_port import TaskTrackerGatewayPort
-from software_factory_poc.application.core.ports.gateways.dtos import TaskDTO
-from software_factory_poc.application.core.domain.configuration.task_status import TaskStatus
+from software_factory_poc.application.core.domain.agents.reporter.ports.task_tracker_gateway import TaskTrackerGateway
+from software_factory_poc.application.core.domain.agents.reporter.dtos.tracker_dtos import TaskDTO
+from software_factory_poc.application.core.domain.agents.common.config.task_status import TaskStatus
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 from software_factory_poc.infrastructure.providers.tracker.clients.jira_http_client import (
     JiraHttpClient,
 )
-from software_factory_poc.application.core.domain.exceptions.provider_error import (
+from software_factory_poc.application.core.domain.agents.common.exceptions.provider_error import (
     ProviderError,
 )
-from software_factory_poc.application.core.domain.configuration.task_tracker_type import (
+from software_factory_poc.application.core.domain.agents.reporter.config.task_tracker_type import (
     TaskTrackerType,
 )
 from software_factory_poc.infrastructure.providers.tracker.dtos.jira_status_enum import JiraStatus
@@ -30,7 +30,7 @@ STATUS_MAPPING = {
 }
 
 
-class JiraProviderImpl(TaskTrackerGatewayPort):
+class JiraProviderImpl(TaskTrackerGateway):
     def __init__(self, http_client: JiraHttpClient):
         self.client = http_client
         self._logger = logger
