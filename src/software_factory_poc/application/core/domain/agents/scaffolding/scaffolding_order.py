@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class ScaffoldingRequest:
+class ScaffoldingOrder:
     issue_key: str
     raw_instruction: str
     technology_stack: str = "python" # Default or Optional

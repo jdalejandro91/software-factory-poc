@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from software_factory_poc.application.core.domain.value_objects.model_id import ModelId
-from software_factory_poc.application.core.domain.entities.llm.llm_response import LlmResponse
+from software_factory_poc.application.core.domain.agents.reasoner.llm_response import LlmResponse
 
 
 class LLMError(Exception):

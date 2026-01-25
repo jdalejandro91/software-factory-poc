@@ -5,14 +5,14 @@ from dataclasses import dataclass
 from typing import Any
 
 from software_factory_poc.application.core.domain.value_objects.model_id import ModelId
-from software_factory_poc.application.core.domain.entities.llm.token_usage import TokenUsage
+from software_factory_poc.application.core.domain.agents.reasoner.token_metric import TokenMetric
 
 
 @dataclass(frozen=True, slots=True)
 class LlmResponse:
     model: ModelId
     content: str
-    usage: TokenUsage | None = None
+    usage: TokenMetric | None = None
     provider_payload: Mapping[str, Any] | None = None
     reasoning_content: str | None = None
 

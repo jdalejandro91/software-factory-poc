@@ -9,7 +9,7 @@ class ArtifactRunStatusEnum(StrEnum):
     DUPLICATE = "DUPLICATE"
 
 
-class ArtifactResultModel(BaseModel):
+class ScaffoldingReport(BaseModel):
     run_id: str
     status: ArtifactRunStatusEnum
     issue_key: str

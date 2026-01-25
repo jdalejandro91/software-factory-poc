@@ -13,7 +13,7 @@ from software_factory_poc.application.core.domain.exceptions.all_models_exhauste
 from software_factory_poc.application.core.domain.exceptions.retryable_error import RetryableError
 from software_factory_poc.application.core.ports.gateways.llm_gateway import LLMError, LlmGateway
 from software_factory_poc.application.core.ports.llms.llm_provider import LlmProvider
-from software_factory_poc.application.core.domain.entities.llm.llm_request import LlmRequest
+from software_factory_poc.application.core.domain.agents.reasoner.llm_request import LlmRequest
 from software_factory_poc.application.core.domain.value_objects.message import Message, MessageRole
 from software_factory_poc.application.core.domain.value_objects.generation_config import GenerationConfig
 from software_factory_poc.application.core.domain.value_objects.model_id import ModelId

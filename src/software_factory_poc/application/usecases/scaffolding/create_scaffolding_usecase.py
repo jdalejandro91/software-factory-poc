@@ -3,20 +3,20 @@ from typing import cast
 from software_factory_poc.application.core.domain.configuration.scaffolding_agent_config import (
     ScaffoldingAgentConfig,
 )
-from software_factory_poc.application.core.domain.entities.scaffolding.scaffolding_request import (
-    ScaffoldingRequest,
+from software_factory_poc.application.core.domain.agents.scaffolding.scaffolding_order import (
+    ScaffoldingOrder,
 )
 
 # Domain Agents (Concrete Orchestrator and Capabilities)
-from software_factory_poc.application.core.domain.agents.orchestrators.scaffolding_agent import ScaffoldingAgent
-from software_factory_poc.application.core.domain.agents.capabilities.reporter_agent import ReporterAgent
+from software_factory_poc.application.core.domain.agents.scaffolding.scaffolding_agent import ScaffoldingAgent
+from software_factory_poc.application.core.domain.agents.reporter.reporter_agent import ReporterAgent
 from software_factory_poc.application.core.domain.agents.capabilities.vcs_agent import VcsAgent
 from software_factory_poc.application.core.domain.agents.capabilities.research_agent import ResearchAgent
 from software_factory_poc.application.core.domain.agents.capabilities.knowledge_agent import KnowledgeAgent
-from software_factory_poc.application.core.domain.agents.capabilities.reasoning_agent import ReasoningAgent
+from software_factory_poc.application.core.domain.agents.reasoner.reasoner_agent import ReasonerAgent
 
 # Domain Entity Config (Target for Orchestrator)
-from software_factory_poc.application.core.domain.entities.scaffolding.scaffolding_agent_config import (
+from software_factory_poc.application.core.domain.agents.scaffolding.scaffolding_agent_config import (
     ScaffoldingAgentConfig as ScaffoldingAgentEntityConfig,
 )
 
@@ -55,7 +55,7 @@ class CreateScaffoldingUseCase:
             }
         )
 
-    def execute(self, request: ScaffoldingRequest) -> None:
+    def execute(self, request: ScaffoldingOrder) -> None:
         logger.info(f"Starting scaffolding execution for issue: {request.issue_key}")
         
         try:
@@ -96,7 +96,7 @@ class CreateScaffoldingUseCase:
             
             # Pass model configuration to the Reasoning Agent
             model_to_use = self.entity_config.model_name or "gpt-4-turbo"
-            reasoner = ReasoningAgent(
+            reasoner = ReasonerAgent(
                 name="ArchitectAI",
                 role="Engineer",
                 goal="Generate scaffolding code",

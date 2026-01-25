@@ -5,8 +5,8 @@ from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService 
 
-from software_factory_poc.application.core.domain.entities.scaffolding.scaffolding_request import (
-    ScaffoldingRequest,
+from software_factory_poc.application.core.domain.agents.scaffolding.scaffolding_order import (
+    ScaffoldingOrder,
 )
 from software_factory_poc.application.usecases.scaffolding.create_scaffolding_usecase import (
     CreateScaffoldingUseCase,

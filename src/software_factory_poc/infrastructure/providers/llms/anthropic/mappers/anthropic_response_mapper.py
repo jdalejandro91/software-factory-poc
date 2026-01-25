@@ -4,10 +4,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from software_factory_poc.application.core.domain.entities.llm.llm_response import LlmResponse
+from software_factory_poc.application.core.domain.agents.reasoner.llm_response import LlmResponse
 from software_factory_poc.application.core.domain.value_objects.model_id import ModelId
 from software_factory_poc.application.core.domain.configuration.llm_provider_type import LlmProviderType
-from software_factory_poc.application.core.domain.entities.llm.token_usage import TokenUsage
+from software_factory_poc.application.core.domain.agents.reasoner.token_metric import TokenMetric
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,11 +25,11 @@ class AnthropicResponseMapper:
             raise ValueError("Anthropic response did not contain text output")
         return text
 
-    def _usage(self, response: Any) -> TokenUsage | None:
+    def _usage(self, response: Any) -> TokenMetric | None:
         u = getattr(response, "usage", None)
         if u is None:
             return None
-        return TokenUsage(input_tokens=getattr(u, "input_tokens", None), output_tokens=getattr(u, "output_tokens", None))
+        return TokenMetric(input_tokens=getattr(u, "input_tokens", None), output_tokens=getattr(u, "output_tokens", None))
 
     def _payload(self, response: Any) -> Mapping[str, Any]:
         return {"id": getattr(response, "id", None), "model": getattr(response, "model", None), "stop_reason": getattr(response, "stop_reason", None)}
