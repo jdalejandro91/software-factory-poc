@@ -33,13 +33,13 @@ class VcsAgent(BaseAgent):
         separator = "/-/tree/" if "gitlab" in base_repo else "/tree/"
         return f"{base_repo}{separator}{branch_name}"
 
-    def create_branch(self, project_id: int, branch_name: str) -> BranchDTO:
+    def create_branch(self, project_id: int, branch_name: str, ref: str = "main") -> BranchDTO:
         """Creates a new branch from main."""
-        return self.gateway.create_branch(project_id, branch_name)
+        return self.gateway.create_branch(project_id, branch_name, ref)
 
-    def commit_files(self, project_id: int, branch_name: str, files_map: dict[str, str], message: str) -> CommitResultDTO:
+    def commit_files(self, project_id: int, branch_name: str, files_map: dict[str, str], message: str, force_create: bool = False) -> CommitResultDTO:
         """Commits files to the specified branch."""
-        return self.gateway.commit_files(project_id, branch_name, files_map, message)
+        return self.gateway.commit_files(project_id, branch_name, files_map, message, force_create)
 
     def create_merge_request(self, project_id: int, source_branch: str, title: str, description: str, target_branch: str = "main") -> MergeRequestDTO:
         """Creates a merge request and returns the DTO."""

@@ -97,6 +97,7 @@ Instruction: Create a Python shopping cart with add_item method.
             "This context needs to be long enough to pass the length check in ResearchAgent "
             "and ensures it is included in the Prompt construction logic properly."
         )
+        mock_research_instance.get_page_content.return_value = mock_research_instance.retrieve_context.return_value
         
         # 3. Execution
         headers = {"X-API-Key": "test-secret"}
