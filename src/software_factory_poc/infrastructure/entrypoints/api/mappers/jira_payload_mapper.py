@@ -16,29 +16,36 @@ class JiraPayloadMapper:
 
     @classmethod
     def map_to_request(cls, payload: Union[dict, JiraWebhookDTO]) -> ScaffoldingOrder:
-        # Normalize input
         if isinstance(payload, JiraWebhookDTO):
-            issue_key = payload.issue.key
-            summary = payload.issue.fields.summary
-            description = payload.issue.fields.description or ""
-            reporter = payload.user.display_name
-        else:
-            # Fallback for dict
-            issue = payload.get("issue", {})
-            fields = issue.get("fields", {})
-            issue_key = issue.get("key", "UNKNOWN")
-            summary = fields.get("summary", "No Summary")
-            description = fields.get("description", "")
-            reporter = payload.get("user", {}).get("displayName", "Unknown")
+            return cls._extract_from_dto(payload)
+        return cls._extract_from_dict(payload)
 
-        # Observability: Log description details
+    @classmethod
+    def _extract_from_dto(cls, payload: JiraWebhookDTO) -> ScaffoldingOrder:
+        issue_key = payload.issue.key
+        description = payload.issue.fields.description or ""
+        
         logger.info(f"Processing Task {issue_key}. Raw Description: {repr(description)}")
-
-        # Map to Domain Request
+        
         return ScaffoldingOrder(
             issue_key=issue_key,
-            raw_instruction=description, # We keep raw description as context
-            summary=summary,
-            reporter=reporter,
-            # The domain will parse the contract from raw_instruction
+            raw_instruction=description,
+            summary=payload.issue.fields.summary,
+            reporter=payload.user.display_name
+        )
+
+    @classmethod
+    def _extract_from_dict(cls, payload: dict) -> ScaffoldingOrder:
+        issue = payload.get("issue", {})
+        fields = issue.get("fields", {})
+        issue_key = issue.get("key", "UNKNOWN")
+        description = fields.get("description", "")
+        
+        logger.info(f"Processing Task {issue_key}. Raw Description: {repr(description)}")
+
+        return ScaffoldingOrder(
+            issue_key=issue_key,
+            raw_instruction=description,
+            summary=fields.get("summary", "No Summary"),
+            reporter=payload.get("user", {}).get("displayName", "Unknown")
         )

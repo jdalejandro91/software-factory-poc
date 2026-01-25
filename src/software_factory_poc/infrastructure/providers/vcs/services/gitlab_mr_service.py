@@ -46,8 +46,6 @@ class GitLabMrService:
         if mrs:
             return mrs[0]
         
-        return {
-            "web_url": "https://gitlab.com/mr-exists-but-cannot-fetch",
-            "id": 0,
-            "iid": 0
-        }
+        # If we got 409 but can't find it, raise error
+        logger.error(f"GitLab reporting conflict but could not find open MR for {source_branch} -> {target_branch}")
+        raise ValueError(f"MR conflict detected but could not be resolved.")

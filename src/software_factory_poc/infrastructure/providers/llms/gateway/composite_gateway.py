@@ -48,78 +48,32 @@ class CompositeLlmGateway(LlmGateway):
         registered_providers = [p.value for p in clients.keys()]
         logger.info(f"--- [DEBUG] CompositeGateway initialized with providers: {registered_providers}")
 
-    def generate_code(self, prompt: str, model: str) -> str:
-        """
-        Generates code trying providers in order defined by priority_list.
-        Wraps async provider calls in a synchronous interface.
-        """
+    def generate_code(self, prompt: str, context: str, model_hints: list[ModelId]) -> Any:
+        # Note: Return type is LlmResponse, imported locally or Any to avoid circular deps if needed, 
+        # but LlmGateway says -> LlmResponse.
         
         last_exception = None
         
-        for item in self.priority_list:
-            provider_enum = None
-            model_name = None
-
-            # Case 1: ModelId object (Expected)
-            if hasattr(item, "provider") and hasattr(item, "name"):
-                provider_enum = item.provider
-                model_name = item.name
-            # Case 2: Dictionary (Pydantic artifacts)
-            elif isinstance(item, dict):
-                provider_val = item.get("provider")
-                model_name = item.get("name")
-                
-                if isinstance(provider_val, str):
-                    try:
-                        provider_enum = LlmProviderType(provider_val.lower())
-                    except ValueError:
-                        logger.warning(f"Invalid provider string in dict: {provider_val}")
-                        continue
-                elif isinstance(provider_val, LlmProviderType):
-                    provider_enum = provider_val
-
-            # Case 3: Enum only (Legacy config)
-            elif isinstance(item, LlmProviderType):
-                provider_enum = item
-                model_name = model # Use global default from args
-
-            # Validation
-            if not provider_enum:
-                logger.warning(f"Skipping invalid priority item: {item} (Type: {type(item)})")
-                continue
-
-            # Find client
-            client = self.clients.get(provider_enum)
-            if not client:
-                logger.warning(f"Client for provider '{provider_enum}' not found. Available: {list(self.clients.keys())}")
-                continue
-            
-            target_model = model_name if model_name else model
-
+        # Priority: Hints > Config Priority
+        # If hints are provided, we should probably try them? 
+        # Or does config override? Usually hints from agent are specific.
+        # But 'config.priority_list' is the main strategy.
+        # Let's verify requirement: "Asegura que ReasonerAgent pase correctamente los model_hints basados en la configuración".
+        # If hints are passed, we use them. If not, use priority list.
+        
+        candidates = model_hints if model_hints else self.priority_list
+        
+        for item in candidates:
             try:
-                logger.info(f"Using Provider: {provider_enum.value} | Model: {target_model}")
-                self._log_token_usage_estimate(prompt)
-                
-                # BRIDGE: Construct Domain Request
-                request = LlmRequest(
-                    model=ModelId(provider=provider_enum, name=target_model),
-                    messages=(Message(role=MessageRole.USER, content=prompt),),
-                    generation=GenerationConfig(max_output_tokens=4000)
-                )
-                
-                # BRIDGE: Async to Sync execution
-                # Since we are running in a worker thread (FastAPI) or main thread (Script),
-                # asyncio.run() creates a new loop for this blocking call.
-                response = asyncio.run(client.generate(request))
-                
-                return response.content
-                
+                result = self._attempt_generation_with_provider(item, prompt)
+                if result:
+                    return result
             except (RetryableError, LLMError) as e:
-                logger.warning(f"Provider {provider_enum} failed with recoverable error: {e}. Falling back...")
+                logger.warning(f"Provider failed with recoverable error: {e}. Falling back...")
                 last_exception = e
                 continue
             except Exception as e:
-                logger.error(f"Provider {provider_enum} failed with unexpected error: {e}. Falling back...", exc_info=True)
+                logger.error(f"Provider failed with unexpected error: {e}. Falling back...", exc_info=True)
                 last_exception = e
                 continue
 
@@ -127,6 +81,66 @@ class CompositeLlmGateway(LlmGateway):
             message="All configured LLM providers failed to generate code.",
             original_exception=last_exception
         )
+
+    def _attempt_generation_with_provider(self, item: Any, prompt: str) -> Any:
+        """
+        Attempts to generate code using a single provider configuration item.
+        Returns the LlmResponse if successful, or raises exception if failed.
+        """
+        provider_enum = None
+        model_name = None
+
+        # Case 1: ModelId object (Expected)
+        if hasattr(item, "provider") and hasattr(item, "name"):
+            provider_enum = item.provider
+            model_name = item.name
+        # Case 2: Dictionary (Pydantic artifacts)
+        elif isinstance(item, dict):
+            provider_val = item.get("provider")
+            model_name = item.get("name")
+            
+            if isinstance(provider_val, str):
+                try:
+                    provider_enum = LlmProviderType(provider_val.lower())
+                except ValueError:
+                    logger.warning(f"Invalid provider string in dict: {provider_val}")
+                    return None
+            elif isinstance(provider_val, LlmProviderType):
+                provider_enum = provider_val
+
+        # Case 3: Enum only (Legacy config)
+        elif isinstance(item, LlmProviderType):
+            provider_enum = item
+            # We don't have 'default_model' passed easily here unless we pass it down.
+            # But hints usually have names.
+            model_name = "gpt-4-turbo" # Fallback default
+
+        # Validation
+        if not provider_enum:
+            logger.warning(f"Skipping invalid priority item: {item} (Type: {type(item)})")
+            return None
+
+        # Find client
+        client = self.clients.get(provider_enum)
+        if not client:
+            logger.warning(f"Client for provider '{provider_enum}' not found. Available: {list(self.clients.keys())}")
+            return None
+        
+        target_model = model_name if model_name else "gpt-4-turbo"
+
+        logger.info(f"Using Provider: {provider_enum.value} | Model: {target_model}")
+        self._log_token_usage_estimate(prompt)
+        
+        # BRIDGE: Construct Domain Request
+        request = LlmRequest(
+            model=ModelId(provider=provider_enum, name=target_model),
+            messages=(Message(role=MessageRole.USER, content=prompt),),
+            generation=GenerationConfig(max_output_tokens=4000)
+        )
+        
+        # BRIDGE: Async to Sync execution
+        response = asyncio.run(client.generate(request))
+        return response
 
     def _log_token_usage_estimate(self, text: str):
         # Basic character count / 4 estimation

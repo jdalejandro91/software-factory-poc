@@ -40,27 +40,23 @@ class GitLabBranchService:
             response.raise_for_status()
             return False
         except Exception as e:
-            if "404" in str(e): 
-                return False
+            # Re-raise only if not a 404-like error handled by client (if client raises on 404)
+            # But here we handled 404 explicitly above.
+            # If client raises exception on connection error, we let it bubble.
             logger.error(f"Error checking branch existence: {e}")
             raise e
 
     def create_branch(self, project_id: int, branch_name: str, ref: str = "main") -> dict[str, Any]:
-        # 1. Check existence
-        existing_branch = self.get_branch(project_id, branch_name)
-        if existing_branch:
-            logger.info(f"Branch '{branch_name}' already exists in project {project_id}. Skipping creation.")
-            return existing_branch
-
-        # 2. Create
+        """Creates a branch. Returns existing one if conflict occurs."""
         path = f"api/v4/projects/{project_id}/repository/branches"
-        logger.info(f"Creating GitLab branch '{branch_name}' in project {project_id} from '{ref}'")
+        logger.info(f"Creating branch '{branch_name}' from '{ref}'")
         
-        payload = {
-            "branch": branch_name,
-            "ref": ref
-        }
-        
-        response = self.client.post(path, payload)
-        response.raise_for_status()
-        return response.json()
+        try:
+            response = self.client.post(path, {"branch": branch_name, "ref": ref})
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            if hasattr(e, "response") and e.response.status_code in [400, 409]:
+                logger.info(f"Branch '{branch_name}' already exists.")
+                return self.get_branch(project_id, branch_name) or {}
+            raise e

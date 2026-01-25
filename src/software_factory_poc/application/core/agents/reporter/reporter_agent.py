@@ -15,8 +15,11 @@ class ReporterAgent(BaseAgent):
     def report_start(self, task_id: str) -> None:
         self.tracker.add_comment(task_id, ReporterMessages.START_SCAFFOLDING)
 
-    def report_success(self, task_id: str, message: str) -> None:
-        self.tracker.add_comment(task_id, f"{ReporterMessages.SUCCESS_PREFIX}{message}")
+    def report_success(self, task_id: str, message: Any) -> None:
+        if isinstance(message, dict):
+            self.tracker.add_comment(task_id, message)
+        else:
+            self.tracker.add_comment(task_id, f"{ReporterMessages.SUCCESS_PREFIX}{message}")
 
     def report_failure(self, task_id: str, error_msg: str) -> None:
         # Note: Previous code accessed self.gateway which did not exist in dataclass definition (which had `tracker`).

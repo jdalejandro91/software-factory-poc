@@ -1,4 +1,4 @@
-from typing import cast
+from typing import cast, Any
 
 from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import (
     ScaffoldingAgentConfig,
@@ -43,13 +43,15 @@ class CreateScaffoldingUseCase:
 
     def execute(self, request: ScaffoldingOrder) -> None:
         logger.info(f"Starting scaffolding execution for issue: {request.issue_key}")
+        reporter = None
         
         try:
-            # 1. Instantiate Domain Agents via Factory (Clean Code < 12 lines logic)
+            # 1. Instantiate Domain Agents
             reporter = self.resolver.create_reporter_agent()
             vcs = self.resolver.create_vcs_agent()
             researcher = self.resolver.create_research_agent()
             reasoner = self.resolver.create_reasoner_agent()
+            
             orchestrator = self.resolver.create_scaffolding_agent(
                 model_name=self.config.llm_model_priority[0].name if self.config.llm_model_priority else "gpt-4-turbo"
             )
@@ -65,15 +67,20 @@ class CreateScaffoldingUseCase:
             )
 
         except Exception as e:
-            self._handle_critical_failure(request, e)
+            self._handle_critical_failure(request, e, reporter)
 
-    def _handle_critical_failure(self, request: ScaffoldingOrder, e: Exception) -> None:
+    def _handle_critical_failure(self, request: ScaffoldingOrder, e: Exception, reporter: Any | None) -> None:
         logger.critical(f"Critical error during scaffolding flow for {request.issue_key}: {e}", exc_info=True)
         try:
-            # Re-resolve reporter for emergency
-            emergency_reporter = self.resolver.create_reporter_agent() 
-            emergency_reporter.report_failure(request.issue_key, str(e))
-            emergency_reporter.transition_task(request.issue_key, TaskStatus.TO_DO)
+            # Use existing reporter if available, otherwise resolve a fresh one
+            # The prompt requested removing "Manual instantiation", meaning ensure we use the Resolver.
+            # self.resolver is injected, so calling create_reporter_agent is safe/clean.
+            if not reporter:
+                logger.warning("Reporter not initialized during failure, resolving emergency reporter...")
+                reporter = self.resolver.create_reporter_agent()
+                
+            reporter.report_failure(request.issue_key, str(e))
+            reporter.transition_task(request.issue_key, TaskStatus.TO_DO)
         except Exception as report_error:
             logger.error(f"Failed to report failure to tracker: {report_error}")
         

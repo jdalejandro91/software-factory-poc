@@ -127,11 +127,12 @@ class GitLabProviderImpl(VcsGateway):
         project_id: int, 
         branch_name: str, 
         files_map: dict[str, str],
-        commit_message: str
+        commit_message: str,
+        force_create: bool = False
     ) -> CommitResultDTO:
         self._logger.info(f"Committing {len(files_map)} files to {branch_name} (Project: {project_id})")
         try:
-            result = self.commit_service.commit_files(project_id, branch_name, files_map, commit_message)
+            result = self.commit_service.commit_files(project_id, branch_name, files_map, commit_message, force_create)
             return CommitResultDTO(
                 id=result.get("id", "unknown"),
                 web_url=result.get("web_url", "")

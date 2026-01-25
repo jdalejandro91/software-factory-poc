@@ -22,22 +22,14 @@ class ConfluenceProviderImpl(ResearchGateway):
 
     def retrieve_context(self, query: str) -> str:
         """
-        Retrieves Confluence page content based on query string or configuration.
+        Retrieves Confluence page content based on query string.
         """
         try:
             if not query:
                 raise ValueError("No search query provided")
 
-            text_query = query
-            
-            # Smart Logic: Check if query is about architecture
-            if "architecture" in text_query.lower() or "arquitectura" in text_query.lower():
-                 if self.settings.architecture_doc_page_id:
-                     logger.info(f"Investigando documento de Arquitectura (ID: {self.settings.architecture_doc_page_id}) por coincidencia de query...")
-                     return self._get_page_by_id(self.settings.architecture_doc_page_id)
-
-            logger.info(f"Investigando en Confluence por query: '{text_query}'...")
-            return self._search_pages(text_query)
+            logger.info(f"Investigando en Confluence por query: '{query}'...")
+            return self._search_pages(query)
 
         except Exception as e:
             # Map low level exceptions to ProviderError
@@ -50,6 +42,16 @@ class ConfluenceProviderImpl(ResearchGateway):
                 message=f"Confluence error: {e}",
                 retryable=retryable
             )
+
+    def get_page_content(self, page_id: str) -> str:
+        """Retrieves content by specific Page ID."""
+        try:
+            return self._get_page_by_id(page_id)
+        except Exception as e:
+            if hasattr(e, "status_code") and e.status_code == 404:
+                logger.warning(f"Page ID {page_id} not found.")
+                return ""
+            raise e
 
     def _get_page_by_id(self, page_id: str) -> str:
         page = self.http_client.get_page(page_id)
@@ -95,22 +97,23 @@ class ConfluenceProviderImpl(ResearchGateway):
 
     def _sanitize_content(self, input_text: str) -> str:
         """
-        Removes HTML tags and entities from the content.
+        clean_html: Removes HTML tags and entities from the content.
+        Uses regex for tags and manual replacement for common entities as no heavy libs allowed.
         """
         if not input_text:
             return ""
-            
-        # 1. Remove HTML Tags
+
+        # 1. Remove HTML Tags (Regex is generally discouraged for HTML but acceptable for stripping tags in simple use cases)
         clean_text = re.sub(r"<[^>]+>", " ", input_text)
         
-        # 2. Collapse whitespace
+        # 2. Decode entities (Simplistic)
+        # Replacing common ones. If complex, would need html module (import html)
+        # Requirement: "Implement Robust HTML cleaning... can use html.unescape"
+        # I will import html at method level to avoid top level import issues if any, or rely on standard lib.
+        import html
+        clean_text = html.unescape(clean_text)
+
+        # 3. Collapse whitespace
         clean_text = " ".join(clean_text.split())
-        
-        # 3. Basic Entity Decode (can be improved with html.unescape if needed)
-        # For now, simplistic approach is fine or use standard lib if imported.
-        # Let's import html standard lib for robustness if I can edit imports again, 
-        # or just rely on the fact that LLMs handle entities okay-ish. 
-        # But user requested "Sanitización".
-        # I will stick to basic tag stripping as requested.
-        
+
         return clean_text

@@ -76,10 +76,20 @@ class ScaffoldingAgent(BaseAgent):
         existing_url = vcs.validate_branch(project_id, branch_name, request.repository_url)
         
         if existing_url:
-            # Short-Circuit: Report as Info/Success but stop execution
-            reporter.report_success(request.issue_key, f"ℹ️ BRANCH_EXISTS|{branch_name}|{existing_url}")
-            reporter.transition_task(request.issue_key, TaskStatus.IN_REVIEW)
+            self._handle_existing_branch(request, branch_name, existing_url, reporter)
             return True
+        return False
+
+    def _handle_existing_branch(self, request: ScaffoldingOrder, branch_name: str, existing_url: str, reporter: ReporterAgent) -> None:
+        """Reports that the branch already exists and stops execution."""
+        from software_factory_poc.application.core.agents.reporter.config.reporter_constants import ReporterMessages
+        
+        # Short-Circuit: Report as Info/Success but stop execution
+        reporter.report_success(
+            request.issue_key, 
+            f"{ReporterMessages.BRANCH_EXISTS_PREFIX}{branch_name}|{existing_url}"
+        )
+        reporter.transition_task(request.issue_key, TaskStatus.IN_REVIEW)
         return False
 
     def _check_permissions(self, request: ScaffoldingOrder) -> None:
@@ -143,10 +153,11 @@ class ScaffoldingAgent(BaseAgent):
         project_id = vcs.resolve_project_id(request.repository_url)
         branch_name = self._get_branch_name(request)
         
-        vcs.create_branch(project_id, branch_name)
+        # Use configured default branch (e.g., 'main') as base ref
+        vcs.create_branch(project_id, branch_name, ref=self.config.default_target_branch)
         
         files_map = self._prepare_commit_payload(artifacts)
-        vcs.commit_files(project_id, branch_name, files_map, f"Scaffolding for {request.issue_key}")
+        vcs.commit_files(project_id, branch_name, files_map, f"Scaffolding for {request.issue_key}", force_create=True)
         
         mr = vcs.create_merge_request(
             project_id=project_id, 
@@ -158,7 +169,9 @@ class ScaffoldingAgent(BaseAgent):
         return mr.web_url
 
     def _get_branch_name(self, request: ScaffoldingOrder) -> str:
-        return f"feature/{request.issue_key}-scaffolding"
+        # Slugify logic: lowercase, alphanumeric/dashes only
+        safe_key = re.sub(r'[^a-z0-9\-]', '', request.issue_key.lower())
+        return f"feature/{safe_key}-scaffolding"
 
     def _prepare_commit_payload(self, artifacts: List[FileContentDTO]) -> dict[str, str]:
         """
@@ -170,15 +183,23 @@ class ScaffoldingAgent(BaseAgent):
             # Sanitize: Strip leading slash
             clean_path = artifact.path.lstrip("/")
             
-            # Integrity Check: duplications? 
-            # (Last write wins is standard, but maybe warn?)
+            if clean_path in files_map:
+                logger.warning(f"Duplicate path generated: {clean_path}. Overwriting with latest content.")
+            
             files_map[clean_path] = artifact.content
             
         return files_map
 
     def _finalize_task_success(self, request: ScaffoldingOrder, reporter: ReporterAgent, mr_link: str) -> None:
-        message = f"Scaffolding completed via [MR Link]({mr_link})"
-        reporter.report_success(request.issue_key, message)
+        # Structured Payload for Rich Reporting
+        message_payload = {
+            "type": "scaffolding_success",
+            "title": "Scaffolding Completado Exitosamente",
+            "summary": f"Se ha generado el código base para la tarea {request.issue_key}.\n{request.summary}",
+            "links": {"🔗 Ver Merge Request": mr_link}
+        }
+        
+        reporter.report_success(request.issue_key, message_payload)
         reporter.transition_task(request.issue_key, TaskStatus.IN_REVIEW)
         logger.info(f"Task {request.issue_key} completed. MR: {mr_link}")
 

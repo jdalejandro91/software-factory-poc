@@ -23,7 +23,13 @@ class VcsAgent(BaseAgent):
             return None
             
         # Construct URL manually for robustness
-        base_repo = repo_url_hint.replace(".git", "").rstrip("/")
+        # Strip .git suffix if present
+        base_repo = repo_url_hint
+        if base_repo.endswith(".git"):
+            base_repo = base_repo[:-4]
+        base_repo = base_repo.rstrip("/")
+        
+        # Determine separator based on provider hint in URL
         separator = "/-/tree/" if "gitlab" in base_repo else "/tree/"
         return f"{base_repo}{separator}{branch_name}"
 

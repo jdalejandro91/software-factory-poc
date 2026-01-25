@@ -20,7 +20,8 @@ class VcsGateway(ABC):
         pass
 
     @abstractmethod
-    def commit_files(self, project_id: int, branch_name: str, files_map: dict[str, str], commit_message: str) -> CommitResultDTO:
+    @abstractmethod
+    def commit_files(self, project_id: int, branch_name: str, files_map: dict[str, str], commit_message: str, force_create: bool = False) -> CommitResultDTO:
         """Commits files to a branch."""
         pass
 

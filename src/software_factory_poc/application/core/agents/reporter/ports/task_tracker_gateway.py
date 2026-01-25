@@ -4,7 +4,7 @@ from software_factory_poc.application.core.agents.common.config.task_status impo
 
 class TaskTrackerGateway(ABC):
     @abstractmethod
-    def add_comment(self, task_id: str, body: str) -> None:
+    def add_comment(self, task_id: str, body: Any) -> None:
         """Adds a comment to the task."""
         pass
 

@@ -174,7 +174,8 @@ class ProviderResolver:
             name="Researcher", 
             role="Researcher", 
             goal="Gather context", 
-            gateway=research_gateway
+            gateway=research_gateway,
+            config=self.config
         )
 
     def create_reasoner_agent(self) -> ReasonerAgent:
