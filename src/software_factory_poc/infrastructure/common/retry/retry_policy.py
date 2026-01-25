@@ -12,7 +12,7 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
-from software_factory_poc.application.core.domain.agents.common.exceptions.provider_error import ProviderError
+from software_factory_poc.application.core.agents.common.exceptions.provider_error import ProviderError
 
 _T = TypeVar("_T")
 
@@ -21,7 +21,7 @@ def _retryable(exc: BaseException) -> bool:
     return isinstance(exc, ProviderError) and exc.retryable
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class RetryPolicy:
     max_attempts: int = 1  # Default: Fail fast (1 attempt, 0 retries)
 

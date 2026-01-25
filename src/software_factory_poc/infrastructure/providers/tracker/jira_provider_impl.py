@@ -1,17 +1,17 @@
 from typing import Any
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from software_factory_poc.application.core.domain.agents.reporter.ports.task_tracker_gateway import TaskTrackerGateway
-from software_factory_poc.application.core.domain.agents.reporter.dtos.tracker_dtos import TaskDTO
-from software_factory_poc.application.core.domain.agents.common.config.task_status import TaskStatus
+from software_factory_poc.application.core.agents.reporter.ports.task_tracker_gateway import TaskTrackerGateway
+from software_factory_poc.application.core.agents.reporter.dtos.tracker_dtos import TaskDTO
+from software_factory_poc.application.core.agents.common.config.task_status import TaskStatus
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 from software_factory_poc.infrastructure.providers.tracker.clients.jira_http_client import (
     JiraHttpClient,
 )
-from software_factory_poc.application.core.domain.agents.common.exceptions.provider_error import (
+from software_factory_poc.application.core.agents.common.exceptions.provider_error import (
     ProviderError,
 )
-from software_factory_poc.application.core.domain.agents.reporter.config.task_tracker_type import (
+from software_factory_poc.application.core.agents.reporter.config.task_tracker_type import (
     TaskTrackerType,
 )
 from software_factory_poc.infrastructure.providers.tracker.dtos.jira_status_enum import JiraStatus
@@ -30,9 +30,12 @@ STATUS_MAPPING = {
 }
 
 
+from software_factory_poc.infrastructure.configuration.tool_settings import ToolSettings
+
 class JiraProviderImpl(TaskTrackerGateway):
-    def __init__(self, http_client: JiraHttpClient):
+    def __init__(self, http_client: JiraHttpClient, settings: ToolSettings):
         self.client = http_client
+        self.settings = settings
         self._logger = logger
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
@@ -195,7 +198,14 @@ class JiraProviderImpl(TaskTrackerGateway):
 
     def transition_status(self, task_id: str, status: TaskStatus) -> None:
         """Adapts TaskTrackerGatewayPort.transition_status to internal transition_issue logic."""
-        # Translate Domain Status to Infrastructure Status (String)
+        # Configurable override for IN_REVIEW
+        if status == TaskStatus.IN_REVIEW:
+            transition_name = self.settings.jira_transition_in_review
+            self._logger.info(f"Transitioning {task_id} to IN_REVIEW using configured transition: '{transition_name}'")
+            self.transition_issue(task_id, transition_name)
+            return
+
+        # Translate Domain Status to Infrastructure Status (String) for others
         jira_target_status = STATUS_MAPPING.get(status)
         
         if jira_target_status:

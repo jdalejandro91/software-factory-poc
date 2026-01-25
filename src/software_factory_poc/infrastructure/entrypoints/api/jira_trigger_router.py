@@ -5,14 +5,14 @@ from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService 
 
-from software_factory_poc.application.core.domain.agents.scaffolding.scaffolding_order import (
+from software_factory_poc.application.core.agents.scaffolding.value_objects.scaffolding_order import (
     ScaffoldingOrder,
 )
 from software_factory_poc.application.usecases.scaffolding.create_scaffolding_usecase import (
     CreateScaffoldingUseCase,
 )
 from software_factory_poc.infrastructure.configuration.main_settings import Settings
-from software_factory_poc.configuration.app_config import AppConfig
+from software_factory_poc.infrastructure.configuration.app_config import AppConfig
 from software_factory_poc.infrastructure.entrypoints.api.dtos.jira_webhook_dto import JiraWebhookDTO
 # from software_factory_poc.infrastructure.entrypoints.api.mappers.jira_mapper import JiraMapper # Legacy mapper removed/deprecated
 from software_factory_poc.infrastructure.entrypoints.api.mappers.jira_payload_mapper import JiraPayloadMapper
@@ -52,51 +52,37 @@ async def trigger_scaffold(
     background_tasks: BackgroundTasks,
     usecase: CreateScaffoldingUseCase = Depends(get_usecase)
 ):
-    # 1. Observability: Log Raw Payload
-    body_bytes = await request.body()
-    try:
-        body_str = body_bytes.decode('utf-8')
-        logger.info(f"Incoming Jira Payload (Raw): {body_str}")
-    except Exception as e:
-        logger.warning(f"Could not decode payload: {e}")
-
-    # 2. Manual Parse
-    try:
-        payload = JiraWebhookDTO.model_validate_json(body_bytes)
-    except Exception as e:
-        logger.error(f"Failed to parse JiraWebhookDTO: {e}")
-        # Return 200 to act as ignored to stop Jira retries if malformed
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content={"status": "ignored", "message": "Malformed JSON", "error": str(e)}
-        )
-
-    issue_key = payload.issue.key
-    logger.info(f"Webhook received for {issue_key}. Processing with JiraPayloadMapper.")
+    # Extract Logic (< 12 lines goal for main logic)
+    jira_request = await _process_incoming_webhook(request)
     
-    try:
-        # Use new Mapper with YAML extraction
-        request = JiraPayloadMapper.map_to_request(payload)
-    except ValueError as e:
-        logger.warning(f"Skipping webhook for {issue_key}: {e}")
-        # We return 200 OK to Jira so it doesn't retry events that are just invalid/ignored
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content={
-                "status": "ignored",
-                "message": str(e),
-                "issue_key": issue_key
-            }
-        )
-    except Exception as e:
-        logger.error(f"Unexpected error mapping payload for {issue_key}: {e}")
-        raise HTTPException(status_code=500, detail="Internal processing error")
-
+    if isinstance(jira_request, JSONResponse):
+        return jira_request
+        
     # Fire and Forget
-    background_tasks.add_task(usecase.execute, request)
+    background_tasks.add_task(usecase.execute, jira_request)
     
     return {
         "status": "accepted",
         "message": "Scaffolding request queued.",
-        "issue_key": issue_key
+        "issue_key": jira_request.issue_key
     }
+
+async def _process_incoming_webhook(request: Request) -> ScaffoldingOrder | JSONResponse:
+    """Helper to parse, validate and map webhook."""
+    body_bytes = await request.body()
+    try:
+        logger.info(f"Incoming Jira Payload (Raw): {body_bytes.decode('utf-8')}")
+        payload = JiraWebhookDTO.model_validate_json(body_bytes)
+        
+        issue_key = payload.issue.key
+        logger.info(f"Processing webhook for {issue_key}")
+        
+        return JiraPayloadMapper.map_to_request(payload)
+        
+    except ValueError as e:
+        logger.warning(f"Skipping webhook: {e}")
+        return JSONResponse(status_code=status.HTTP_200_OK, content={"status": "ignored", "message": str(e)})
+    except Exception as e:
+        logger.error(f"Error processing webhook: {e}")
+        # If parsing fails entirely (malformed JSON), return 200 to satisfy Jira
+        return JSONResponse(status_code=status.HTTP_200_OK, content={"status": "error", "message": str(e)})

@@ -2,8 +2,9 @@ import pytest
 from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
-from software_factory_poc.application.core.ports.gateways.dtos import TaskDTO, MergeRequestDTO, BranchDTO, CommitResultDTO
-from software_factory_poc.application.core.domain.configuration.task_status import TaskStatus
+from software_factory_poc.application.core.agents.reporter.dtos.tracker_dtos import TaskDTO
+from software_factory_poc.application.core.agents.vcs.dtos.vcs_dtos import MergeRequestDTO, BranchDTO, CommitResultDTO
+from software_factory_poc.application.core.agents.common.config.task_status import TaskStatus
 from software_factory_poc.main import app
 from software_factory_poc.infrastructure.configuration.main_settings import Settings
 
@@ -60,7 +61,7 @@ Instruction: Create a Python shopping cart with add_item method.
     with patch("software_factory_poc.infrastructure.resolution.provider_resolver.ProviderResolver.resolve_llm_gateway", spec=True) as mock_resolve_llm, \
          patch("software_factory_poc.infrastructure.resolution.provider_resolver.ProviderResolver.resolve_vcs", spec=True) as mock_resolve_vcs, \
          patch("software_factory_poc.infrastructure.resolution.provider_resolver.ProviderResolver.resolve_tracker", spec=True) as mock_resolve_tracker, \
-         patch("software_factory_poc.infrastructure.resolution.provider_resolver.ProviderResolver.resolve_knowledge", spec=True) as mock_resolve_knowledge:
+         patch("software_factory_poc.infrastructure.resolution.provider_resolver.ProviderResolver.resolve_research", spec=True) as mock_resolve_research:
         
         # Configure LLM Mock
         mock_llm_instance = MagicMock()
@@ -68,11 +69,7 @@ Instruction: Create a Python shopping cart with add_item method.
         
         # Return an object that has .content attribute (LlmResponse-like)
         mock_response = MagicMock()
-        mock_response.content = (
-            "<<<FILE:src/shopping_cart.py>>>\n"
-            "class ShoppingCart: pass\n"
-            "<<<END>>>"
-        )
+        mock_response.content = '[{"path": "src/shopping_cart.py", "content": "class ShoppingCart: pass"}]'
         mock_llm_instance.generate_code.return_value = mock_response
         
         # Configure VCS Mock (Strict DTOs)
@@ -83,24 +80,33 @@ Instruction: Create a Python shopping cart with add_item method.
         # Using manual DTO instantiation or factory if I injected it. 
         # Here I will just instantiate DTOs directly as it's cleaner than injecting fixture into this big block.
         mock_vcs_instance.create_merge_request.return_value = MergeRequestDTO(id="1", web_url="http://gitlab.mock/mr/1")
-        mock_vcs_instance.create_branch.return_value = BranchDTO("feature/KAN-123/scaffolding", "url")
+        mock_vcs_instance.create_branch.return_value = BranchDTO("feature/KAN-123-scaffolding", "url")
         mock_vcs_instance.commit_files.return_value = CommitResultDTO("sha", "url")
         
         # Configure Tracker Mock (Jira)
         mock_tracker_instance = MagicMock()
         mock_resolve_tracker.return_value = mock_tracker_instance
         
-        # Configure Knowledge Mock
-        mock_knowledge_instance = MagicMock()
-        mock_resolve_knowledge.return_value = mock_knowledge_instance
-        mock_knowledge_instance.retrieve_context.return_value = "Shopping Cart Architecture (Modular Monolith)\nCart Entity"
-        mock_knowledge_instance.retrieve_similar_solutions.return_value = "Examples"
+        # Configure Research Mock
+        mock_research_instance = MagicMock()
+        mock_resolve_research.return_value = mock_research_instance
+        mock_research_instance.retrieve_context.return_value = (
+            "Shopping Cart Architecture (Modular Monolith)\n"
+            "Cart Entity\n"
+            "Examples of Implementation in Python and clean architecture.\n"
+            "This context needs to be long enough to pass the length check in ResearchAgent "
+            "and ensures it is included in the Prompt construction logic properly."
+        )
         
         # 3. Execution
         headers = {"X-API-Key": "test-secret"}
         
         with pytest.MonkeyPatch.context() as mp:
             mp.setenv("JIRA_WEBHOOK_SECRET", "test-secret")
+            mp.setenv("JIRA_BASE_URL", "https://mock.jira")
+            mp.setenv("CONFLUENCE_BASE_URL", "https://mock.confluence")
+            mp.setenv("CONFLUENCE_API_TOKEN", "mock-token")
+            mp.setenv("CONFLUENCE_USER_EMAIL", "mock@email.com")
             
             response = client.post("/api/v1/jira-webhook", json=payload, headers=headers)
             

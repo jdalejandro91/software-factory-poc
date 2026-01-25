@@ -1,5 +1,5 @@
 import pytest
-from software_factory_poc.application.core.domain.agents.scaffolding.tools.artifact_parser import ArtifactParser
+from software_factory_poc.application.core.agents.scaffolding.tools.artifact_parser import ArtifactParser
 from software_factory_poc.application.core.ports.gateways.dtos import FileContentDTO
 
 class TestArtifactParserTool:

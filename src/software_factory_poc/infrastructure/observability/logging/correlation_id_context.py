@@ -7,7 +7,7 @@ from uuid import uuid4
 _CORRELATION_ID: ContextVar[str | None] = ContextVar("_CORRELATION_ID", default=None)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class CorrelationIdContext:
     def get(self) -> str | None:
         return _CORRELATION_ID.get()

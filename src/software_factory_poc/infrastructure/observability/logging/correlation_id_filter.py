@@ -8,7 +8,7 @@ from software_factory_poc.infrastructure.observability.logging.correlation_id_co
 )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class CorrelationIdFilter(logging.Filter):
     context: CorrelationIdContext
 

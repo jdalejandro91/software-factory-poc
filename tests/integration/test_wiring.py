@@ -3,11 +3,11 @@ import pytest
 from software_factory_poc.configuration.app_config import AppConfig
 from software_factory_poc.infrastructure.resolution.provider_resolver import ProviderResolver
 from software_factory_poc.infrastructure.configuration.scaffolding_config_loader import ScaffoldingConfigLoader
-from software_factory_poc.application.core.domain.agents.research.config.research_provider_type import ResearchProviderType
+from software_factory_poc.application.core.agents.research.config.research_provider_type import ResearchProviderType
 from software_factory_poc.infrastructure.providers.research.confluence_provider_impl import ConfluenceProviderImpl
-from software_factory_poc.application.core.domain.agents.research.ports.research_gateway import ResearchGateway
+from software_factory_poc.application.core.agents.research.ports.research_gateway import ResearchGateway
 from software_factory_poc.application.usecases.scaffolding.create_scaffolding_usecase import CreateScaffoldingUseCase
-from software_factory_poc.application.core.domain.agents.research.research_agent import ResearchAgent
+from software_factory_poc.application.core.agents.research.research_agent import ResearchAgent
 
 def test_wiring_confluence_provider():
     # 1. Setup Env Vars
@@ -16,6 +16,10 @@ def test_wiring_confluence_provider():
     os.environ["CONFLUENCE_API_TOKEN"] = "secret"
     os.environ["CONFLUENCE_BASE_URL"] = "https://example.atlassian.net"
     os.environ["CONFLUENCE_ARCHITECTURE_DOC_PAGE_ID"] = "12345"
+    os.environ["JIRA_USER_EMAIL"] = "jirauser@example.com"
+    os.environ["JIRA_API_TOKEN"] = "jirasecret"
+    os.environ["JIRA_BASE_URL"] = "https://jira.example.com"
+    os.environ["SCAFFOLDING_TRACKER_PROVIDER"] = "JIRA"
     
     # 2. Load Configs
     scaffolding_config = ScaffoldingConfigLoader.load_config()
@@ -27,14 +31,21 @@ def test_wiring_confluence_provider():
     # 3. Instantiate Resolver
     resolver = ProviderResolver(scaffolding_config, app_config=app_config)
     
-    # 4. Resolve Research Gateway
-    gateway = resolver.resolve_research()
+    # 4. Resolve Research Gateway via Agent Factory (New Pattern)
+    agent = resolver.create_research_agent()
     
-    assert isinstance(gateway, ConfluenceProviderImpl)
-    assert isinstance(gateway, ResearchGateway)
-    assert gateway.settings.architecture_doc_page_id == "12345"
+    assert isinstance(agent, ResearchAgent)
+    assert isinstance(agent.gateway, ConfluenceProviderImpl)
+    assert agent.gateway.settings.architecture_doc_page_id == "12345"
+
+    # 5. Resolve Tracker (Reporter)
+    tracker = resolver.resolve_tracker()
+    assert isinstance(tracker, JiraProviderImpl)
+    assert tracker.client.settings.user_email == "test@example.com" # Should fail if unset? Wait, main_settings vs jira_settings.
+    # Env var CONFLUENCE_USER_EMAIL was set, but JIRA_USER_EMAIL wasn't.
+    # I should set JIRA env vars in test setup.
     
-    # 5. Instantiate Use Case (Full Wiring)
+    # 6. Instantiate Use Case (Full Wiring)
     usecase = CreateScaffoldingUseCase(scaffolding_config, resolver)
     
     # Note: We can't easily inspect the internal agents of usecase unless we access them during execution or if they are public.

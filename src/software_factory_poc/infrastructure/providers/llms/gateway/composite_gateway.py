@@ -1,23 +1,23 @@
 import asyncio
 from typing import Any
 
-from software_factory_poc.application.core.domain.agents.common.config.llm_provider_type import (
+from software_factory_poc.application.core.agents.common.config.llm_provider_type import (
     LlmProviderType,
 )
-from software_factory_poc.application.core.domain.agents.scaffolding.config.scaffolding_agent_config import (
+from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import (
     ScaffoldingAgentConfig,
 )
-from software_factory_poc.application.core.domain.agents.reasoner.exceptions.all_models_exhausted_error import (
+from software_factory_poc.application.core.agents.reasoner.exceptions.all_models_exhausted_error import (
     AllModelsExhaustedException,
 )
-from software_factory_poc.application.core.domain.agents.common.exceptions.retryable_error import RetryableError
-from software_factory_poc.application.core.domain.agents.reasoner.ports.llm_gateway import LLMError, LlmGateway
-from software_factory_poc.application.core.domain.agents.reasoner.ports.llm_provider import LlmProvider
-from software_factory_poc.application.core.domain.agents.reasoner.llm_request import LlmRequest
-from software_factory_poc.application.core.domain.agents.reasoner.value_objects.message import Message
-from software_factory_poc.application.core.domain.agents.reasoner.value_objects.message_role import MessageRole
-from software_factory_poc.application.core.domain.agents.reasoner.value_objects.generation_config import GenerationConfig
-from software_factory_poc.application.core.domain.agents.common.value_objects.model_id import ModelId
+from software_factory_poc.application.core.agents.common.exceptions.retryable_error import RetryableError
+from software_factory_poc.application.core.agents.reasoner.ports.llm_gateway import LLMError, LlmGateway
+from software_factory_poc.application.core.agents.reasoner.ports.llm_provider import LlmProvider
+from software_factory_poc.application.core.agents.reasoner.llm_request import LlmRequest
+from software_factory_poc.application.core.agents.reasoner.value_objects.message import Message
+from software_factory_poc.application.core.agents.reasoner.value_objects.message_role import MessageRole
+from software_factory_poc.application.core.agents.reasoner.value_objects.generation_config import GenerationConfig
+from software_factory_poc.application.core.agents.common.value_objects.model_id import ModelId
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 
 logger = LoggerFactoryService.build_logger(__name__)

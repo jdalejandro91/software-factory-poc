@@ -27,6 +27,7 @@ class GitLabPayloadBuilderService:
                 "action": action_type,
                 "file_path": file_path,
                 "content": content,
+                "encoding": "text"
             }
             actions.append(action)
             

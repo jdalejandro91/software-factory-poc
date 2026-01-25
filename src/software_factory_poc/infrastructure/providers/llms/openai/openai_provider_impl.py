@@ -4,11 +4,11 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from software_factory_poc.application.core.domain.agents.reasoner.llm_request import LlmRequest
-from software_factory_poc.application.core.domain.agents.reasoner.llm_response import LlmResponse
-from software_factory_poc.application.core.domain.agents.common.exceptions.provider_error import ProviderError
-from software_factory_poc.application.core.domain.agents.common.config.llm_provider_type import LlmProviderType
-from software_factory_poc.application.core.domain.agents.reasoner.ports.llm_provider import LlmProvider
+from software_factory_poc.application.core.agents.reasoner.llm_request import LlmRequest
+from software_factory_poc.application.core.agents.reasoner.llm_response import LlmResponse
+from software_factory_poc.application.core.agents.common.exceptions.provider_error import ProviderError
+from software_factory_poc.application.core.agents.common.config.llm_provider_type import LlmProviderType
+from software_factory_poc.application.core.agents.reasoner.ports.llm_provider import LlmProvider
 from software_factory_poc.infrastructure.common.retry.retry_policy import RetryPolicy
 from software_factory_poc.infrastructure.observability.logging.correlation_id_context import (
     CorrelationIdContext,
@@ -21,7 +21,7 @@ from software_factory_poc.infrastructure.providers.llms.openai.mappers.openai_re
 )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class OpenAiProvider(LlmProvider):
     client: Any
     retry: RetryPolicy
@@ -54,9 +54,9 @@ class OpenAiProvider(LlmProvider):
             debug_payload = json.dumps(msgs, indent=2, ensure_ascii=False)
             debug_payload = json.dumps(msgs, indent=2, ensure_ascii=False)
             
-            print(f"\n🚀 [INFRA:LLM-SEND] Sending to {self.name.value.upper()}:\n"
-                  f"{debug_payload}\n"
-                  f"Config: {kwargs.get('max_tokens')}, {kwargs.get('temperature')}\n", flush=True)
+            # print(f"\n🚀 [INFRA:LLM-SEND] Sending to {self.name.value.upper()}:\n"
+            #       f"{debug_payload}\n"
+            #       f"Config: {kwargs.get('max_tokens')}, {kwargs.get('temperature')}\n", flush=True)
 
             # 4. Llamada Oficial SDK v1
             # logging.debug(f"OpenAI Payload: {kwargs}") # Descomentar para debug local

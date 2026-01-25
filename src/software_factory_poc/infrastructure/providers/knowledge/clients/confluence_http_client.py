@@ -1,16 +1,16 @@
 import httpx
-from software_factory_poc.infrastructure.configuration.tool_settings import ToolSettings
+from software_factory_poc.infrastructure.configuration.confluence_settings import ConfluenceSettings
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 
 logger = LoggerFactoryService.build_logger(__name__)
 
 
 class ConfluenceHttpClient:
-    def __init__(self, settings: ToolSettings) -> None:
-        self.base_url = settings.confluence_base_url.rstrip("/")
+    def __init__(self, settings: ConfluenceSettings) -> None:
+        self.base_url = settings.base_url.rstrip("/")
         self.auth = (
-            settings.confluence_user_email,
-            settings.confluence_api_token.get_secret_value(),
+            settings.user_email,
+            settings.api_token.get_secret_value(),
         )
         self.timeout = 30.0
 

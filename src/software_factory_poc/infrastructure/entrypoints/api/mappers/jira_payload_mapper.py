@@ -1,6 +1,6 @@
-from typing import Any
+from typing import Any, Union 
 
-from software_factory_poc.application.core.domain.agents.scaffolding.scaffolding_order import (
+from software_factory_poc.application.core.agents.scaffolding.value_objects.scaffolding_order import (
     ScaffoldingOrder,
 )
 
@@ -15,7 +15,7 @@ class JiraPayloadMapper:
     """
 
     @classmethod
-    def map_to_request(cls, payload: dict | JiraWebhookDTO) -> ScaffoldingOrder:
+    def map_to_request(cls, payload: Union[dict, JiraWebhookDTO]) -> ScaffoldingOrder:
         # Normalize input
         if isinstance(payload, JiraWebhookDTO):
             issue_key = payload.issue.key

@@ -24,7 +24,8 @@ def boot_diagnostics():
     sin depender de que Pydantic esté configurado correctamente.
     """
     try:
-        print(">>> BOOT DIAGNOSTICS START (Direct Env Check) <<<", file=sys.stderr)
+
+        logger.info(">>> BOOT DIAGNOSTICS START (Direct Env Check) <<<")
         
         # Lista de variables críticas a verificar
         critical_vars = [
@@ -40,16 +41,14 @@ def boot_diagnostics():
         for k in critical_vars:
             val = os.getenv(k)
             if val:
-                # Sanitización visual para logs: mostrar longitud y si tiene comillas
-                raw_repr = repr(val) # Esto revela si hay comillas ocultas como 'sk-...'
-                preview = val[:4] + "..." + val[-2:] if len(val) > 6 else "***"
-                print(f"ENV: {k:<30} = PRESENT (Len={len(val)}) RawStart={raw_repr[:6]}...", file=sys.stderr)
+                # Sanitización segura: solo mostrar existencia o longitud
+                logger.info(f"ENV: {k:<30} = PRESENT (Len={len(val)})")
             else:
-                print(f"ENV: {k:<30} = MISSING", file=sys.stderr)
+                logger.warning(f"ENV: {k:<30} = MISSING")
                 
-        print(">>> BOOT DIAGNOSTICS END <<<", file=sys.stderr)
+        logger.info(">>> BOOT DIAGNOSTICS END <<<")
     except Exception as e:
-        print(f"Error during boot diagnostics: {e}", file=sys.stderr)
+        logger.error(f"Error during boot diagnostics: {e}")
 
 def create_app(settings: Settings) -> FastAPI:
     # 1. Ejecutar diagnósticos de bajo nivel primero

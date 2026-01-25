@@ -3,13 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from software_factory_poc.application.core.domain.agents.common.tools.dependency_guard import DependencyGuard
+from software_factory_poc.application.core.agents.common.tools.dependency_guard import DependencyGuard
 from software_factory_poc.infrastructure.providers.llms.deepseek.clients.deepseek_config import (
     DeepSeekConfig,
 )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class DeepSeekClientFactory:
     config: DeepSeekConfig
 

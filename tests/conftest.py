@@ -5,8 +5,10 @@ from pathlib import Path
 
 import pytest
 from unittest.mock import MagicMock
-from software_factory_poc.application.core.ports.gateways.dtos import TaskDTO, MergeRequestDTO, BranchDTO, CommitResultDTO, FileContentDTO
-from software_factory_poc.application.core.domain.agents.scaffolding.scaffolding_order import ScaffoldingOrder
+from software_factory_poc.application.core.agents.reporter.dtos.tracker_dtos import TaskDTO
+from software_factory_poc.application.core.agents.vcs.dtos.vcs_dtos import MergeRequestDTO, BranchDTO, CommitResultDTO
+from software_factory_poc.application.core.agents.common.dtos.file_content_dto import FileContentDTO
+from software_factory_poc.application.core.agents.scaffolding.value_objects.scaffolding_order import ScaffoldingOrder
 
 @pytest.fixture
 def mock_task_dto_factory():

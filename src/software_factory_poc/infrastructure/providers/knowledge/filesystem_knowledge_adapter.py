@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from software_factory_poc.application.core.domain.agents.common.exceptions.provider_error import ProviderError
-from software_factory_poc.application.core.domain.agents.research.config.research_provider_type import ResearchProviderType
-from software_factory_poc.application.core.domain.agents.research.ports.research_gateway import ResearchGateway
+from software_factory_poc.application.core.agents.common.exceptions.provider_error import ProviderError
+from software_factory_poc.application.core.agents.research.config.research_provider_type import ResearchProviderType
+from software_factory_poc.application.core.agents.research.ports.research_gateway import ResearchGateway
 
 
 

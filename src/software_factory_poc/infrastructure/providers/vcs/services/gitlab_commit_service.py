@@ -31,7 +31,13 @@ class GitLabCommitService:
         """
         Commits files to a branch. Performs smart upsert.
         """
+
         path = f"api/v4/projects/{project_id}/repository/commits"
+        
+        if not files_map:
+            logger.warning("Commit requested with empty files_map. Skipping.")
+            return {}
+
         logger.info(f"Committing {len(files_map)} files to branch '{branch_name}' in project {project_id}")
         
         files_action_map = {}

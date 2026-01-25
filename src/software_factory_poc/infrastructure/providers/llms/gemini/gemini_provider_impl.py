@@ -4,11 +4,11 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from software_factory_poc.application.core.domain.agents.reasoner.llm_request import LlmRequest
-from software_factory_poc.application.core.domain.agents.reasoner.llm_response import LlmResponse
-from software_factory_poc.application.core.domain.agents.common.exceptions.provider_error import ProviderError
-from software_factory_poc.application.core.domain.agents.common.config.llm_provider_type import LlmProviderType
-from software_factory_poc.application.core.domain.agents.reasoner.ports.llm_provider import LlmProvider
+from software_factory_poc.application.core.agents.reasoner.llm_request import LlmRequest
+from software_factory_poc.application.core.agents.reasoner.llm_response import LlmResponse
+from software_factory_poc.application.core.agents.common.exceptions.provider_error import ProviderError
+from software_factory_poc.application.core.agents.common.config.llm_provider_type import LlmProviderType
+from software_factory_poc.application.core.agents.reasoner.ports.llm_provider import LlmProvider
 from software_factory_poc.infrastructure.common.retry.retry_policy import RetryPolicy
 from software_factory_poc.infrastructure.observability.logging.correlation_id_context import (
     CorrelationIdContext,
@@ -21,7 +21,7 @@ from software_factory_poc.infrastructure.providers.llms.gemini.mappers.gemini_re
 )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class GeminiProviderImpl(LlmProvider):
     client: Any
     retry: RetryPolicy
@@ -45,9 +45,10 @@ class GeminiProviderImpl(LlmProvider):
             
             # 2. Debug Log
             prompt_content = kwargs.get("contents", "NO_CONTENT")
-            prompt_content = kwargs.get("contents", "NO_CONTENT")
-            print(f"\n🚀 [INFRA:LLM-SEND] Sending to {self.name.value.upper()}:\n"
-                  f"--- BEGIN PROMPT ---\n{prompt_content}\n--- END PROMPT ---\n", flush=True)
+            logging.getLogger(__name__).debug(
+                f"\n🚀 [INFRA:LLM-SEND] Sending to {self.name.value.upper()}:\n"
+                f"--- BEGIN PROMPT ---\n{prompt_content}\n--- END PROMPT ---\n"
+            )
             
             # 3. Execute
             resp = await self.client.models.generate_content(**kwargs)

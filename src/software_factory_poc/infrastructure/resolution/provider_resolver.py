@@ -1,27 +1,34 @@
+from typing import cast
 from pathlib import Path
 
-from software_factory_poc.application.core.domain.agents.research.config.research_provider_type import (
+from software_factory_poc.application.core.agents.reporter.reporter_agent import ReporterAgent
+from software_factory_poc.application.core.agents.vcs.vcs_agent import VcsAgent
+from software_factory_poc.application.core.agents.research.research_agent import ResearchAgent
+from software_factory_poc.application.core.agents.reasoner.reasoner_agent import ReasonerAgent
+from software_factory_poc.application.core.agents.scaffolding.scaffolding_agent import ScaffoldingAgent
+
+from software_factory_poc.application.core.agents.research.config.research_provider_type import (
     ResearchProviderType,
 )
-from software_factory_poc.application.core.domain.agents.common.config.llm_provider_type import (
+from software_factory_poc.application.core.agents.common.config.llm_provider_type import (
     LlmProviderType,
 )
-from software_factory_poc.application.core.domain.agents.scaffolding.config.scaffolding_agent_config import (
+from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import (
     ScaffoldingAgentConfig,
 )
-from software_factory_poc.application.core.domain.agents.reporter.config.task_tracker_type import (
+from software_factory_poc.application.core.agents.reporter.config.task_tracker_type import (
     TaskTrackerType,
 )
-from software_factory_poc.application.core.domain.agents.vcs.config.vcs_provider_type import (
+from software_factory_poc.application.core.agents.vcs.config.vcs_provider_type import (
     VcsProviderType,
 )
-from software_factory_poc.application.core.domain.agents.reasoner.ports.llm_gateway import LlmGateway
-from software_factory_poc.application.core.domain.agents.research.ports.research_gateway import ResearchGateway
-from software_factory_poc.application.core.domain.agents.research.ports.research_gateway import ResearchGateway
-from software_factory_poc.application.core.domain.agents.reporter.ports.task_tracker_gateway import TaskTrackerGateway
-from software_factory_poc.application.core.domain.agents.vcs.ports.vcs_gateway import VcsGateway
+from software_factory_poc.application.core.agents.reasoner.ports.llm_gateway import LlmGateway
+from software_factory_poc.application.core.agents.research.ports.research_gateway import ResearchGateway
+
+from software_factory_poc.application.core.agents.reporter.ports.task_tracker_gateway import TaskTrackerGateway
+from software_factory_poc.application.core.agents.vcs.ports.vcs_gateway import VcsGateway
 from software_factory_poc.infrastructure.configuration.main_settings import Settings # Legacy or remove
-from software_factory_poc.configuration.app_config import AppConfig
+from software_factory_poc.infrastructure.configuration.app_config import AppConfig
 from software_factory_poc.infrastructure.common.retry.retry_policy import RetryPolicy
 from software_factory_poc.infrastructure.observability.logging.correlation_id_context import (
     CorrelationIdContext,
@@ -30,15 +37,7 @@ from software_factory_poc.infrastructure.providers.llms.facade.llm_provider_fact
     LlmProviderFactory,
 )
 from software_factory_poc.infrastructure.providers.research.research_provider_factory import ResearchProviderFactory
-from software_factory_poc.infrastructure.providers.knowledge.clients.confluence_http_client import (
-    ConfluenceHttpClient,
-)
-from software_factory_poc.infrastructure.providers.knowledge.confluence_knowledge_adapter import (
-    ConfluenceKnowledgeAdapter,
-)
-from software_factory_poc.infrastructure.providers.knowledge.filesystem_knowledge_adapter import (
-    FileSystemKnowledgeAdapter,
-)
+
 from software_factory_poc.infrastructure.providers.llms.gateway.composite_gateway import (
     CompositeLlmGateway,
 )
@@ -110,8 +109,8 @@ class ProviderResolver:
         Resolves the configured Tracker provider.
         """
         if self.config.tracker_provider == TaskTrackerType.JIRA:
-            http_client = JiraHttpClient(self.settings)
-            return JiraProviderImpl(http_client)
+            http_client = JiraHttpClient(self.app_config.jira)
+            return JiraProviderImpl(http_client, self.app_config.tools)
             
         elif self.config.tracker_provider == TaskTrackerType.AZURE_DEVOPS:
             raise NotImplementedError("Azure DevOps adapter is not yet implemented.")
@@ -146,3 +145,51 @@ class ProviderResolver:
         
         # 3. Return Composite Gateway
         return CompositeLlmGateway(self.config, clients)
+
+    # ---------------------------------------------------------
+    # Domain Agent Factory Methods (Clean Code / DI Encapsulation)
+    # ---------------------------------------------------------
+
+    def create_reporter_agent(self) -> ReporterAgent:
+        tracker_gateway = cast(TaskTrackerGateway, self.resolve_tracker())
+        return ReporterAgent(
+            name="Reporter", 
+            role="Communicator", 
+            goal="Report status to Issue Tracker", 
+            tracker=tracker_gateway
+        )
+
+    def create_vcs_agent(self) -> VcsAgent:
+        vcs_gateway = self.resolve_vcs()
+        return VcsAgent(
+            name="GitLabVcs", 
+            role="Vcs", 
+            goal="Manage GitLab branches/MRs", 
+            gateway=vcs_gateway
+        )
+
+    def create_research_agent(self) -> ResearchAgent:
+        research_gateway = self.resolve_research()
+        return ResearchAgent(
+            name="Researcher", 
+            role="Researcher", 
+            goal="Gather context", 
+            gateway=research_gateway
+        )
+
+    def create_reasoner_agent(self) -> ReasonerAgent:
+        llm_gateway = self.resolve_llm_gateway()
+        return ReasonerAgent(
+            name="ArchitectAI",
+            role="Engineer",
+            goal="Generate scaffolding code",
+            llm_gateway=llm_gateway
+        )
+
+    def create_scaffolding_agent(self, model_name: str = "gpt-4-turbo", temperature: float = 0.2, max_tokens: int = 4000) -> ScaffoldingAgent:
+        orchestrator_config = self.config.model_copy(update={
+            "model_name": model_name,
+            "temperature": temperature,
+            "extra_params": {"max_tokens": max_tokens}
+        })
+        return ScaffoldingAgent(config=orchestrator_config)

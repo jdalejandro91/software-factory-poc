@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import Any
+from typing import Any, Optional
 
 
 class LoggerFactoryService:
@@ -26,10 +26,10 @@ class LoggerFactoryService:
 
     @staticmethod
     def build_log_context(
-        run_id: str | None = None,
-        issue_key: str | None = None,
-        step_name: str | None = None,
-        extra: dict[str, Any] | None = None,
+        run_id: Optional[str] = None,
+        issue_key: Optional[str] = None,
+        step_name: Optional[str] = None,
+        extra: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         """
         Builds a dictionary for use in logging 'extra' fields or structural logging.
@@ -49,9 +49,9 @@ class LoggerFactoryService:
 
     @staticmethod
     def log_context_string(
-        run_id: str | None = None,
-        issue_key: str | None = None,
-        step_name: str | None = None,
+        run_id: Optional[str] = None,
+        issue_key: Optional[str] = None,
+        step_name: Optional[str] = None,
     ) -> str:
         """
         Helper to create a standard prefix string '[run_id=... issue_key=...]'

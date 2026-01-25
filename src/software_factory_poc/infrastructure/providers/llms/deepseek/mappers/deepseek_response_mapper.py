@@ -4,13 +4,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from software_factory_poc.application.core.domain.agents.reasoner.llm_response import LlmResponse
-from software_factory_poc.application.core.domain.value_objects.model_id import ModelId
-from software_factory_poc.application.core.domain.agents.common.config.llm_provider_type import LlmProviderType
-from software_factory_poc.application.core.domain.agents.reasoner.token_metric import TokenMetric
+from software_factory_poc.application.core.agents.reasoner.llm_response import LlmResponse
+from software_factory_poc.application.core.agents.common.value_objects.model_id import ModelId
+from software_factory_poc.application.core.agents.common.config.llm_provider_type import LlmProviderType
+from software_factory_poc.application.core.agents.reasoner.token_metric import TokenMetric
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class DeepSeekResponseMapper:
     def to_domain(self, model_name: str, response: Any) -> LlmResponse:
         msg = self._message(response)

@@ -3,12 +3,12 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from software_factory_poc.application.core.domain.agents.common.exceptions.configuration_error import (
+from software_factory_poc.application.core.agents.common.exceptions.configuration_error import (
     ConfigurationError,
 )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class AnthropicConfig:
     api_key: str
     timeout_s: float = 120.0

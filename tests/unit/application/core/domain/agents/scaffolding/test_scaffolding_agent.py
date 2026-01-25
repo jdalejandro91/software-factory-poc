@@ -1,8 +1,8 @@
 import pytest
 from unittest.mock import MagicMock, ANY
-from software_factory_poc.application.core.domain.agents.scaffolding.scaffolding_agent import ScaffoldingAgent
-from software_factory_poc.application.core.domain.agents.scaffolding.scaffolding_agent_config import ScaffoldingAgentConfig
-from software_factory_poc.application.core.domain.agents.scaffolding.scaffolding_order import ScaffoldingOrder
+from software_factory_poc.application.core.agents.scaffolding.scaffolding_agent import ScaffoldingAgent
+from software_factory_poc.application.core.agents.scaffolding.scaffolding_agent_config import ScaffoldingAgentConfig
+from software_factory_poc.application.core.agents.scaffolding.scaffolding_order import ScaffoldingOrder
 from software_factory_poc.application.core.ports.gateways.dtos import FileContentDTO, MergeRequestDTO, BranchDTO, CommitResultDTO
 from software_factory_poc.application.core.domain.configuration.task_status import TaskStatus
 
