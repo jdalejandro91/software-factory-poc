@@ -1,7 +1,10 @@
-import pytest
 from unittest.mock import MagicMock, AsyncMock
-from software_factory_poc.infrastructure.providers.llms.deepseek.deepseek_provider_impl import DeepSeekProviderImpl
+
+import pytest
+
 from software_factory_poc.infrastructure.providers.llms.deepseek.clients.deepseek_config import DeepSeekConfig
+from software_factory_poc.infrastructure.providers.llms.deepseek.deepseek_provider_impl import DeepSeekProviderImpl
+
 
 @pytest.fixture
 def mock_client():

@@ -1,14 +1,19 @@
-import pytest
 from unittest.mock import MagicMock, ANY, patch
-from software_factory_poc.application.core.agents.scaffolding.scaffolding_agent import ScaffoldingAgent
-from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import ScaffoldingAgentConfig
-from software_factory_poc.application.core.agents.scaffolding.value_objects.scaffolding_order import ScaffoldingOrder # Fixed import path
-from software_factory_poc.application.core.agents.common.config.task_status import TaskStatus # Updated to match usage if needed, or keep existing
-from software_factory_poc.application.core.ports.gateways.dtos import FileContentDTO, MergeRequestDTO, BranchDTO, CommitResultDTO
+
+import pytest
+from software_factory_poc.application.core.ports.gateways.dtos import FileContentDTO, MergeRequestDTO, BranchDTO, \
+    CommitResultDTO
+
 # Removed duplicate TaskStatus import if it was handled above or keep it
 # The original code had: from software_factory_poc.application.core.agents.common.config.task_status import TaskStatus
 # I will check if I need to update that one too. I'll leave it for now or update it if I know the path.
 from software_factory_poc.application.core.agents.common.config.task_status import TaskStatus
+from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import \
+    ScaffoldingAgentConfig
+from software_factory_poc.application.core.agents.scaffolding.scaffolding_agent import ScaffoldingAgent
+from software_factory_poc.application.core.agents.scaffolding.value_objects.scaffolding_order import \
+    ScaffoldingOrder  # Fixed import path
+
 
 class TestScaffoldingAgent:
     @pytest.fixture

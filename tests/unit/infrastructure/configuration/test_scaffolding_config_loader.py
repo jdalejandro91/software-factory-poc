@@ -1,20 +1,19 @@
 import json
 import os
-from unittest import mock
 
 import pytest
-
 from software_factory_poc.application.core.agents.common.configuration.knowledge_provider_type import (
     KnowledgeProviderType,
-)
-from software_factory_poc.application.core.agents.common.config.llm_provider_type import (
-    LlmProviderType,
 )
 from software_factory_poc.application.core.agents.common.configuration.task_tracker_type import (
     TaskTrackerType,
 )
 from software_factory_poc.application.core.agents.common.configuration.vcs_provider_type import (
     VcsProviderType,
+)
+
+from software_factory_poc.application.core.agents.common.config.llm_provider_type import (
+    LlmProviderType,
 )
 from software_factory_poc.infrastructure.configuration.scaffolding_config_loader import (
     ScaffoldingConfigLoader,

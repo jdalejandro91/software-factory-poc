@@ -1,7 +1,9 @@
-
-import pytest
 from unittest.mock import MagicMock, patch
 from software_factory_poc.infrastructure.providers.knowledge.clients.confluence_http_client import ConfluenceHttpClient
+from unittest.mock import MagicMock, patch
+
+from software_factory_poc.infrastructure.providers.knowledge.clients.confluence_http_client import ConfluenceHttpClient
+
 
 class TestConfluenceHttpClient:
     @patch('software_factory_poc.infrastructure.providers.knowledge.clients.confluence_http_client.httpx.Client')

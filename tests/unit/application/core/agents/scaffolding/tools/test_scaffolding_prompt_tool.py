@@ -1,7 +1,13 @@
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from software_factory_poc.application.core.agents.scaffolding.tools.scaffolding_prompt_builder import ScaffoldingPromptBuilder
 from software_factory_poc.application.core.agents.scaffolding.scaffolding_order import ScaffoldingOrder
+from unittest.mock import patch
+
+from software_factory_poc.application.core.agents.scaffolding.scaffolding_order import ScaffoldingOrder
+
+from software_factory_poc.application.core.agents.scaffolding.tools.scaffolding_prompt_builder import \
+    ScaffoldingPromptBuilder
+
 
 class TestScaffoldingPromptTool:
     @patch('software_factory_poc.application.core.agents.scaffolding.tools.scaffolding_prompt_builder.logger')

@@ -1,7 +1,9 @@
-
-import pytest
 from unittest.mock import MagicMock
 from software_factory_poc.infrastructure.providers.research.confluence_provider_impl import ConfluenceProviderImpl
+from unittest.mock import MagicMock
+
+from software_factory_poc.infrastructure.providers.research.confluence_provider_impl import ConfluenceProviderImpl
+
 
 def test_confluence_html_cleaning():
     settings = MagicMock()

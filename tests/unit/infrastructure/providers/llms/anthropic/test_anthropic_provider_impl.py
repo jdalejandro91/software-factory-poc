@@ -1,6 +1,9 @@
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock
+
 from software_factory_poc.infrastructure.providers.llms.anthropic.anthropic_provider_impl import AnthropicProviderImpl
+
 
 @pytest.mark.asyncio
 async def test_anthropic_provider_instantiation():

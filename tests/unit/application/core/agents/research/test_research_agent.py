@@ -1,8 +1,12 @@
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
+
 from software_factory_poc.application.core.agents.research.research_agent import ResearchAgent
-from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import ScaffoldingAgentConfig
+from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import \
+    ScaffoldingAgentConfig
+
 
 @pytest.fixture
 def mock_gateway():

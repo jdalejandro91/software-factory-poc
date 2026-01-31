@@ -1,13 +1,14 @@
 import os
-import pytest
+
 from software_factory_poc.configuration.app_config import AppConfig
-from software_factory_poc.infrastructure.resolution.provider_resolver import ProviderResolver
-from software_factory_poc.infrastructure.configuration.scaffolding_config_loader import ScaffoldingConfigLoader
+
 from software_factory_poc.application.core.agents.research.config.research_provider_type import ResearchProviderType
-from software_factory_poc.infrastructure.providers.research.confluence_provider_impl import ConfluenceProviderImpl
-from software_factory_poc.application.core.agents.research.ports.research_gateway import ResearchGateway
-from software_factory_poc.application.usecases.scaffolding.create_scaffolding_usecase import CreateScaffoldingUseCase
 from software_factory_poc.application.core.agents.research.research_agent import ResearchAgent
+from software_factory_poc.application.usecases.scaffolding.create_scaffolding_usecase import CreateScaffoldingUseCase
+from software_factory_poc.infrastructure.configuration.scaffolding_config_loader import ScaffoldingConfigLoader
+from software_factory_poc.infrastructure.providers.research.confluence_provider_impl import ConfluenceProviderImpl
+from software_factory_poc.infrastructure.resolution.provider_resolver import ProviderResolver
+
 
 def test_wiring_confluence_provider():
     # 1. Setup Env Vars

@@ -18,7 +18,6 @@ from software_factory_poc.application.usecases.scaffolding.create_scaffolding_us
 from software_factory_poc.infrastructure.configuration.scaffolding_config_loader import (
     ScaffoldingConfigLoader,
 )
-from software_factory_poc.infrastructure.configuration.tool_settings import ToolSettings
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 from software_factory_poc.infrastructure.resolution.provider_resolver import ProviderResolver
 

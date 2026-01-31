@@ -1,8 +1,10 @@
-import pytest
 from unittest.mock import MagicMock, patch
-from software_factory_poc.infrastructure.providers.tracker.jira_provider_impl import JiraProviderImpl
-from software_factory_poc.infrastructure.providers.tracker.mappers.jira_panel_factory import JiraPanelFactory
+
+import pytest
+
 from software_factory_poc.application.core.agents.common.exceptions.provider_error import ProviderError
+from software_factory_poc.infrastructure.providers.tracker.jira_provider_impl import JiraProviderImpl
+
 
 @pytest.fixture
 def mock_client():

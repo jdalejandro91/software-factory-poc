@@ -3,7 +3,6 @@ import uuid
 
 import pytest
 
-from software_factory_poc.infrastructure.configuration.tool_settings import ToolSettings
 from software_factory_poc.infrastructure.configuration.main_settings import Settings
 from software_factory_poc.infrastructure.providers.vcs.clients.gitlab_http_client import (
     GitLabHttpClient,

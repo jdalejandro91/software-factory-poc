@@ -1,13 +1,18 @@
 
-import pytest
 from unittest.mock import MagicMock, AsyncMock
-from software_factory_poc.infrastructure.providers.llms.gateway.composite_gateway import CompositeLlmGateway
-from software_factory_poc.application.core.agents.reasoner.exceptions.all_models_exhausted_error import AllModelsExhaustedException
-from software_factory_poc.application.core.agents.reasoner.ports.llm_gateway import LLMError
+
+import pytest
+
 from software_factory_poc.application.core.agents.common.config.llm_provider_type import LlmProviderType
-from software_factory_poc.application.core.agents.reasoner.llm_response import LlmResponse
 from software_factory_poc.application.core.agents.common.value_objects.model_id import ModelId
-from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import ScaffoldingAgentConfig
+from software_factory_poc.application.core.agents.reasoner.exceptions.all_models_exhausted_error import \
+    AllModelsExhaustedException
+from software_factory_poc.application.core.agents.reasoner.llm_response import LlmResponse
+from software_factory_poc.application.core.agents.reasoner.ports.llm_gateway import LLMError
+from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import \
+    ScaffoldingAgentConfig
+from software_factory_poc.infrastructure.providers.llms.gateway.composite_gateway import CompositeLlmGateway
+
 
 @pytest.fixture
 def mock_config():

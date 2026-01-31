@@ -1,8 +1,11 @@
 
-import pytest
-import httpx
 from unittest.mock import MagicMock
+
+import httpx
+import pytest
+
 from software_factory_poc.infrastructure.providers.vcs.services.gitlab_mr_service import GitLabMrService
+
 
 def test_mr_creation_conflict_recovery():
     mock_client = MagicMock()

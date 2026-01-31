@@ -1,8 +1,9 @@
 
 import pytest
-from software_factory_poc.application.core.agents.scaffolding.tools.artifact_parser import ArtifactParser
-from software_factory_poc.application.core.agents.common.dtos.file_content_dto import FileContentDTO
+
 from software_factory_poc.application.core.agents.common.exceptions.contract_parse_error import ContractParseError
+from software_factory_poc.application.core.agents.scaffolding.tools.artifact_parser import ArtifactParser
+
 
 def test_parse_valid_json_with_markdown():
     parser = ArtifactParser()

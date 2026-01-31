@@ -1,7 +1,9 @@
-
-import pytest
 from unittest.mock import MagicMock
 from software_factory_poc.infrastructure.providers.vcs.services.gitlab_commit_service import GitLabCommitService
+from unittest.mock import MagicMock
+
+from software_factory_poc.infrastructure.providers.vcs.services.gitlab_commit_service import GitLabCommitService
+
 
 def test_commit_files_force_create_optimization():
     mock_client = MagicMock()

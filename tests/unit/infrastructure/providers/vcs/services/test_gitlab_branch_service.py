@@ -1,6 +1,9 @@
-import pytest
 from unittest.mock import MagicMock
 from software_factory_poc.infrastructure.providers.vcs.services.gitlab_branch_service import GitLabBranchService
+from unittest.mock import MagicMock
+
+from software_factory_poc.infrastructure.providers.vcs.services.gitlab_branch_service import GitLabBranchService
+
 
 def test_gitlab_service_conflict_handling():
     mock_client = MagicMock()
