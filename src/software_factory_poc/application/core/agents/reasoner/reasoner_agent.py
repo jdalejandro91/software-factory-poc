@@ -8,6 +8,7 @@ from software_factory_poc.infrastructure.observability.logger_factory_service im
 
 logger = LoggerFactoryService.build_logger(__name__)
 
+
 @dataclass
 class ReasonerAgent(BaseAgent):
     """
@@ -22,17 +23,24 @@ class ReasonerAgent(BaseAgent):
         Stateless operation.
         """
         logger.info(f"Reasoning with model {model_id}...")
-        
-        # Adapt to Gateway Interface
-        # Gateway expects (prompt, context, hints)
-        # We assume 'prompt' here is the full accumulated prompt/context combo.
-        # Assuming OPENAI if vague string, but ModelId requires explicit provider.
-        # Since we only get a name, we default to OPENAI.
-        hints = [ModelId(provider=LlmProviderType.OPENAI, name=model_id)]
-        
+
+        provider = LlmProviderType.OPENAI
+        name = model_id
+
+        if ":" in model_id:
+            parts = model_id.split(":", 1)
+            provider_str = parts[0].lower()
+            name = parts[1]
+            try:
+                provider = LlmProviderType(provider_str)
+            except ValueError:
+                logger.warning(f"Unknown provider '{provider_str}' in model_id '{model_id}'. Falling back to OPENAI.")
+
+        hints = [ModelId(provider=provider, name=name)]
+
         response = self.llm_gateway.generate_code(
-            prompt=prompt, 
-            context="", 
+            prompt=prompt,
+            context="",
             model_hints=hints
         )
         return response.content

@@ -1,5 +1,4 @@
 from software_factory_poc.infrastructure.providers.tracker.mappers.jira_panel_factory import JiraPanelFactory
-from software_factory_poc.infrastructure.providers.tracker.mappers.jira_panel_factory import JiraPanelFactory
 
 
 def test_panel_factory_success_payload():

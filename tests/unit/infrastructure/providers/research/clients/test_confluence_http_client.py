@@ -1,7 +1,6 @@
 from unittest.mock import MagicMock, patch
-from software_factory_poc.infrastructure.providers.knowledge.clients.confluence_http_client import ConfluenceHttpClient
-from unittest.mock import MagicMock, patch
 
+from software_factory_poc.infrastructure.providers.knowledge.clients.confluence_http_client import ConfluenceHttpClient
 from software_factory_poc.infrastructure.providers.knowledge.clients.confluence_http_client import ConfluenceHttpClient
 
 

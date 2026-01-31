@@ -1,6 +1,4 @@
 from unittest.mock import MagicMock
-from software_factory_poc.infrastructure.providers.vcs.services.gitlab_commit_service import GitLabCommitService
-from unittest.mock import MagicMock
 
 from software_factory_poc.infrastructure.providers.vcs.services.gitlab_commit_service import GitLabCommitService
 

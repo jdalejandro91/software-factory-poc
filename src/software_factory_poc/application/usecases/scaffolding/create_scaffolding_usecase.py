@@ -40,7 +40,10 @@ class CreateScaffoldingUseCase:
             researcher = self.resolver.create_research_agent()
             reasoner = self.resolver.create_reasoner_agent()
 
-            priority_model = self.config.llm_model_priority[0].name if self.config.llm_model_priority else "gpt-4-turbo"
+            if self.config.llm_model_priority:
+                priority_model = self.config.llm_model_priority[0].qualified_name
+            else:
+                priority_model = "openai:gpt-4-turbo"
 
             orchestrator = self.resolver.create_scaffolding_agent(
                 model_name=priority_model

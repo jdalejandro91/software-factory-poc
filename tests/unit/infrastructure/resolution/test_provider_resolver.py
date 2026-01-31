@@ -1,5 +1,4 @@
 from software_factory_poc.infrastructure.resolution.provider_resolver import ProviderResolver
-from software_factory_poc.infrastructure.resolution.provider_resolver import ProviderResolver
 
 
 def test_resolve_model_success():
