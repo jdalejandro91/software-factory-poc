@@ -10,6 +10,9 @@ class CodeReviewOrder(BaseModel):
     mr_id: str
     source_branch: str
     vcs_provider: str
+    summary: str
+    description: str
+    technical_doc_id: Optional[str] = None
     requesting_user: Optional[str] = None
     
     class Config:

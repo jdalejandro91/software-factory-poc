@@ -72,6 +72,14 @@ class CodeReviewerAgent(BaseAgent):
                 self.reporter.report_success(order.issue_key, msg)
                 return
 
+            # 3.5 Gather Technical Context
+            query = f"Standards and guidelines for {order.summary}"
+            technical_context = self.researcher.investigate(
+                query=query,
+                specific_page_id=order.technical_doc_id
+            )
+            self.logger.info(f"Research complete. Context size: {len(technical_context)} chars")
+
         except Exception as e:
             self.logger.error(f"Unexpected error in CodeReviewerAgent flow: {e}", exc_info=True)
             self.reporter.report_failure(order.issue_key, f"Unexpected error: {str(e)}")
