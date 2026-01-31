@@ -1,5 +1,6 @@
 import urllib.parse
-from typing import Any, Optional
+from typing import Any, Optional, List
+from software_factory_poc.application.core.agents.common.dtos.file_content_dto import FileContentDTO
 
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -162,6 +163,89 @@ class GitLabProviderImpl(VcsGateway):
             )
         except Exception as e:
             self._handle_error(e, "create_merge_request")
+            raise
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
+    def get_repository_files(self, project_id: int, branch_name: str) -> List[FileContentDTO]:
+        self._logger.info(f"Fetching file list for project {project_id} on branch {branch_name}...")
+        
+        all_files = []
+        page = 1
+        per_page = 100
+        
+        try:
+            while True:
+                response = self.client.get(
+                    f"api/v4/projects/{project_id}/repository/tree",
+                    params={
+                        "ref": branch_name,
+                        "recursive": True,
+                        "per_page": per_page,
+                        "page": page
+                    }
+                )
+                
+                if response.status_code == 404:
+                     raise ProviderError(
+                        provider=VcsProviderType.GITLAB,
+                        message=f"Branch '{branch_name}' not found for project {project_id}",
+                        retryable=False
+                    )
+                
+                response.raise_for_status()
+                items = response.json()
+                
+                if not items:
+                    break
+                
+                all_files.extend(items)
+                page += 1
+                
+            # Filter and Download
+            result_dtos = []
+            binary_extensions = {
+                '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.pdf', 
+                '.zip', '.tar', '.gz', '.pyc', '.exe', '.dll', '.so', '.bin', '.lock'
+            }
+            
+            filtered_files = []
+            for item in all_files:
+                if item['type'] != 'blob':
+                    continue
+                
+                path = item['path']
+                ext = ""
+                if "." in path:
+                    ext = "." + path.split(".")[-1].lower()
+                
+                if ext in binary_extensions:
+                    continue
+                    
+                filtered_files.append(path)
+
+            self._logger.info(f"Found {len(all_files)} items. Downloading {len(filtered_files)} text files...")
+
+            for file_path in filtered_files:
+                try:
+                    encoded_path = urllib.parse.quote(file_path, safe="")
+                    # Get raw content
+                    resp = self.client.get(
+                        f"api/v4/projects/{project_id}/repository/files/{encoded_path}/raw",
+                        params={"ref": branch_name}
+                    )
+                    resp.raise_for_status()
+                    
+                    content = resp.text
+                    result_dtos.append(FileContentDTO(path=file_path, content=content))
+                    
+                except Exception as e:
+                     self._logger.warning(f"Failed to download/decode {file_path}: {e}")
+            
+            self._logger.info(f"Downloaded {len(result_dtos)} files.")
+            return result_dtos
+
+        except Exception as e:
+            self._handle_error(e, f"get_repository_files({branch_name})")
             raise
 
     def _handle_error(self, error: Exception, context: str) -> None:
