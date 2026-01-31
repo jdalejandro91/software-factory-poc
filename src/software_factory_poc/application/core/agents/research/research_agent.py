@@ -8,6 +8,7 @@ from software_factory_poc.application.core.agents.scaffolding.config.scaffolding
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class ResearchAgent(BaseAgent):
     """
@@ -19,17 +20,26 @@ class ResearchAgent(BaseAgent):
     def investigate(self, query: str) -> str:
         # Check if query implies architecture and we have a configured page ID
         if self._is_architecture_query(query) and self.config.architecture_page_id:
-            logger.info(f"Architecture query detected. Fetching page ID: {self.config.architecture_page_id}")
-            context = self.gateway.get_page_content(self.config.architecture_page_id)
+            logger.info(
+                f"🕵️ ARCHITECTURE QUERY DETECTED. Fetching Confluence Page ID: {self.config.architecture_page_id}")
+            try:
+                context = self.gateway.get_page_content(self.config.architecture_page_id)
+                # LOGGING IMPROVEMENT: Print preview of what was found
+                logger.info(f"CONFLUENCE CONTENT RETRIEVED ({len(context)} chars).")
+                logger.info(
+                    f"PREVIEW:\n{context[:500]}...\n(Check if 'Modular Monolith' or specific modules are mentioned above)")
+            except Exception as e:
+                logger.error(f"Error fetching architecture page: {e}")
+                context = "Error retrieving architecture. Use standard defaults."
         else:
-            logger.info(f"General research query: {query}")
+            logger.info(f"🔎 General research query: {query}")
             context = self.gateway.retrieve_context(query)
-        
+
         if not context or len(context) < 100:
-             logger.warning(f"Context retrieval yielded empty or short result for query: {query}")
-             if not context:
-                 return "No context found."
-             
+            logger.warning(f"Context retrieval yielded empty or short result for query: {query}")
+            if not context:
+                return "No specific architecture context found. Use industry standards."
+
         return context
 
     def _is_architecture_query(self, query: str) -> bool:

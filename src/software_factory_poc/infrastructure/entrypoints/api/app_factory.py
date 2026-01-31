@@ -19,59 +19,36 @@ logger = LoggerFactoryService.build_logger(__name__)
 
 
 def boot_diagnostics():
-    """
-    Imprime un diagnóstico directo de las variables de entorno a stderr.
-    """
     try:
-        logger.info(">>> BOOT DIAGNOSTICS START (Direct Env Check) <<<")
-
+        logger.info(">>> BOOT DIAGNOSTICS START <<<")
         critical_vars = [
-            "OPENAI_API_KEY",
-            "DEEPSEEK_API_KEY",
-            "GEMINI_API_KEY",
-            "ANTHROPIC_API_KEY",
-            "SCAFFOLDING_LLM_MODEL_PRIORITY",
-            "VCS_PROVIDER",
-            "TRACKER_PROVIDER",
-            "SCAFFOLDING_ALLOWLISTED_GROUPS"
+            "OPENAI_API_KEY", "DEEPSEEK_API_KEY",
+            "GEMINI_API_KEY", "ANTHROPIC_API_KEY",
+            "ARCHITECTURE_DOC_PAGE_ID", "CONFLUENCE_BASE_URL"
         ]
-
         for k in critical_vars:
             val = os.getenv(k)
-            if val:
-                logger.info(f"ENV: {k:<30} = PRESENT (Len={len(val)})")
-            else:
-                logger.warning(f"ENV: {k:<30} = MISSING")
-
+            status = "PRESENT" if val else "MISSING"
+            logger.info(f"ENV: {k:<30} = {status}")
         logger.info(">>> BOOT DIAGNOSTICS END <<<")
     except Exception as e:
         logger.error(f"Error during boot diagnostics: {e}")
 
 
 def create_app(settings: Settings) -> FastAPI:
-    # This ensures logs from Agents (Research, Scaffolding) appear in Docker logs
+    # 1. CRITICAL: Configure Root Logger so INFO logs appear in Docker console
     LoggerFactoryService.configure_root_logger()
 
-    # 2. Run Diagnostics
     boot_diagnostics()
 
-    logger.info("--- APP INITIALIZATION ---")
-    logger.info(f"App Name: {settings.app_name}")
-    env_name = os.getenv("ENV", "production")
-    logger.info(f"Environment: {env_name}")
-
-    # Check loaded settings
-    has_openai = bool(settings.openai_api_key)
-    has_deepseek = bool(settings.deepseek_api_key)
-    logger.info(f"Pydantic Settings Loaded: OpenAI={has_openai}, DeepSeek={has_deepseek}")
-    logger.info("------------------------")
+    logger.info(f"--- APP INITIALIZATION: {settings.app_name} ---")
 
     app = FastAPI(title=settings.app_name)
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
         error_details = exc.errors()
-        logger.error(f"Validation error for request {request.url}: {error_details}")
+        logger.error(f"Validation error: {error_details}")
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={"detail": error_details, "body": str(exc.body)},
