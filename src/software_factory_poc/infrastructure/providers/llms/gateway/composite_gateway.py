@@ -22,47 +22,49 @@ from software_factory_poc.infrastructure.observability.logger_factory_service im
 
 logger = LoggerFactoryService.build_logger(__name__)
 
+
 class CompositeLlmGateway(LlmGateway):
     """
     Gateway that iterates over a priority list of providers to generate code.
     Fallback pattern: tries first, if fails (retryable), tries next.
     Acts as a bridge between Sync Use Case and Async Providers.
     """
+
     def __init__(
-        self, 
-        config: ScaffoldingAgentConfig,
-        clients: dict[LlmProviderType, LlmProvider]
+            self,
+            config: ScaffoldingAgentConfig,
+            clients: dict[LlmProviderType, LlmProvider]
     ):
         self.config = config
         self.clients = clients
         # Use config provided priority list, or fallback to known keys
         self.priority_list: list[Any] = config.llm_model_priority
-        
+
         # Security validation
         if not self.priority_list:
             logger.warning("Priority list is empty in config! Fallback to available clients.")
             self.priority_list = list(clients.keys())
 
         logger.info(f"CompositeGateway loaded {len(self.priority_list)} priority items.")
-        
+
         registered_providers = [p.value for p in clients.keys()]
         logger.info(f"--- [DEBUG] CompositeGateway initialized with providers: {registered_providers}")
 
     def generate_code(self, prompt: str, context: str, model_hints: list[ModelId]) -> Any:
-        # Note: Return type is LlmResponse, imported locally or Any to avoid circular deps if needed, 
+        # Note: Return type is LlmResponse, imported locally or Any to avoid circular deps if needed,
         # but LlmGateway says -> LlmResponse.
-        
+
         last_exception = None
-        
+
         # Priority: Hints > Config Priority
-        # If hints are provided, we should probably try them? 
+        # If hints are provided, we should probably try them?
         # Or does config override? Usually hints from agent are specific.
         # But 'config.priority_list' is the main strategy.
         # Let's verify requirement: "Asegura que ReasonerAgent pase correctamente los model_hints basados en la configuración".
         # If hints are passed, we use them. If not, use priority list.
-        
+
         candidates = model_hints if model_hints else self.priority_list
-        
+
         for item in candidates:
             try:
                 result = self._attempt_generation_with_provider(item, prompt)
@@ -90,15 +92,42 @@ class CompositeLlmGateway(LlmGateway):
         provider_enum = None
         model_name = None
 
+        # Case 0: String Parsing (Fix for .env JSON lists)
+        if isinstance(item, str):
+            # Format "provider:model" (e.g., "gemini:gemini-3-flash-preview")
+            if ":" in item:
+                parts = item.split(":", 1)
+                provider_str = parts[0].lower()
+                model_name = parts[1]
+                try:
+                    provider_enum = LlmProviderType(provider_str)
+                except ValueError:
+                    logger.warning(f"Unknown provider in string '{provider_str}'.")
+                    return None
+            else:
+                # Fallback: Infer provider from model name if no prefix
+                model_lower = item.lower()
+                if "gemini" in model_lower:
+                    provider_enum = LlmProviderType.GEMINI
+                elif "claude" in model_lower:
+                    provider_enum = LlmProviderType.ANTHROPIC
+                elif "deepseek" in model_lower:
+                    provider_enum = LlmProviderType.DEEPSEEK
+                else:
+                    # Default risky fallback
+                    provider_enum = LlmProviderType.OPENAI
+                model_name = item
+
         # Case 1: ModelId object (Expected)
-        if hasattr(item, "provider") and hasattr(item, "name"):
+        elif hasattr(item, "provider") and hasattr(item, "name"):
             provider_enum = item.provider
             model_name = item.name
+
         # Case 2: Dictionary (Pydantic artifacts)
         elif isinstance(item, dict):
             provider_val = item.get("provider")
             model_name = item.get("name")
-            
+
             if isinstance(provider_val, str):
                 try:
                     provider_enum = LlmProviderType(provider_val.lower())
@@ -113,7 +142,7 @@ class CompositeLlmGateway(LlmGateway):
             provider_enum = item
             # We don't have 'default_model' passed easily here unless we pass it down.
             # But hints usually have names.
-            model_name = "gpt-4-turbo" # Fallback default
+            model_name = "gpt-4-turbo"  # Fallback default
 
         # Validation
         if not provider_enum:
@@ -125,19 +154,19 @@ class CompositeLlmGateway(LlmGateway):
         if not client:
             logger.warning(f"Client for provider '{provider_enum}' not found. Available: {list(self.clients.keys())}")
             return None
-        
+
         target_model = model_name if model_name else "gpt-4-turbo"
 
         logger.info(f"Using Provider: {provider_enum.value} | Model: {target_model}")
         self._log_token_usage_estimate(prompt)
-        
+
         # BRIDGE: Construct Domain Request
         request = LlmRequest(
             model=ModelId(provider=provider_enum, name=target_model),
             messages=(Message(role=MessageRole.USER, content=prompt),),
             generation=GenerationConfig(max_output_tokens=4000)
         )
-        
+
         # BRIDGE: Async to Sync execution
         response = asyncio.run(client.generate(request))
         return response
