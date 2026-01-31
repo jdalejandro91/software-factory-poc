@@ -5,7 +5,7 @@ from dataclasses import dataclass
 class ScaffoldingOrder:
     issue_key: str
     raw_instruction: str
-    technology_stack: str = "python" # Default or Optional
+    technology_stack: str = "nestJS" # Default or Optional
     repository_url: str = ""
     project_id: str = ""
     # Legacy fields kept optional or removed if unused?

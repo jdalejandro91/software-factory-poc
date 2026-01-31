@@ -1,8 +1,9 @@
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import List
 
+from software_factory_poc.application.core.agents.base_agent import BaseAgent
 from software_factory_poc.application.core.agents.common.config.task_status import TaskStatus
 from software_factory_poc.application.core.agents.common.dtos.file_content_dto import FileContentDTO
 from software_factory_poc.application.core.agents.reasoner.reasoner_agent import ReasonerAgent
@@ -15,7 +16,6 @@ from software_factory_poc.application.core.agents.scaffolding.tools.scaffolding_
 from software_factory_poc.application.core.agents.vcs.vcs_agent import VcsAgent
 from .config.scaffolding_agent_config import ScaffoldingAgentConfig
 from .value_objects.scaffolding_order import ScaffoldingOrder
-from software_factory_poc.application.core.agents.base_agent import BaseAgent
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +47,12 @@ class ScaffoldingAgent(BaseAgent):
             # STEP 1: PARSE CONTRACT
             try:
                 contract = ScaffoldingContractModel.from_raw_text(request.raw_instruction)
+
+                # Since ScaffoldingOrder is frozen, we must use replace() to create a new instance with the updated field.
+                if contract.technology_stack:
+                    logger.info(f"Override Tech Stack from Contract: {contract.technology_stack}")
+                    request = replace(request, technology_stack=contract.technology_stack)
+
             except Exception as parse_error:
                 logger.error(f"Contract parsing failed: {parse_error}")
                 reporter.report_failure(request.issue_key, f"Invalid Contract: {parse_error}")
@@ -89,7 +95,6 @@ class ScaffoldingAgent(BaseAgent):
         project_id = vcs.resolve_project_id(target_repo)
         branch_name = self._get_branch_name(request)
 
-        # Check if branch already has an open MR or exists
         existing_url = vcs.validate_branch(project_id, branch_name, target_repo)
 
         if existing_url:
@@ -123,9 +128,9 @@ class ScaffoldingAgent(BaseAgent):
             researcher: ResearchAgent,
             reasoner: ReasonerAgent,
     ) -> List[FileContentDTO]:
+        # Thanks to the replace(), request.technology_stack is now correctly updated (e.g. "TypeScript con NestJS")
         query = f"Architecture standards for {request.technology_stack} enterprise projects"
 
-        # Logs should now appear thanks to app_factory fix
         logger.info(f"Researching: {query}")
         research_ctx = researcher.investigate(query)
         logger.info(f"Research result length: {len(research_ctx)}")
@@ -133,7 +138,18 @@ class ScaffoldingAgent(BaseAgent):
         full_context = f"Research:\n{research_ctx}"
         prompt = self.prompt_builder_tool.build_prompt(request, full_context)
 
-        model_id = self.config.model_name or "gpt-4-turbo"
+        # --- MODEL SELECTION LOGIC ---
+        model_id = self.config.model_name
+
+        if not model_id and self.config.llm_model_priority:
+            primary_model = self.config.llm_model_priority[0]
+            model_id = f"{primary_model.provider.value}:{primary_model.name}"
+            logger.info(f"Selected High Priority Model: {model_id}")
+
+        if not model_id:
+            model_id = "openai:gpt-4-turbo"
+            logger.warning(f"No model configured. Falling back to default: {model_id}")
+
         raw_response = reasoner.reason(prompt, model_id)
 
         return self.artifact_parser_tool.parse_response(raw_response)
@@ -149,8 +165,6 @@ class ScaffoldingAgent(BaseAgent):
         vcs.create_branch(project_id, branch_name, ref=self.config.default_target_branch)
 
         files_map = self._prepare_commit_payload(artifacts)
-
-        # force_create=False avoids 400 Bad Request on existing files
         vcs.commit_files(project_id, branch_name, files_map, f"Scaffolding for {request.issue_key}", force_create=False)
 
         mr = vcs.create_merge_request(
@@ -160,7 +174,6 @@ class ScaffoldingAgent(BaseAgent):
             description=f"Auto-generated.\n{request.summary}",
             target_branch=self.config.default_target_branch
         )
-
         logger.info(f"MR Created successfully. Link: {mr.web_url}")
         return mr.web_url
 
