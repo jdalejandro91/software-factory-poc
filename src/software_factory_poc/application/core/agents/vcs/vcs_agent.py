@@ -1,5 +1,9 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, List
+
+from software_factory_poc.application.core.agents.common.dtos.file_changes_dto import FileChangesDTO
+from software_factory_poc.application.core.agents.common.dtos.file_content_dto import FileContentDTO
+from software_factory_poc.application.core.agents.code_reviewer.dtos.code_review_result_dto import ReviewCommentDTO
 
 from software_factory_poc.application.core.agents.base_agent import BaseAgent
 from software_factory_poc.application.core.agents.vcs.dtos.vcs_dtos import MergeRequestDTO, CommitResultDTO, BranchDTO
@@ -51,3 +55,23 @@ class VcsAgent(BaseAgent):
             title=title,
             description=description
         )
+
+    def get_code_context(self, project_id: int, branch: str) -> List[FileContentDTO]:
+        """Retrieves code context (files) from the repository."""
+        self.logger.info(f"Fetching code context from branch '{branch}' for project {project_id}")
+        return self.gateway.get_repository_files(project_id, branch)
+
+    def get_mr_changes(self, project_id: int, mr_id: str) -> List[FileChangesDTO]:
+        """Retrieves file changes for a specific Merge Request."""
+        self.logger.info(f"Fetching diffs for MR {mr_id} in project {project_id}")
+        return self.gateway.get_merge_request_diffs(project_id, mr_id)
+
+    def submit_review(self, project_id: int, mr_id: str, comments: List[ReviewCommentDTO]) -> None:
+        """Submits review comments to a Merge Request."""
+        self.logger.info(f"Submitting {len(comments)} review comments to MR {mr_id} in project {project_id}")
+        self.gateway.post_review_comments(project_id, mr_id, comments)
+
+    def validate_mr(self, project_id: int, mr_id: str) -> bool:
+        """Validates if a Merge Request exists."""
+        self.logger.info(f"Validating existence of MR {mr_id} in project {project_id}")
+        return self.gateway.validate_mr_exists(project_id, mr_id)

@@ -1,6 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, List
 
+from software_factory_poc.application.core.agents.common.dtos.file_changes_dto import FileChangesDTO
+from software_factory_poc.application.core.agents.common.dtos.file_content_dto import FileContentDTO
+from software_factory_poc.application.core.agents.code_reviewer.dtos.code_review_result_dto import ReviewCommentDTO
 from software_factory_poc.application.core.agents.vcs.dtos.vcs_dtos import BranchDTO, CommitResultDTO, MergeRequestDTO
 
 
@@ -36,4 +39,24 @@ class VcsGateway(ABC):
         description:Optional[ str] = None
     ) -> MergeRequestDTO:
         """Creates a merge request."""
+        pass
+
+    @abstractmethod
+    def get_repository_files(self, project_id: int, branch_name: str) -> List[FileContentDTO]:
+        """Retrieves all text files from a specific branch."""
+        pass
+
+    @abstractmethod
+    def get_merge_request_diffs(self, project_id: int, mr_id: str) -> List[FileChangesDTO]:
+        """Retrieves the file changes (diffs) for a specific Merge Request."""
+        pass
+
+    @abstractmethod
+    def post_review_comments(self, project_id: int, mr_id: str, comments: List[ReviewCommentDTO]) -> None:
+        """Posts a batch of review comments to a Merge Request."""
+        pass
+
+    @abstractmethod
+    def validate_mr_exists(self, project_id: int, mr_id: str) -> bool:
+        """Checks if a Merge Request exists and is accessible."""
         pass
