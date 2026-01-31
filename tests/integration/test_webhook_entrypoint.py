@@ -34,9 +34,9 @@ def valid_jira_payload():
 
 def test_jira_webhook_entrypoint_success(valid_jira_payload, mock_settings):
     # Mocking the usecase execution to avoid full system run
-    with patch("software_factory_poc.infrastructure.entrypoints.api.jira_trigger_router.CreateScaffoldingUseCase") as MockUseCase, \
-         patch("software_factory_poc.infrastructure.entrypoints.api.jira_trigger_router.AppConfig") as MockAppConfig, \
-         patch("software_factory_poc.infrastructure.entrypoints.api.jira_trigger_router.ProviderResolver") as MockResolver:
+    with patch("software_factory_poc.infrastructure.entrypoints.api.scaffolding_router.CreateScaffoldingUseCase") as MockUseCase, \
+         patch("software_factory_poc.infrastructure.entrypoints.api.scaffolding_router.AppConfig") as MockAppConfig, \
+         patch("software_factory_poc.infrastructure.entrypoints.api.scaffolding_router.ProviderResolver") as MockResolver:
         
         mock_instance = MockUseCase.return_value
 
@@ -58,7 +58,7 @@ def test_jira_webhook_invalid_secret(valid_jira_payload, mock_settings):
 
 def test_jira_webhook_malformed_payload(mock_settings):
     # Patch AppConfig to prevent validation error during instantiation
-    with patch("software_factory_poc.infrastructure.entrypoints.api.jira_trigger_router.AppConfig"):
+    with patch("software_factory_poc.infrastructure.entrypoints.api.scaffolding_router.AppConfig"):
         headers = {"X-API-KEY": "test-secret"}
         # Missing issue key
         payload = {"issue": {}} 
