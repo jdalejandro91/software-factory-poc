@@ -60,3 +60,18 @@ class GitLabMrService:
         
         data = response.json()
         return data.get("changes", [])
+
+    def get_mr_details(self, project_id: int, mr_iid: str) -> Dict[str, Any]:
+        path = f"api/v4/projects/{project_id}/merge_requests/{mr_iid}"
+        response = self.client.get(path)
+        response.raise_for_status()
+        return response.json()
+
+    def create_discussion(self, project_id: int, mr_iid: str, body: str, position: Optional[Dict[str, Any]] = None) -> None:
+        path = f"api/v4/projects/{project_id}/merge_requests/{mr_iid}/discussions"
+        payload = {"body": body}
+        if position:
+            payload["position"] = position
+            
+        response = self.client.post(path, payload)
+        response.raise_for_status()

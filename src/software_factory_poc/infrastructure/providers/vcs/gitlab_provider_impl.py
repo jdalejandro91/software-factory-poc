@@ -2,6 +2,7 @@ import urllib.parse
 from typing import Any, Optional, List
 from typing import Any, Optional, List
 from software_factory_poc.application.core.agents.common.dtos.change_type import ChangeType
+from software_factory_poc.application.core.agents.code_reviewer.dtos.code_review_result_dto import ReviewCommentDTO
 from software_factory_poc.application.core.agents.common.dtos.file_changes_dto import FileChangesDTO
 from software_factory_poc.application.core.agents.common.dtos.file_content_dto import FileContentDTO
 
@@ -302,6 +303,69 @@ class GitLabProviderImpl(VcsGateway):
         except Exception as e:
             self._handle_error(e, f"get_merge_request_diffs({mr_id})")
             raise
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
+    def validate_mr_exists(self, project_id: int, mr_id: str) -> bool:
+        self._logger.info(f"Validating MR {mr_id} exists in project {project_id}")
+        try:
+            self.mr_service.get_mr_details(project_id, mr_id)
+            return True
+        except Exception:
+            return False
+
+    def post_review_comments(self, project_id: int, mr_id: str, comments: List[ReviewCommentDTO]) -> None:
+        self._logger.info(f"Posting {len(comments)} review comments to MR {mr_id} in project {project_id}")
+        try:
+            # fetch mr details for SHAs
+            mr_details = self.mr_service.get_mr_details(project_id, mr_id)
+            diff_refs = mr_details.get("diff_refs", {})
+            base_sha = diff_refs.get("base_sha")
+            start_sha = diff_refs.get("start_sha")
+            head_sha = diff_refs.get("head_sha")
+
+            if not (base_sha and start_sha and head_sha):
+               self._logger.warning(f"MR {mr_id} missing SHA refs. Comments will be general (not threaded).")
+
+            for comment in comments:
+                position = None
+                if comment.line_number and comment.file_path and base_sha:
+                     position = {
+                        "position_type": "text",
+                        "base_sha": base_sha,
+                        "start_sha": start_sha,
+                        "head_sha": head_sha,
+                        "new_path": comment.file_path,
+                        "old_path": comment.file_path, # API requires old_path even for modified files
+                        "new_line": comment.line_number
+                    }
+                
+                # Format body
+                severity_emoji = {
+                    "INFO": "ℹ️",
+                    "MINOR": "⚠️",
+                    "MAJOR": "🛑",
+                    "CRITICAL": "🚨"
+                }.get(comment.severity.name, "📝")
+                
+                body = f"{severity_emoji} **{comment.severity.name}**\n\n{comment.comment_body}"
+                
+                if comment.suggestion:
+                    body += f"\n\n```suggestion\n{comment.suggestion}\n```"
+                
+                try:
+                    self.mr_service.create_discussion(project_id, mr_id, body, position)
+                except Exception as e:
+                    self._logger.warning(f"Failed to post comment at {comment.file_path}:{comment.line_number}. Retrying as general comment. Error: {e}")
+                    if position:
+                         fallback_body = f"**[Ctx: {comment.file_path}:{comment.line_number}]**\n{body}"
+                         try:
+                             self.mr_service.create_discussion(project_id, mr_id, fallback_body, position=None)
+                         except Exception as exc:
+                             self._logger.error(f"Failed to post general fallback comment: {exc}")
+
+        except Exception as e:
+             self._handle_error(e, f"post_review_comments({mr_id})")
+             raise
 
     def _handle_error(self, error: Exception, context: str) -> None:
         self._logger.error(f"Error in GitLabProviderImpl [{context}]: {str(error)}", exc_info=True)
