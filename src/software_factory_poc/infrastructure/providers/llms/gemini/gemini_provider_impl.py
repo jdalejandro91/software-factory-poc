@@ -42,16 +42,17 @@ class GeminiProviderImpl(LlmProvider):
         try:
             # 1. Prepare payload
             kwargs = self.request_mapper.to_kwargs(request)
-            
+
             # 2. Debug Log
             prompt_content = kwargs.get("contents", "NO_CONTENT")
             logging.getLogger(__name__).debug(
                 f"\n🚀 [INFRA:LLM-SEND] Sending to {self.name.value.upper()}:\n"
                 f"--- BEGIN PROMPT ---\n{prompt_content}\n--- END PROMPT ---\n"
             )
-            
-            # 3. Execute
-            resp = await self.client.models.generate_content(**kwargs)
+
+            # 3. Execute ASYNC using .aio property
+            resp = await self.client.aio.models.generate_content(**kwargs)
+
         except Exception as exc:
             raise self._map_error(exc)
         return self.response_mapper.to_domain(request.model.name, resp)
@@ -62,7 +63,7 @@ class GeminiProviderImpl(LlmProvider):
         retryable = self._is_retryable(exc, code)
         return ProviderError(provider=self.name, message=str(exc), retryable=retryable, status_code=code)
 
-    def _is_retryable(self, exc: Exception, code:Optional[ int]) -> bool:
+    def _is_retryable(self, exc: Exception, code: Optional[int]) -> bool:
         if code in (429, 500, 502, 503, 504):
             return True
         name = type(exc).__name__.lower()
