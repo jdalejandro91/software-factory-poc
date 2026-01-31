@@ -47,11 +47,9 @@ class ScaffoldingAgent(BaseAgent):
             reporter.report_start(request.issue_key)
 
             # STEP 1: PARSE CONTRACT (The Source of Truth)
-            # This extracts the target repo, stack, etc.
             try:
                 contract = ScaffoldingContractModel.from_raw_text(request.raw_instruction)
             except Exception as parse_error:
-                # If we can't understand what to do, we abort immediately.
                 logger.error(f"Contract parsing failed for {request.issue_key}: {parse_error}")
                 reporter.report_failure(request.issue_key, f"Invalid Contract: {parse_error}")
                 return
@@ -151,7 +149,9 @@ class ScaffoldingAgent(BaseAgent):
         vcs.create_branch(project_id, branch_name, ref=self.config.default_target_branch)
 
         files_map = self._prepare_commit_payload(artifacts)
-        vcs.commit_files(project_id, branch_name, files_map, f"Scaffolding for {request.issue_key}", force_create=True)
+
+        # 'Smart Upsert'
+        vcs.commit_files(project_id, branch_name, files_map, f"Scaffolding for {request.issue_key}", force_create=False)
 
         mr = vcs.create_merge_request(
             project_id=project_id,
