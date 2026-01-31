@@ -3,10 +3,10 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from software_factory_poc.application.core.domain.entities.llm.llm_request import LlmRequest
-from software_factory_poc.application.core.domain.entities.llm.llm_response import LlmResponse
-from software_factory_poc.infrastructure.configuration.llm_settings import LlmSettings
+from software_factory_poc.application.core.agents.reasoner.llm_request import LlmRequest
+from software_factory_poc.application.core.agents.reasoner.llm_response import LlmResponse
 from software_factory_poc.infrastructure.common.retry.retry_policy import RetryPolicy
+from software_factory_poc.infrastructure.configuration.llm_settings import LlmSettings
 from software_factory_poc.infrastructure.observability.logging.correlation_id_context import (
     CorrelationIdContext,
 )
@@ -22,7 +22,7 @@ from software_factory_poc.infrastructure.providers.llms.gateway.model_allowlist 
 )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class LlmBridge:
     gateway: LlmGateway
     correlation: CorrelationIdContext

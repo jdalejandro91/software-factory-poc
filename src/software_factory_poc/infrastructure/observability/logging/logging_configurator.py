@@ -14,7 +14,7 @@ from software_factory_poc.infrastructure.observability.logging.correlation_id_fi
 )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class LoggingConfigurator:
     context: CorrelationIdContext
 

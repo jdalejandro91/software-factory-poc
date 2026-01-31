@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from software_factory_poc.application.core.domain.configuration.llm_provider_type import LlmProviderType
+from software_factory_poc.application.core.agents.common.config.llm_provider_type import LlmProviderType
 from software_factory_poc.infrastructure.providers.llms.openai.mappers.openai_response_mapper import (
     OpenAiResponseMapper,
 )

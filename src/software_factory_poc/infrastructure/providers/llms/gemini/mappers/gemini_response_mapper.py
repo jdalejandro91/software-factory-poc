@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 
-from software_factory_poc.application.core.domain.entities.llm.llm_response import LlmResponse
-from software_factory_poc.application.core.domain.value_objects.model_id import ModelId
-from software_factory_poc.application.core.domain.configuration.llm_provider_type import LlmProviderType
-from software_factory_poc.application.core.domain.entities.llm.token_usage import TokenUsage
+from software_factory_poc.application.core.agents.common.config.llm_provider_type import LlmProviderType
+from software_factory_poc.application.core.agents.common.value_objects.model_id import ModelId
+from software_factory_poc.application.core.agents.reasoner.llm_response import LlmResponse
+from software_factory_poc.application.core.agents.reasoner.token_metric import TokenMetric
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class GeminiResponseMapper:
     def to_domain(self, model_name: str, response: Any) -> LlmResponse:
         text = self._text(response)
@@ -23,11 +23,11 @@ class GeminiResponseMapper:
             return text.strip()
         raise ValueError("Gemini response did not contain text output")
 
-    def _usage(self, response: Any) -> TokenUsage | None:
+    def _usage(self, response: Any) ->Optional[ TokenMetric]:
         meta = getattr(response, "usage_metadata", None)
         if meta is None:
             return None
-        return TokenUsage(input_tokens=getattr(meta, "prompt_token_count", None), output_tokens=getattr(meta, "candidates_token_count", None), total_tokens=getattr(meta, "total_token_count", None))
+        return TokenMetric(input_tokens=getattr(meta, "prompt_token_count", None), output_tokens=getattr(meta, "candidates_token_count", None), total_tokens=getattr(meta, "total_token_count", None))
 
     def _payload(self, response: Any) -> Mapping[str, Any]:
         return {"model": getattr(response, "model_version", None)}

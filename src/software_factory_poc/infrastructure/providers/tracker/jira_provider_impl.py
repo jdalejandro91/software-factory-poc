@@ -1,18 +1,18 @@
 from typing import Any
+
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from software_factory_poc.application.core.ports.tools.jira_provider import JiraProvider
-from software_factory_poc.application.core.ports.gateways.task_tracker_gateway_port import TaskTrackerGatewayPort
-from software_factory_poc.application.core.domain.configuration.task_status import TaskStatus
+from software_factory_poc.application.core.agents.common.config.task_status import TaskStatus
+from software_factory_poc.application.core.agents.common.exceptions.provider_error import (
+    ProviderError,
+)
+from software_factory_poc.application.core.agents.reporter.config.task_tracker_type import (
+    TaskTrackerType,
+)
+from software_factory_poc.application.core.agents.reporter.ports.task_tracker_gateway import TaskTrackerGateway
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 from software_factory_poc.infrastructure.providers.tracker.clients.jira_http_client import (
     JiraHttpClient,
-)
-from software_factory_poc.application.core.domain.exceptions.provider_error import (
-    ProviderError,
-)
-from software_factory_poc.application.core.domain.configuration.task_tracker_type import (
-    TaskTrackerType,
 )
 from software_factory_poc.infrastructure.providers.tracker.dtos.jira_status_enum import JiraStatus
 
@@ -28,9 +28,12 @@ STATUS_MAPPING = {
 }
 
 
-class JiraProviderImpl(JiraProvider, TaskTrackerGatewayPort):
-    def __init__(self, http_client: JiraHttpClient):
+from software_factory_poc.infrastructure.configuration.jira_settings import JiraSettings
+
+class JiraProviderImpl(TaskTrackerGateway):
+    def __init__(self, http_client: JiraHttpClient, settings: JiraSettings):
         self.client = http_client
+        self.settings = settings
         self._logger = logger
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
@@ -48,95 +51,8 @@ class JiraProviderImpl(JiraProvider, TaskTrackerGatewayPort):
     def add_comment(self, issue_key: str, body: Any) -> dict[str, Any]:
         self._logger.info(f"Adding comment to Jira issue: {issue_key}")
         try:
-            payload = {}
-            if isinstance(body, dict):
-                payload = {"body": body}
-            elif isinstance(body, str):
-                # Smart Formatting: Check for semantic markers from ScaffoldingAgent
-                import re
-                from software_factory_poc.infrastructure.providers.tracker.mappers.jira_adf_builder import JiraAdfBuilder
-                
-                payload_body = None
-                
-                # Case 1: Success
-                # "✅ Scaffolding exitoso. MR: {mr_link}"
-                if body.startswith("✅"):
-                    match = re.search(r"MR: (.+)", body)
-                    mr_link = match.group(1).strip() if match else "#"
-                    payload_body = JiraAdfBuilder.build_success_panel(
-                        title="Tarea Completada",
-                        summary="El scaffolding ha sido generado correctamente.",
-                        links={"🔗 Ver Merge Request": mr_link}
-                    )
-
-                # Case 2: Failure
-                # "❌ Fallo en generación ({error_type}): {str(error)}"
-                elif body.startswith("❌"):
-                    # Extract error details
-                    try:
-                        parts = body.split(":", 1)
-                        summary = parts[0].replace("❌ ", "").strip()
-                        detail = parts[1].strip() if len(parts) > 1 else "Unknown error"
-                    except Exception:
-                        summary = "Fallo en generación"
-                        detail = body
-                        
-                    payload_body = JiraAdfBuilder.build_error_panel(
-                        error_summary="La ejecución se detuvo debido a un error.",
-                        technical_detail=f"{summary}\n{detail}"
-                    )
-
-                # Case 3: Info / Branch Exists
-                # Formato esperado: "ℹ️ BRANCH_EXISTS|branch_name|branch_url"
-                elif body.startswith("ℹ️ BRANCH_EXISTS|"):
-                    try:
-                        parts = body.split("|")
-                        # parts[0] es el prefijo, [1] nombre, [2] url
-                        branch_name = parts[1]
-                        branch_url = parts[2]
-
-                        payload_body = JiraAdfBuilder.build_info_panel(
-                            title="Rama Existente Detectada",
-                            details=f"La rama '{branch_name}' ya existe en el repositorio. "
-                                    f"Se asume que el trabajo fue generado previamente. "
-                                    f"La tarea pasará a revisión.",
-                            links={"🔗 Ver Rama Existente": branch_url}
-                        )
-                    except IndexError:
-                        # Fallback por si el formato falla
-                        payload_body = JiraAdfBuilder.build_info_panel(
-                            title="Rama Existente Detectada",
-                            details=f"La rama existe, pero no se pudo parsear la URL. Mensaje original: {body}"
-                        )
-
-                # Fallback: Standard Text
-                if not payload_body:
-                    payload_body = {
-                        "type": "doc",
-                        "version": 1,
-                        "content": [
-                            {
-                                "type": "paragraph",
-                                "content": [{"type": "text", "text": str(body)}]
-                            }
-                        ]
-                    }
-                
-                payload = {"body": payload_body}
-            else:
-                 # Fallback for other types
-                payload = {
-                    "body": {
-                        "type": "doc",
-                        "version": 1,
-                        "content": [
-                            {
-                                "type": "paragraph",
-                                "content": [{"type": "text", "text": str(body)}]
-                            }
-                        ]
-                    }
-                }
+            from software_factory_poc.infrastructure.providers.tracker.mappers.jira_panel_factory import JiraPanelFactory
+            payload = JiraPanelFactory.create_payload(body)
             
             self._logger.debug(f"Sending comment payload to Jira: {payload}")
             response = self.client.post(f"rest/api/3/issue/{issue_key}/comment", payload)
@@ -150,51 +66,8 @@ class JiraProviderImpl(JiraProvider, TaskTrackerGatewayPort):
     def transition_issue(self, issue_key: str, transition_id: str) -> None:
         self._logger.info(f"Transitioning issue: {issue_key} to state matching: {transition_id}")
         try:
-            # Note: The argument is named 'transition_id' to match the interface, 
-            # but the implementation supports searching by name/keyword as per original requirements.
-            target_status_keyword = transition_id
+            final_id = self._resolve_transition_id(issue_key, transition_id)
             
-            # 1. Get available transitions
-            response = self.client.get(f"rest/api/3/issue/{issue_key}/transitions")
-            try:
-                response.raise_for_status()
-            except Exception as e:
-                self._logger.error(f"Failed to fetch transitions for {issue_key}: {e}")
-                raise e
-                
-            transitions = response.json().get("transitions", [])
-            
-            available_names = [t["name"] for t in transitions]
-            self._logger.debug(f"Transitions available for {issue_key}: {available_names}")
-    
-            # 2. Find target ID with enhanced logic
-            final_id = None
-            keyword_lower = target_status_keyword.lower()
-            
-            # Strategy A: Exact Match (Case Insensitive)
-            for t in transitions:
-                if t["name"].lower() == keyword_lower:
-                    final_id = t["id"]
-                    self._logger.info(f"Transition '{transition_id}' found (Exact Match ID: {final_id})")
-                    break
-            
-            # Strategy B: Partial Match (if no exact found)
-            if not final_id:
-                for t in transitions:
-                    if keyword_lower in t["name"].lower() or keyword_lower in t["to"]["name"].lower():
-                        final_id = t["id"]
-                        self._logger.info(f"Transition '{transition_id}' found (Partial Match ID: {final_id})")
-                        break
-            
-            if not final_id:
-                error_msg = f"Transition '{transition_id}' not found. Available: {available_names}"
-                self._logger.error(error_msg)
-                raise ProviderError(
-                    provider=TaskTrackerType.JIRA,
-                    message=error_msg,
-                    retryable=True
-                )
-    
             self._logger.info(f"Transitioning issue {issue_key} to (ID: {final_id})")
             payload = {
                 "transition": {
@@ -207,9 +80,50 @@ class JiraProviderImpl(JiraProvider, TaskTrackerGatewayPort):
             self._handle_error(e, f"transition_issue({issue_key}, {transition_id})")
             raise
 
+    def _resolve_transition_id(self, issue_key: str, target_keyword: str) -> str:
+        """Resolves transition ID from keyword using Exact, then Partial matching."""
+        # 1. Fetch available transitions
+        response = self.client.get(f"rest/api/3/issue/{issue_key}/transitions")
+        try:
+            response.raise_for_status()
+        except Exception as e:
+            self._logger.error(f"Failed to fetch transitions for {issue_key}: {e}")
+            raise e
+            
+        transitions = response.json().get("transitions", [])
+        available_names = [t["name"] for t in transitions]
+        
+        keyword_lower = target_keyword.lower()
+        
+        # 2a. Exact Match
+        for t in transitions:
+            if t["name"].lower() == keyword_lower:
+                return t["id"]
+        
+        # 2b. Partial Match
+        for t in transitions:
+             if keyword_lower in t["name"].lower() or keyword_lower in t["to"]["name"].lower():
+                 return t["id"]
+                 
+        # 3. Not Found
+        error_msg = f"Transition '{target_keyword}' not found. Available: {available_names}"
+        self._logger.error(error_msg)
+        raise ProviderError(
+            provider=TaskTrackerType.JIRA,
+            message=error_msg,
+            retryable=False # Configuration error usually
+        )
+
     def transition_status(self, task_id: str, status: TaskStatus) -> None:
         """Adapts TaskTrackerGatewayPort.transition_status to internal transition_issue logic."""
-        # Translate Domain Status to Infrastructure Status (String)
+        # Configurable override for IN_REVIEW
+        if status == TaskStatus.IN_REVIEW:
+            transition_name = self.settings.transition_in_review
+            self._logger.info(f"Transitioning {task_id} to IN_REVIEW using configured transition: '{transition_name}'")
+            self.transition_issue(task_id, transition_name)
+            return
+
+        # Translate Domain Status to Infrastructure Status (String) for others
         jira_target_status = STATUS_MAPPING.get(status)
         
         if jira_target_status:

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 
-from software_factory_poc.application.core.domain.entities.llm.llm_request import LlmRequest
-from software_factory_poc.application.core.domain.entities.llm.llm_response import LlmResponse
-from software_factory_poc.application.core.domain.exceptions.provider_error import ProviderError
-from software_factory_poc.application.core.domain.configuration.llm_provider_type import LlmProviderType
-from software_factory_poc.application.core.ports.llms.llm_provider import LlmProvider
+from software_factory_poc.application.core.agents.common.config.llm_provider_type import LlmProviderType
+from software_factory_poc.application.core.agents.common.exceptions.provider_error import ProviderError
+from software_factory_poc.application.core.agents.reasoner.llm_request import LlmRequest
+from software_factory_poc.application.core.agents.reasoner.llm_response import LlmResponse
+from software_factory_poc.application.core.agents.reasoner.ports.llm_provider import LlmProvider
 from software_factory_poc.infrastructure.common.retry.retry_policy import RetryPolicy
 from software_factory_poc.infrastructure.observability.logging.correlation_id_context import (
     CorrelationIdContext,
@@ -21,7 +21,7 @@ from software_factory_poc.infrastructure.providers.llms.gemini.mappers.gemini_re
 )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class GeminiProviderImpl(LlmProvider):
     client: Any
     retry: RetryPolicy
@@ -42,15 +42,17 @@ class GeminiProviderImpl(LlmProvider):
         try:
             # 1. Prepare payload
             kwargs = self.request_mapper.to_kwargs(request)
-            
+
             # 2. Debug Log
             prompt_content = kwargs.get("contents", "NO_CONTENT")
-            prompt_content = kwargs.get("contents", "NO_CONTENT")
-            print(f"\n🚀 [INFRA:LLM-SEND] Sending to {self.name.value.upper()}:\n"
-                  f"--- BEGIN PROMPT ---\n{prompt_content}\n--- END PROMPT ---\n", flush=True)
-            
-            # 3. Execute
-            resp = await self.client.models.generate_content(**kwargs)
+            logging.getLogger(__name__).debug(
+                f"\n🚀 [INFRA:LLM-SEND] Sending to {self.name.value.upper()}:\n"
+                f"--- BEGIN PROMPT ---\n{prompt_content}\n--- END PROMPT ---\n"
+            )
+
+            # 3. Execute ASYNC using .aio property
+            resp = await self.client.aio.models.generate_content(**kwargs)
+
         except Exception as exc:
             raise self._map_error(exc)
         return self.response_mapper.to_domain(request.model.name, resp)
@@ -61,7 +63,7 @@ class GeminiProviderImpl(LlmProvider):
         retryable = self._is_retryable(exc, code)
         return ProviderError(provider=self.name, message=str(exc), retryable=retryable, status_code=code)
 
-    def _is_retryable(self, exc: Exception, code: int | None) -> bool:
+    def _is_retryable(self, exc: Exception, code: Optional[int]) -> bool:
         if code in (429, 500, 502, 503, 504):
             return True
         name = type(exc).__name__.lower()

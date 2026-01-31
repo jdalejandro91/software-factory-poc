@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import time
+from typing import Optional
 
-from software_factory_poc.application.core.ports.tools.confluence_provider import ConfluenceProvider
+from software_factory_poc.application.core.agents.research.ports.confluence_provider import ConfluenceProvider
 from software_factory_poc.infrastructure.configuration.tool_settings import ToolSettings
 
 
@@ -12,7 +13,7 @@ class ArchitectureKnowledgeService:
         self.page_id = settings.architecture_doc_page_id
         
         # Simple in-memory cache
-        self._cache: str | None = None
+        self._cache:Optional[ str] = None
         self._cache_timestamp: float = 0.0
         self._cache_ttl_seconds: float = 300.0  # 5 minutes default
 

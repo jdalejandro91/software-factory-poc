@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 
-from software_factory_poc.application.core.domain.entities.llm.llm_response import LlmResponse
-from software_factory_poc.application.core.domain.value_objects.model_id import ModelId
-from software_factory_poc.application.core.domain.configuration.llm_provider_type import LlmProviderType
-from software_factory_poc.application.core.domain.entities.llm.token_usage import TokenUsage
+from software_factory_poc.application.core.agents.common.config.llm_provider_type import LlmProviderType
+from software_factory_poc.application.core.agents.common.value_objects.model_id import ModelId
+from software_factory_poc.application.core.agents.reasoner.llm_response import LlmResponse
+from software_factory_poc.application.core.agents.reasoner.token_metric import TokenMetric
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class OpenAiResponseMapper:
     def to_domain(self, model_name: str, response: Any) -> LlmResponse:
         try:
@@ -40,11 +40,11 @@ class OpenAiResponseMapper:
         except Exception as e:
             raise ValueError(f"Failed to map OpenAI response: {e}")
 
-    def _usage(self, response: Any) -> TokenUsage | None:
+    def _usage(self, response: Any) ->Optional[ TokenMetric]:
         u = getattr(response, "usage", None)
         if u is None:
             return None
-        return TokenUsage(input_tokens=getattr(u, "input_tokens", None), output_tokens=getattr(u, "output_tokens", None), total_tokens=getattr(u, "total_tokens", None))
+        return TokenMetric(input_tokens=getattr(u, "input_tokens", None), output_tokens=getattr(u, "output_tokens", None), total_tokens=getattr(u, "total_tokens", None))
 
     def _payload(self, response: Any) -> Mapping[str, Any]:
         return {"id": getattr(response, "id", None), "model": getattr(response, "model", None)}

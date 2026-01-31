@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from software_factory_poc.application.core.domain.exceptions.configuration_error import (
+from software_factory_poc.application.core.agents.common.exceptions.configuration_error import (
     ConfigurationError,
 )
-from software_factory_poc.application.core.domain.value_objects.model_id import ModelId
+from software_factory_poc.application.core.agents.common.value_objects.model_id import ModelId
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ModelAllowlist:
     allowed: frozenset[str]
 

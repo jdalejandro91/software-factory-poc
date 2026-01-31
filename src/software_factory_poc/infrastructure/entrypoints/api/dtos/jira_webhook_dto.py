@@ -1,47 +1,47 @@
-
+from typing import Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 
 
 class JiraUserDTO(BaseModel):
     model_config = ConfigDict(extra='ignore')
-    name: str | None = None
-    display_name: str | None = Field(None, alias="displayName")
-    active: bool | None = None
+    name:Optional[ str] = None
+    display_name:Optional[ str] = Field(None, alias="displayName")
+    active:Optional[ bool] = None
 
 class JiraProjectDTO(BaseModel):
     model_config = ConfigDict(extra='ignore')
     key: str
-    name: str | None = None
+    name:Optional[ str] = None
 
 class JiraIssueFieldsDTO(BaseModel):
     model_config = ConfigDict(extra='ignore')
-    summary: str | None = None
-    description: str | None = None
-    project: JiraProjectDTO | None = None
+    summary:Optional[ str] = None
+    description:Optional[ str] = None
+    project:Optional[ JiraProjectDTO] = None
 
 class JiraIssueDTO(BaseModel):
     model_config = ConfigDict(extra='ignore')
-    id: str | None = None
+    id:Optional[ str] = None
     key: str
-    fields: JiraIssueFieldsDTO | None = None
+    fields:Optional[ JiraIssueFieldsDTO] = None
 
 class JiraChangelogItem(BaseModel):
     model_config = ConfigDict(extra='ignore')
-    field: str | None = None
-    fieldtype: str | None = None
-    fromString: str | None = None
-    toString: str | None = None
+    field:Optional[ str] = None
+    fieldtype:Optional[ str] = None
+    fromString:Optional[ str] = None
+    toString:Optional[ str] = None
 
 class JiraChangelog(BaseModel):
     model_config = ConfigDict(extra='ignore')
-    id: str | None = None
+    id:Optional[ str] = None
     items: list[JiraChangelogItem] = []
 
 class JiraWebhookDTO(BaseModel):
     model_config = ConfigDict(extra='ignore')
-    webhook_event: str | None = Field(None, alias="webhookEvent")
-    timestamp: int | None = None
-    user: JiraUserDTO | None = None
+    webhook_event:Optional[ str] = Field(None, alias="webhookEvent")
+    timestamp:Optional[ int] = None
+    user:Optional[ JiraUserDTO] = None
     issue: JiraIssueDTO
-    changelog: JiraChangelog | None = None
+    changelog:Optional[ JiraChangelog] = None

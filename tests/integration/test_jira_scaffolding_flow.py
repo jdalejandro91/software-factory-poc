@@ -1,89 +1,16 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from software_factory_poc.application.core.domain.entities.scaffolding.scaffolding_agent import ScaffoldingAgent
-from software_factory_poc.application.core.ports.gateways.llm_gateway import LlmGateway
-from software_factory_poc.application.core.ports.tools.gitlab_provider import GitLabProvider
-from software_factory_poc.application.core.ports.tools.jira_provider import JiraProvider
-from software_factory_poc.application.usecases.scaffolding.create_scaffolding_usecase import (
-    CreateScaffoldingUseCase,
-)
-from software_factory_poc.infrastructure.configuration.main_settings import Settings
-from software_factory_poc.infrastructure.entrypoints.api.jira_trigger_router import (
-    get_settings,
-    get_usecase,
-)
-from software_factory_poc.infrastructure.providers.knowledge.confluence_mock_adapter import (
-    ConfluenceMockAdapter,
-)
-from software_factory_poc.infrastructure.resolution.provider_resolver import ProviderResolver
-from software_factory_poc.infrastructure.configuration.scaffolding_config_loader import ScaffoldingConfigLoader
+from software_factory_poc.application.core.agents.common.config.task_status import TaskStatus
+from software_factory_poc.application.core.agents.vcs.dtos.vcs_dtos import MergeRequestDTO, BranchDTO, CommitResultDTO
 from software_factory_poc.main import app
-
-# ... imports ...
-
-
-
-class MockLLMGateway(LlmGateway):
-    def __init__(self):
-        self.last_prompt = ""
-        self.last_model = ""
-
-    def generate_code(self, prompt: str, model: str) -> str:
-        self.last_prompt = prompt
-        self.last_model = model
-        # Wrap in markdown for robust parsing
-        return '<<<FILE:src/shopping_cart.py>>>\nclass ShoppingCart: pass\n<<<END>>>'
-
-mock_llm = MockLLMGateway()
-
-@pytest.fixture(autouse=True)
-def setup_overrides():
-
-    def get_settings_override():
-        s = Settings()
-        from pydantic import SecretStr
-        s.jira_webhook_secret = SecretStr("test-secret")
-        return s
-
-    def override_get_usecase_fn():
-        # Mock Providers
-        # We need a mock that satisfies TaskTrackerGatewayPort (transition_status)
-        mock_jira = MagicMock(spec=JiraProvider)
-        # Manually attach the new interface method since spec=JiraProvider doesn't have it
-        mock_jira.transition_status = MagicMock()
-        mock_jira.add_comment = MagicMock()
-        
-        mock_gitlab = MagicMock(spec=GitLabProvider)
-        
-        # Setup GitLab Mock return values to avoid failures
-        mock_gitlab.resolve_project_id.return_value = 123
-        mock_gitlab.create_merge_request.return_value = {"web_url": "http://gitlab.mock/mr/1"}
-        mock_gitlab.branch_exists.return_value = False # <--- Ensure standard flow proceeds
-        
-        mock_resolver = MagicMock(spec=ProviderResolver)
-        mock_resolver.resolve_vcs.return_value = mock_gitlab
-        mock_resolver.resolve_tracker.return_value = mock_jira
-        mock_resolver.resolve_llm_gateway.return_value = mock_llm
-        
-        # Use real Mock Adapter for Knowledge
-        kb_adapter = ConfluenceMockAdapter()
-        mock_resolver.resolve_knowledge.return_value = kb_adapter
-        
-        config = ScaffoldingConfigLoader.load_config()
-        
-        return CreateScaffoldingUseCase(config=config, resolver=mock_resolver)
-
-    app.dependency_overrides[get_settings] = get_settings_override
-    app.dependency_overrides[get_usecase] = override_get_usecase_fn
-    yield
-    app.dependency_overrides = {}
 
 client = TestClient(app)
 
 def test_jira_scaffolding_flow_end_to_end():
+    # 1. Prepare Payload
     payload = {
         "webhookEvent": "jira:issue_created",
         "timestamp": 123456789,
@@ -128,44 +55,87 @@ Instruction: Create a Python shopping cart with add_item method.
         }
     }
 
-    # API Key from settings (default mock or env)
-    # Using default secret from Settings() if not set env
-    # Mock Env Vars for Settings
-    msg_env = {
-        "JIRA_WEBHOOK_SECRET": "test-secret", 
-        "JIRA_USER_EMAIL": "test@example.com",
-        "JIRA_API_TOKEN": "token",
-        "JIRA_BASE_URL": "https://test.jira.com"
-    }
-    with pytest.MonkeyPatch.context() as mp:
-        for k, v in msg_env.items():
-            mp.setenv(k, v)
+    # 2. Setup Mocks via Patch with Strict Specs
+    # using spec=True ensures calls fail if method doesn't exist on real class
+    with patch("software_factory_poc.infrastructure.resolution.provider_resolver.ProviderResolver.resolve_llm_gateway", spec=True) as mock_resolve_llm, \
+         patch("software_factory_poc.infrastructure.resolution.provider_resolver.ProviderResolver.resolve_vcs", spec=True) as mock_resolve_vcs, \
+         patch("software_factory_poc.infrastructure.resolution.provider_resolver.ProviderResolver.resolve_tracker", spec=True) as mock_resolve_tracker, \
+         patch("software_factory_poc.infrastructure.resolution.provider_resolver.ProviderResolver.resolve_research", spec=True) as mock_resolve_research:
         
-        settings = Settings()
+        # Configure LLM Mock
+        mock_llm_instance = MagicMock()
+        mock_resolve_llm.return_value = mock_llm_instance
+        
+        # Return an object that has .content attribute (LlmResponse-like)
+        mock_response = MagicMock()
+        mock_response.content = '[{"path": "src/shopping_cart.py", "content": "class ShoppingCart: pass"}]'
+        mock_llm_instance.generate_code.return_value = mock_response
+        
+        # Configure VCS Mock (Strict DTOs)
+        # Note: mocking the instance returned by resolve_vcs directly
+        mock_vcs_instance = MagicMock()
+        mock_resolve_vcs.return_value = mock_vcs_instance
+        mock_vcs_instance.branch_exists.return_value = False 
+        # Using manual DTO instantiation or factory if I injected it. 
+        # Here I will just instantiate DTOs directly as it's cleaner than injecting fixture into this big block.
+        mock_vcs_instance.create_merge_request.return_value = MergeRequestDTO(id="1", web_url="http://gitlab.mock/mr/1")
+        mock_vcs_instance.create_branch.return_value = BranchDTO("feature/KAN-123-scaffolding", "url")
+        mock_vcs_instance.commit_files.return_value = CommitResultDTO("sha", "url")
+        
+        # Configure Tracker Mock (Jira)
+        mock_tracker_instance = MagicMock()
+        mock_resolve_tracker.return_value = mock_tracker_instance
+        
+        # Configure Research Mock
+        mock_research_instance = MagicMock()
+        mock_resolve_research.return_value = mock_research_instance
+        mock_research_instance.retrieve_context.return_value = (
+            "Shopping Cart Architecture (Modular Monolith)\n"
+            "Cart Entity\n"
+            "Examples of Implementation in Python and clean architecture.\n"
+            "This context needs to be long enough to pass the length check in ResearchAgent "
+            "and ensures it is included in the Prompt construction logic properly."
+        )
+        mock_research_instance.get_page_content.return_value = mock_research_instance.retrieve_context.return_value
+        
+        # 3. Execution
         headers = {"X-API-Key": "test-secret"}
-    
-        response = client.post("/api/v1/jira-webhook", json=payload, headers=headers)
+        
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setenv("JIRA_WEBHOOK_SECRET", "test-secret")
+            mp.setenv("JIRA_BASE_URL", "https://mock.jira")
+            mp.setenv("CONFLUENCE_BASE_URL", "https://mock.confluence")
+            mp.setenv("CONFLUENCE_API_TOKEN", "mock-token")
+            mp.setenv("CONFLUENCE_USER_EMAIL", "mock@email.com")
+            
+            response = client.post("/api/v1/jira-webhook", json=payload, headers=headers)
+            
+            # 4. Verifications
+            assert response.status_code == 202
+            assert response.json()["status"] == "accepted"
+            
+            # Verification 1: LLM Interaction
+            assert mock_llm_instance.generate_code.called
+            
+            # Inspect Prompt
+            call_args = mock_llm_instance.generate_code.call_args
+            args, kwargs = call_args
+            prompt_arg = args[0] if args else kwargs.get("prompt")
+            
+            assert "service_name: 'shopping-cart-service'" in prompt_arg
+            assert "Shopping Cart Architecture" in prompt_arg
+            
+            # Verification 2: Tracker Interaction with Strict Sequence
+            from unittest.mock import call, ANY
+            
+            # Use strict assert_has_calls to check order: Report Start -> Report Success
+            mock_tracker_instance.add_comment.assert_has_calls([
+                call("KAN-123", ANY), # Start
+                call("KAN-123", ANY)  # Success
+            ])
+            
+            # Verify Transition
+            mock_tracker_instance.transition_status.assert_has_calls([
+                call("KAN-123", TaskStatus.IN_REVIEW)
+            ])
 
-    assert response.status_code == 202
-    data = response.json()
-    assert data["status"] == "accepted"
-    
-    # Verifications
-    prompt = mock_llm.last_prompt
-    
-    # 1. Mapper Verification: Prompt contains instruction (YAML block)
-    # Since JiraMapper extracts only the block, we verity the YAML content is present.
-    assert "service_name: 'shopping-cart-service'" in prompt
-    assert "mock-group/mock-project" in prompt
-    
-    # 2. Adapter Verification: Prompt contains Architecture Text
-    assert "Shopping Cart Architecture (Modular Monolith)" in prompt
-    assert "Cart Entity" in prompt
-    
-    # 3. Agent Verification: Constructed structure
-    assert "--- ARCHITECTURAL STANDARDS (RAG CONTEXT) ---" in prompt
-    assert "--- TASK INSTRUCTIONS ---" in prompt
-    
-    # 4. Prompt Hardening Verification
-    assert "--- CRITICAL OUTPUT RULES ---" in prompt
-    assert "--- EXAMPLE OUTPUT ---" in prompt

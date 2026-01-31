@@ -3,13 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from software_factory_poc.application.core.shared.dependency_guard import DependencyGuard
+from software_factory_poc.application.core.agents.common.tools.dependency_guard import DependencyGuard
 from software_factory_poc.infrastructure.providers.llms.openai.clients.openai_config import (
     OpenAiConfig,
 )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class OpenAiClientFactory:
     config: OpenAiConfig
 

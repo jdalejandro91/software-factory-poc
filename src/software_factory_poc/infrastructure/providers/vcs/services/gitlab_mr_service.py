@@ -1,16 +1,18 @@
-from typing import Any
+from typing import Any, Optional
+
 import httpx
+
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 from software_factory_poc.infrastructure.providers.vcs.clients.gitlab_http_client import GitLabHttpClient
 
 logger = LoggerFactoryService.build_logger(__name__)
 
 
-class GitLabMergeRequestService:
+class GitLabMrService:
     def __init__(self, client: GitLabHttpClient):
         self.client = client
 
-    def create_merge_request(self, project_id: int, source_branch: str, target_branch: str, title: str, description: str = None) -> dict[str, Any]:
+    def create_merge_request(self, project_id: int, source_branch: str, target_branch: str, title: str, description:Optional[ str] = None) -> dict[str, Any]:
         path = f"api/v4/projects/{project_id}/merge_requests"
         payload = {
             "source_branch": source_branch,
@@ -46,8 +48,6 @@ class GitLabMergeRequestService:
         if mrs:
             return mrs[0]
         
-        return {
-            "web_url": "https://gitlab.com/mr-exists-but-cannot-fetch",
-            "id": 0,
-            "iid": 0
-        }
+        # If we got 409 but can't find it, raise error
+        logger.error(f"GitLab reporting conflict but could not find open MR for {source_branch} -> {target_branch}")
+        raise ValueError(f"MR conflict detected but could not be resolved.")

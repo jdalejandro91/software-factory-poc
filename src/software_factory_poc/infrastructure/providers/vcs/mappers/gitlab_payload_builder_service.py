@@ -27,8 +27,12 @@ class GitLabPayloadBuilderService:
                 "action": action_type,
                 "file_path": file_path,
                 "content": content,
+                "encoding": "text"
             }
             actions.append(action)
+            
+        if not actions:
+            raise ValueError("Commit payload cannot have empty actions list.")
             
         return {
             "branch": branch_name,

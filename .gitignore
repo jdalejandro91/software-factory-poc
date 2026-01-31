@@ -8,6 +8,7 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 .coverage
+.idea/
 htmlcov/
 
 # Build and distribution
@@ -21,6 +22,7 @@ build/
 .venv/
 venv/
 ENV/
+vars
 env_production_source
 dev-container.sh
 build_secrets.sh
