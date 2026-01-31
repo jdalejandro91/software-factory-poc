@@ -40,10 +40,6 @@ class GitLabProviderImpl(VcsGateway):
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
     def resolve_project_id(self, repo_url: str) -> int:
-        """
-        Resolves a project path (group/project) to an numeric ID.
-        """
-        # 1. Input Guard: Validate input is not empty
         if not repo_url or not repo_url.strip():
             raise ValueError("GitLabProvider: Cannot resolve project ID. 'repo_url' provided is empty.")
 
@@ -57,7 +53,6 @@ class GitLabProviderImpl(VcsGateway):
             except Exception:
                 pass
 
-        # 2. Input Guard: Validate path is not empty after cleaning
         if not project_path or not project_path.strip():
             raise ValueError(f"GitLabProvider: Parsed project path is empty from url '{repo_url}'")
 
@@ -72,7 +67,6 @@ class GitLabProviderImpl(VcsGateway):
             response.raise_for_status()
             data = response.json()
 
-            # 3. Type Guard: Ensure we got a Dict, not a List
             if isinstance(data, list):
                 raise ProviderError(
                     provider=VcsProviderType.GITLAB,
@@ -84,8 +78,6 @@ class GitLabProviderImpl(VcsGateway):
         except Exception as e:
             self._handle_error(e, f"resolve_project_id({project_path})")
             raise
-
-    # ... [Resto de métodos create_branch, commit_files, etc. se mantienen igual] ...
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
     def get_branch(self, project_id: int, branch_name: str) -> Optional[dict[str, Any]]:
@@ -154,9 +146,18 @@ class GitLabProviderImpl(VcsGateway):
         try:
             result = self.mr_service.create_merge_request(project_id, source_branch, target_branch, title,
                                                           description or "")
+
+            # FIX: Validate Web URL availability
+            web_url = result.get("web_url")
+            if not web_url:
+                self._logger.error(f"GitLab API returned MR without 'web_url'. Full response keys: {result.keys()}")
+                # Fallback to avoid broken links if possible, or raise
+                # Raising ensures we spot the error instead of sending a dead link to Jira
+                raise ValueError("GitLab MR created but 'web_url' is missing in response.")
+
             return MergeRequestDTO(
                 id=str(result.get("iid", result.get("id", "0"))),
-                web_url=result.get("web_url", ""),
+                web_url=web_url,
                 state=result.get("state", "opened")
             )
         except Exception as e:

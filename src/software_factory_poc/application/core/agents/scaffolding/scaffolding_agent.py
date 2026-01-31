@@ -15,10 +15,9 @@ from software_factory_poc.application.core.agents.scaffolding.tools.scaffolding_
 from software_factory_poc.application.core.agents.vcs.vcs_agent import VcsAgent
 from .config.scaffolding_agent_config import ScaffoldingAgentConfig
 from .value_objects.scaffolding_order import ScaffoldingOrder
+from software_factory_poc.application.core.agents.base_agent import BaseAgent
 
 logger = logging.getLogger(__name__)
-
-from software_factory_poc.application.core.agents.base_agent import BaseAgent
 
 
 @dataclass
@@ -42,25 +41,23 @@ class ScaffoldingAgent(BaseAgent):
             researcher: ResearchAgent,
             reasoner: ReasonerAgent,
     ) -> None:
-        """Executes the scaffolding orchestration flow."""
         try:
             reporter.report_start(request.issue_key)
 
-            # STEP 1: PARSE CONTRACT (The Source of Truth)
+            # STEP 1: PARSE CONTRACT
             try:
                 contract = ScaffoldingContractModel.from_raw_text(request.raw_instruction)
             except Exception as parse_error:
-                logger.error(f"Contract parsing failed for {request.issue_key}: {parse_error}")
+                logger.error(f"Contract parsing failed: {parse_error}")
                 reporter.report_failure(request.issue_key, f"Invalid Contract: {parse_error}")
                 return
 
-            # Enrich request/context with parsed data
             target_repo = self._resolve_target_repo(request, contract)
 
             # STEP 2: SECURITY CHECK
             self._check_permissions(target_repo)
 
-            # STEP 3: PRECONDITIONS (Idempotency)
+            # STEP 3: PRECONDITIONS
             if self._check_preconditions(request, vcs, reporter, target_repo):
                 return
 
@@ -70,13 +67,15 @@ class ScaffoldingAgent(BaseAgent):
             # STEP 5: VCS OPERATIONS
             mr_link = self._apply_changes_to_vcs(request, vcs, artifacts, target_repo)
 
+            if not mr_link or not mr_link.startswith("http"):
+                raise ValueError(f"Invalid MR Link generated: '{mr_link}'. Cannot complete task.")
+
             self._finalize_task_success(request, reporter, mr_link)
 
         except Exception as e:
             self._handle_error(request, e, reporter)
 
     def _resolve_target_repo(self, request: ScaffoldingOrder, contract: ScaffoldingContractModel) -> str:
-        """Resolves target repository from Contract (Priority 1) or Request (Priority 2)."""
         if contract.gitlab.project_path:
             return contract.gitlab.project_path
         if contract.gitlab.project_id:
@@ -90,6 +89,7 @@ class ScaffoldingAgent(BaseAgent):
         project_id = vcs.resolve_project_id(target_repo)
         branch_name = self._get_branch_name(request)
 
+        # Check if branch already has an open MR or exists
         existing_url = vcs.validate_branch(project_id, branch_name, target_repo)
 
         if existing_url:
@@ -107,14 +107,10 @@ class ScaffoldingAgent(BaseAgent):
         reporter.transition_task(request.issue_key, TaskStatus.IN_REVIEW)
 
     def _check_permissions(self, target_repo: str) -> None:
-        """
-        Enforces security policy based on Allowlisted Groups.
-        """
         if not self.config.project_allowlist:
             logger.warning("No allowlist configured. All groups allowed (INSECURE).")
             return
 
-        # Extract group from "group/project"
         group = target_repo.split("/")[0] if "/" in target_repo else target_repo
 
         if group not in self.config.project_allowlist:
@@ -127,8 +123,12 @@ class ScaffoldingAgent(BaseAgent):
             researcher: ResearchAgent,
             reasoner: ReasonerAgent,
     ) -> List[FileContentDTO]:
-        query = f"Busca los lineamientos de arquitectura en la documentación oficial para la tecnología {request.technology_stack}"
+        query = f"Architecture standards for {request.technology_stack} enterprise projects"
+
+        # Logs should now appear thanks to app_factory fix
+        logger.info(f"Researching: {query}")
         research_ctx = researcher.investigate(query)
+        logger.info(f"Research result length: {len(research_ctx)}")
 
         full_context = f"Research:\n{research_ctx}"
         prompt = self.prompt_builder_tool.build_prompt(request, full_context)
@@ -150,7 +150,7 @@ class ScaffoldingAgent(BaseAgent):
 
         files_map = self._prepare_commit_payload(artifacts)
 
-        # 'Smart Upsert'
+        # force_create=False avoids 400 Bad Request on existing files
         vcs.commit_files(project_id, branch_name, files_map, f"Scaffolding for {request.issue_key}", force_create=False)
 
         mr = vcs.create_merge_request(
@@ -160,6 +160,8 @@ class ScaffoldingAgent(BaseAgent):
             description=f"Auto-generated.\n{request.summary}",
             target_branch=self.config.default_target_branch
         )
+
+        logger.info(f"MR Created successfully. Link: {mr.web_url}")
         return mr.web_url
 
     def _get_branch_name(self, request: ScaffoldingOrder) -> str:
@@ -171,7 +173,7 @@ class ScaffoldingAgent(BaseAgent):
         for artifact in artifacts:
             clean_path = artifact.path.lstrip("/")
             if clean_path in files_map:
-                logger.warning(f"Duplicate path generated: {clean_path}. Overwriting with latest content.")
+                logger.warning(f"Duplicate path generated: {clean_path}. Overwriting.")
             files_map[clean_path] = artifact.content
         return files_map
 
