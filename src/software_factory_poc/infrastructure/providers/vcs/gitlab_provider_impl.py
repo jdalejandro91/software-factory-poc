@@ -1,5 +1,8 @@
 import urllib.parse
 from typing import Any, Optional, List
+from typing import Any, Optional, List
+from software_factory_poc.application.core.agents.common.dtos.change_type import ChangeType
+from software_factory_poc.application.core.agents.common.dtos.file_changes_dto import FileChangesDTO
 from software_factory_poc.application.core.agents.common.dtos.file_content_dto import FileContentDTO
 
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -246,6 +249,58 @@ class GitLabProviderImpl(VcsGateway):
 
         except Exception as e:
             self._handle_error(e, f"get_repository_files({branch_name})")
+            raise
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
+    def get_merge_request_diffs(self, project_id: int, mr_id: str) -> List[FileChangesDTO]:
+        self._logger.info(f"Fetching diffs for MR {mr_id} in project {project_id}")
+        try:
+            raw_changes = self.mr_service.get_mr_changes(project_id, mr_id)
+            result_dtos = []
+            
+            for change in raw_changes:
+                new_path = change.get("new_path")
+                old_path = change.get("old_path")
+                new_file = change.get("new_file", False)
+                deleted_file = change.get("deleted_file", False)
+                renamed_file = change.get("renamed_file", False)
+                diff_content = change.get("diff", "")
+                
+                # Derive ChangeType
+                change_type = ChangeType.MODIFIED
+                if new_file:
+                    change_type = ChangeType.ADDED
+                elif deleted_file:
+                    change_type = ChangeType.DELETED
+                elif renamed_file:
+                    change_type = ChangeType.RENAMED
+                    
+                # Calculate stats
+                additions = 0
+                deletions = 0
+                if diff_content:
+                    lines = diff_content.split('\n')
+                    for line in lines:
+                        if line.startswith('+') and not line.startswith('+++'):
+                            additions += 1
+                        elif line.startswith('-') and not line.startswith('---'):
+                            deletions += 1
+                            
+                dto = FileChangesDTO(
+                    file_path=new_path,
+                    old_path=old_path,
+                    change_type=change_type,
+                    diff_content=diff_content,
+                    additions=additions,
+                    deletions=deletions,
+                    is_binary=False # GitLab usually handles binary diffs separately/empty, defaulting False for safety
+                )
+                result_dtos.append(dto)
+                
+            return result_dtos
+            
+        except Exception as e:
+            self._handle_error(e, f"get_merge_request_diffs({mr_id})")
             raise
 
     def _handle_error(self, error: Exception, context: str) -> None:

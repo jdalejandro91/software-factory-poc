@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, Optional, List, Dict
 
 import httpx
 
@@ -51,3 +51,12 @@ class GitLabMrService:
         # If we got 409 but can't find it, raise error
         logger.error(f"GitLab reporting conflict but could not find open MR for {source_branch} -> {target_branch}")
         raise ValueError(f"MR conflict detected but could not be resolved.")
+
+    def get_mr_changes(self, project_id: int, mr_iid: str) -> List[Dict[str, Any]]:
+        path = f"api/v4/projects/{project_id}/merge_requests/{mr_iid}/changes"
+        
+        response = self.client.get(path)
+        response.raise_for_status()
+        
+        data = response.json()
+        return data.get("changes", [])
