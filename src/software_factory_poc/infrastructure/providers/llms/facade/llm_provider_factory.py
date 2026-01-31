@@ -117,8 +117,12 @@ class LlmProviderFactory:
             )
 
         if settings.gemini_api_key:
-            api_key = settings.gemini_api_key.get_secret_value()
-            config = GeminiConfig(api_key=api_key)
+            try:
+                config = GeminiConfig.from_env()
+            except Exception:
+                api_key = settings.gemini_api_key.get_secret_value()
+                config = GeminiConfig(api_key=api_key)  # Usa default 600.0s
+
             client = GeminiClientFactory(config).create()
             providers[LlmProviderType.GEMINI] = GeminiProviderImpl(
                 client=client,

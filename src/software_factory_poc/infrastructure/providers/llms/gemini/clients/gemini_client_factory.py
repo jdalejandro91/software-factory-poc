@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from software_factory_poc.application.core.agents.common.tools.dependency_guard import DependencyGuard
+from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 from software_factory_poc.infrastructure.providers.llms.gemini.clients.gemini_config import (
     GeminiConfig,
 )
-from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 
 logger = LoggerFactoryService.build_logger(__name__)
 
@@ -19,18 +19,18 @@ class GeminiClientFactory:
     def create(self) -> Any:
         try:
             from google import genai
+            from google.genai import types
         except ImportError:
             DependencyGuard(package="google-genai", extra="gemini").require()
+            from google import genai
+            from google.genai import types
 
-        final_timeout = max(30.0, self.config.timeout_s)
+        safe_timeout_seconds = max(30.0, self.config.timeout_s)
+        timeout_ms = int(safe_timeout_seconds * 1000)
 
-        if final_timeout != self.config.timeout_s:
-            logger.warning(
-                f"Gemini config timeout {self.config.timeout_s}s is too low. Enforcing minimum {final_timeout}s.")
-
-        logger.info(f"Initializing Gemini Client with timeout={final_timeout}s")
+        logger.info(f"Initializing Gemini Client with timeout={timeout_ms}ms ({safe_timeout_seconds}s)")
 
         return genai.Client(
             api_key=self.config.api_key,
-            http_options={"timeout": final_timeout}
+            http_options=types.HttpOptions(timeout=timeout_ms)
         )
