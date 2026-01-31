@@ -206,4 +206,4 @@ class ScaffoldingAgent(BaseAgent):
         logger.error(f"Task {request.issue_key} failed: {error}", exc_info=True)
         reporter.report_failure(request.issue_key, str(error))
         reporter.transition_task(request.issue_key, TaskStatus.TO_DO)
-        raise error
+        logger.info(f"Error handled gracefully for task {request.issue_key}. Flow terminated.")
