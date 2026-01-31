@@ -64,13 +64,14 @@ class ScaffoldingPromptBuilder:
         )
 
     def _get_example_output(self) -> str:
+        # FIX: Usamos doble llave {{ }} para escapar y que Python imprima una llave literal en el string final.
         return (
             f"--- JSON OUTPUT EXAMPLE (Adapt structure to Confluence doc) ---\n"
             f"[\n"
             f"  {{\"path\": \".gitignore\", \"content\": \"node_modules/\\ndist/\"}},\n"
             f"  {{\"path\": \"nest-cli.json\", \"content\": \"{{...}}\"}},\n"
-            f"  {{\"path\": \"src/main.ts\", \"content\": \"import {NestFactory} ...\"}},\n"
-            f"  {{\"path\": \"src/modules/cart/cart.module.ts\", \"content\": \"@Module({...}) export class CartModule {{}}\"}},\n"
+            f"  {{\"path\": \"src/main.ts\", \"content\": \"import {{ NestFactory }} ...\"}},\n"
+            f"  {{\"path\": \"src/modules/cart/cart.module.ts\", \"content\": \"@Module({{...}}) export class CartModule {{}}\"}},\n"
             f"  {{\"path\": \"src/modules/cart/domain/README.md\", \"content\": \"Domain entities for Cart go here.\"}}\n"
             f"]\n"
         )
