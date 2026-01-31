@@ -26,16 +26,14 @@ logger = LoggerFactoryService.build_logger(__name__)
 
 class GitLabProviderImpl(VcsGateway):
     def __init__(
-        self,
-        branch_service: GitLabBranchService,
-        commit_service: GitLabCommitService,
-        mr_service: GitLabMrService,
-        http_client: GitLabHttpClient # Injecting client
+            self,
+            branch_service: GitLabBranchService,
+            commit_service: GitLabCommitService,
+            mr_service: GitLabMrService,
+            http_client: GitLabHttpClient
     ):
         self._logger = logger
         self.client = http_client
-
-        # Initialize internal services
         self.branch_service = branch_service
         self.commit_service = commit_service
         self.mr_service = mr_service
@@ -44,41 +42,53 @@ class GitLabProviderImpl(VcsGateway):
     def resolve_project_id(self, repo_url: str) -> int:
         """
         Resolves a project path (group/project) to an numeric ID.
-        Robustly handles full URLs by stripping protocol and domain.
         """
+        # 1. Input Guard: Validate input is not empty
+        if not repo_url or not repo_url.strip():
+            raise ValueError("GitLabProvider: Cannot resolve project ID. 'repo_url' provided is empty.")
+
         project_path = repo_url
-        # Sanitization: Strip scheme and domain if present
         if "://" in project_path:
             try:
                 parsed = urllib.parse.urlparse(project_path)
-                # Remove leading slash if present
                 project_path = parsed.path.lstrip("/")
-                # If path ends in .git, optional cleanup (though API often handles it, let's keep it simple)
                 if project_path.endswith(".git"):
                     project_path = project_path[:-4]
             except Exception:
-                # If parse fails, fallback to original string
                 pass
+
+        # 2. Input Guard: Validate path is not empty after cleaning
+        if not project_path or not project_path.strip():
+            raise ValueError(f"GitLabProvider: Parsed project path is empty from url '{repo_url}'")
 
         self._logger.info(f"Resolving project ID for path: {project_path}")
         try:
             encoded_path = urllib.parse.quote(project_path, safe="")
             response = self.client.get(f"api/v4/projects/{encoded_path}")
-            
+
             if response.status_code == 404:
-                # 404 is technically not a connection error, so maybe we don't retry? 
-                # But tenacity reraises everything by default.
-                # We map it to a clear error.
                 raise ValueError(f"GitLab project path not found: {project_path}")
-                
+
             response.raise_for_status()
-            return response.json()["id"]
+            data = response.json()
+
+            # 3. Type Guard: Ensure we got a Dict, not a List
+            if isinstance(data, list):
+                raise ProviderError(
+                    provider=VcsProviderType.GITLAB,
+                    message=f"GitLab API returned a list instead of a project object. Check if path '{project_path}' is ambiguous.",
+                    retryable=False
+                )
+
+            return data["id"]
         except Exception as e:
             self._handle_error(e, f"resolve_project_id({project_path})")
             raise
 
+    # ... [Resto de métodos create_branch, commit_files, etc. se mantienen igual] ...
+
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
-    def get_branch(self, project_id: int, branch_name: str) ->Optional[ dict[str, Any]]:
+    def get_branch(self, project_id: int, branch_name: str) -> Optional[dict[str, Any]]:
         self._logger.info(f"Getting branch: {branch_name} (Project: {project_id})")
         try:
             return self.branch_service.get_branch(project_id, branch_name)
@@ -88,8 +98,6 @@ class GitLabProviderImpl(VcsGateway):
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
     def branch_exists(self, project_id: int, branch_name: str) -> bool:
-        # Check existence often returns boolean, maybe logging is verbose here?
-        # Keeping info level as requested.
         self._logger.info(f"Checking if branch exists: {branch_name} (Project: {project_id})")
         try:
             return self.branch_service.branch_exists(project_id, branch_name)
@@ -121,12 +129,12 @@ class GitLabProviderImpl(VcsGateway):
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
     def commit_files(
-        self, 
-        project_id: int, 
-        branch_name: str, 
-        files_map: dict[str, str],
-        commit_message: str,
-        force_create: bool = False
+            self,
+            project_id: int,
+            branch_name: str,
+            files_map: dict[str, str],
+            commit_message: str,
+            force_create: bool = False
     ) -> CommitResultDTO:
         self._logger.info(f"Committing {len(files_map)} files to {branch_name} (Project: {project_id})")
         try:
@@ -140,10 +148,12 @@ class GitLabProviderImpl(VcsGateway):
             raise
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
-    def create_merge_request(self, project_id: int, source_branch: str, target_branch: str, title: str, description:Optional[ str] = None) -> MergeRequestDTO:
+    def create_merge_request(self, project_id: int, source_branch: str, target_branch: str, title: str,
+                             description: Optional[str] = None) -> MergeRequestDTO:
         self._logger.info(f"Creating MR: {source_branch} -> {target_branch} (Project: {project_id})")
         try:
-            result = self.mr_service.create_merge_request(project_id, source_branch, target_branch, title, description or "")
+            result = self.mr_service.create_merge_request(project_id, source_branch, target_branch, title,
+                                                          description or "")
             return MergeRequestDTO(
                 id=str(result.get("iid", result.get("id", "0"))),
                 web_url=result.get("web_url", ""),
@@ -154,24 +164,15 @@ class GitLabProviderImpl(VcsGateway):
             raise
 
     def _handle_error(self, error: Exception, context: str) -> None:
-        """Centralized error handling and logging."""
-        # Clean existing logging (if any internal service logged it, this might be duplicate but ensures Error level)
         self._logger.error(f"Error in GitLabProviderImpl [{context}]: {str(error)}", exc_info=True)
-        
         if isinstance(error, ProviderError):
-            # Already mapped
             return
-            
-        # Map generic exceptions
-        # Note: requests.HTTPError might be raised by services. 
-        # We can inspect status codes if we import requests, or rely on string checking as simplest generic way without tight coupling.
         msg = str(error)
         retryable = False
         if "500" in msg or "502" in msg or "503" in msg or "504" in msg:
             retryable = True
         elif "Connection" in msg or "Timeout" in msg:
-             retryable = True
-             
+            retryable = True
         raise ProviderError(
             provider=VcsProviderType.GITLAB,
             message=f"GitLab operation failed: {error}",

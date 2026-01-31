@@ -8,6 +8,7 @@ from software_factory_poc.application.core.agents.common.dtos.file_content_dto i
 from software_factory_poc.application.core.agents.reasoner.reasoner_agent import ReasonerAgent
 from software_factory_poc.application.core.agents.reporter.reporter_agent import ReporterAgent
 from software_factory_poc.application.core.agents.research.research_agent import ResearchAgent
+from software_factory_poc.application.core.agents.scaffolding.scaffolding_contract import ScaffoldingContractModel
 from software_factory_poc.application.core.agents.scaffolding.tools.artifact_parser import ArtifactParser
 from software_factory_poc.application.core.agents.scaffolding.tools.scaffolding_prompt_builder import \
     ScaffoldingPromptBuilder
@@ -19,185 +20,169 @@ logger = logging.getLogger(__name__)
 
 from software_factory_poc.application.core.agents.base_agent import BaseAgent
 
+
 @dataclass
 class ScaffoldingAgent(BaseAgent):
     """
     Orchestrator Agent for Scaffolding Tasks.
-    Coordinates the capabilities: Research -> Reasoning -> Knowledge -> VCS -> Reporting.
     """
     config: ScaffoldingAgentConfig
 
     def __init__(self, config: ScaffoldingAgentConfig):
         super().__init__(name="ScaffoldingAgent", role="Orchestrator", goal="Orchestrate scaffolding creation")
         self.config = config
-        # Instantiate Tools
         self.prompt_builder_tool = ScaffoldingPromptBuilder()
         self.artifact_parser_tool = ArtifactParser()
 
     def execute_flow(
-        self,
-        request: ScaffoldingOrder,
-        reporter: ReporterAgent,
-        vcs: VcsAgent,
-        researcher: ResearchAgent,
-        reasoner: ReasonerAgent,
+            self,
+            request: ScaffoldingOrder,
+            reporter: ReporterAgent,
+            vcs: VcsAgent,
+            researcher: ResearchAgent,
+            reasoner: ReasonerAgent,
     ) -> None:
         """Executes the scaffolding orchestration flow."""
         try:
-            if self._start_task_execution(request, reporter, vcs):
+            reporter.report_start(request.issue_key)
+
+            # STEP 1: PARSE CONTRACT (The Source of Truth)
+            # This extracts the target repo, stack, etc.
+            try:
+                contract = ScaffoldingContractModel.from_raw_text(request.raw_instruction)
+            except Exception as parse_error:
+                # If we can't understand what to do, we abort immediately.
+                logger.error(f"Contract parsing failed for {request.issue_key}: {parse_error}")
+                reporter.report_failure(request.issue_key, f"Invalid Contract: {parse_error}")
                 return
 
+            # Enrich request/context with parsed data
+            target_repo = self._resolve_target_repo(request, contract)
+
+            # STEP 2: SECURITY CHECK
+            self._check_permissions(target_repo)
+
+            # STEP 3: PRECONDITIONS (Idempotency)
+            if self._check_preconditions(request, vcs, reporter, target_repo):
+                return
+
+            # STEP 4: GENERATION
             artifacts = self._generate_scaffolding_artifacts(request, researcher, reasoner)
-            mr_link = self._apply_changes_to_vcs(request, vcs, artifacts)
-            
+
+            # STEP 5: VCS OPERATIONS
+            mr_link = self._apply_changes_to_vcs(request, vcs, artifacts, target_repo)
+
             self._finalize_task_success(request, reporter, mr_link)
 
         except Exception as e:
             self._handle_error(request, e, reporter)
 
-    def _start_task_execution(self, request: ScaffoldingOrder, reporter: ReporterAgent, vcs: VcsAgent) -> bool:
-        reporter.report_start(request.issue_key)
-        
-        self._check_permissions(request)
+    def _resolve_target_repo(self, request: ScaffoldingOrder, contract: ScaffoldingContractModel) -> str:
+        """Resolves target repository from Contract (Priority 1) or Request (Priority 2)."""
+        if contract.gitlab.project_path:
+            return contract.gitlab.project_path
+        if contract.gitlab.project_id:
+            return str(contract.gitlab.project_id)
+        if request.repository_url:
+            return request.repository_url
+        raise ValueError("Target repository not found in Contract or Request.")
 
-        
-        # Extracted Precondition Check
-        if self._check_preconditions(request, vcs, reporter):
-            return True
-            
-        return False
-
-    def _check_preconditions(self, request: ScaffoldingOrder, vcs: VcsAgent, reporter: ReporterAgent) -> bool:
-        project_id = vcs.resolve_project_id(request.repository_url)
+    def _check_preconditions(self, request: ScaffoldingOrder, vcs: VcsAgent, reporter: ReporterAgent,
+                             target_repo: str) -> bool:
+        project_id = vcs.resolve_project_id(target_repo)
         branch_name = self._get_branch_name(request)
-        
-        # User requested method name
-        existing_url = vcs.validate_branch(project_id, branch_name, request.repository_url)
-        
+
+        existing_url = vcs.validate_branch(project_id, branch_name, target_repo)
+
         if existing_url:
             self._handle_existing_branch(request, branch_name, existing_url, reporter)
             return True
         return False
 
-    def _handle_existing_branch(self, request: ScaffoldingOrder, branch_name: str, existing_url: str, reporter: ReporterAgent) -> None:
-        """Reports that the branch already exists and stops execution."""
+    def _handle_existing_branch(self, request: ScaffoldingOrder, branch_name: str, existing_url: str,
+                                reporter: ReporterAgent) -> None:
         from software_factory_poc.application.core.agents.reporter.config.reporter_constants import ReporterMessages
-        
-        # Short-Circuit: Report as Info/Success but stop execution
         reporter.report_success(
-            request.issue_key, 
+            request.issue_key,
             f"{ReporterMessages.BRANCH_EXISTS_PREFIX}{branch_name}|{existing_url}"
         )
         reporter.transition_task(request.issue_key, TaskStatus.IN_REVIEW)
-        return False
 
-    def _check_permissions(self, request: ScaffoldingOrder) -> None:
+    def _check_permissions(self, target_repo: str) -> None:
         """
         Enforces security policy based on Allowlisted Groups.
-        extracts path from raw_instruction using regex if not present in request.
         """
         if not self.config.project_allowlist:
             logger.warning("No allowlist configured. All groups allowed (INSECURE).")
             return
 
-        # Attempt to extract path from raw_instruction (YAML block)
-        # Looking for: gitlab_project_path: 'group/project'
-        path = ""
-        # 1. Try ScaffoldingOrder field if it existed (it does not currently, but defensive coding)
-        if hasattr(request, "target_conf") and request.target_conf:
-             path = request.target_conf.gitlab_project_path
+        # Extract group from "group/project"
+        group = target_repo.split("/")[0] if "/" in target_repo else target_repo
 
-        # 2. Regex fallback
-        if not path:
-             match = re.search(r"gitlab_project_path:\s*['\"]?([\w\-\./]+)['\"]?", request.raw_instruction)
-             if match:
-                 path = match.group(1)
-        
-        if not path:
-             # If we can't find the target, we can't allowlist it.
-             # Failing open or closed? Closed is secure.
-             msg = "Could not identify 'gitlab_project_path' in instruction to validate permissions."
-             logger.error(msg)
-             raise ValueError(msg)
-            
-        group = path.split("/")[0]
-        
         if group not in self.config.project_allowlist:
             logger.warning(f"Security Block: Group '{group}' not in allowlist {self.config.project_allowlist}")
             raise PermissionError(f"Security Policy Violation: Group '{group}' is not authorized for scaffolding.")
 
-
     def _generate_scaffolding_artifacts(
-        self, 
-        request: ScaffoldingOrder, 
-        researcher: ResearchAgent, 
-        reasoner: ReasonerAgent, 
+            self,
+            request: ScaffoldingOrder,
+            researcher: ResearchAgent,
+            reasoner: ReasonerAgent,
     ) -> List[FileContentDTO]:
         query = f"Busca los lineamientos de arquitectura en la documentación oficial para la tecnología {request.technology_stack}"
         research_ctx = researcher.investigate(query)
-        # Knowledge retrieval merged into research or just removed if redundant
-        
+
         full_context = f"Research:\n{research_ctx}"
         prompt = self.prompt_builder_tool.build_prompt(request, full_context)
-        
+
         model_id = self.config.model_name or "gpt-4-turbo"
         raw_response = reasoner.reason(prompt, model_id)
-        
+
         return self.artifact_parser_tool.parse_response(raw_response)
 
-    def _apply_changes_to_vcs(self, request: ScaffoldingOrder, vcs: VcsAgent, artifacts: List[FileContentDTO]) -> str:
+    def _apply_changes_to_vcs(self, request: ScaffoldingOrder, vcs: VcsAgent, artifacts: List[FileContentDTO],
+                              target_repo: str) -> str:
         if not artifacts:
             raise ValueError("No artifacts generated to publish.")
 
-        project_id = vcs.resolve_project_id(request.repository_url)
+        project_id = vcs.resolve_project_id(target_repo)
         branch_name = self._get_branch_name(request)
-        
-        # Use configured default branch (e.g., 'main') as base ref
+
         vcs.create_branch(project_id, branch_name, ref=self.config.default_target_branch)
-        
+
         files_map = self._prepare_commit_payload(artifacts)
         vcs.commit_files(project_id, branch_name, files_map, f"Scaffolding for {request.issue_key}", force_create=True)
-        
+
         mr = vcs.create_merge_request(
-            project_id=project_id, 
-            source_branch=branch_name, 
-            title=f"Scaffolding {request.issue_key}", 
+            project_id=project_id,
+            source_branch=branch_name,
+            title=f"Scaffolding {request.issue_key}",
             description=f"Auto-generated.\n{request.summary}",
             target_branch=self.config.default_target_branch
         )
         return mr.web_url
 
     def _get_branch_name(self, request: ScaffoldingOrder) -> str:
-        # Slugify logic: lowercase, alphanumeric/dashes only
         safe_key = re.sub(r'[^a-z0-9\-]', '', request.issue_key.lower())
         return f"feature/{safe_key}-scaffolding"
 
     def _prepare_commit_payload(self, artifacts: List[FileContentDTO]) -> dict[str, str]:
-        """
-        Converts artifacts to VCS-ready dictionary.
-        Sanitizes paths to ensure they are relative.
-        """
         files_map = {}
         for artifact in artifacts:
-            # Sanitize: Strip leading slash
             clean_path = artifact.path.lstrip("/")
-            
             if clean_path in files_map:
                 logger.warning(f"Duplicate path generated: {clean_path}. Overwriting with latest content.")
-            
             files_map[clean_path] = artifact.content
-            
         return files_map
 
     def _finalize_task_success(self, request: ScaffoldingOrder, reporter: ReporterAgent, mr_link: str) -> None:
-        # Structured Payload for Rich Reporting
         message_payload = {
             "type": "scaffolding_success",
             "title": "Scaffolding Completado Exitosamente",
             "summary": f"Se ha generado el código base para la tarea {request.issue_key}.\n{request.summary}",
             "links": {"🔗 Ver Merge Request": mr_link}
         }
-        
+
         reporter.report_success(request.issue_key, message_payload)
         reporter.transition_task(request.issue_key, TaskStatus.IN_REVIEW)
         logger.info(f"Task {request.issue_key} completed. MR: {mr_link}")
