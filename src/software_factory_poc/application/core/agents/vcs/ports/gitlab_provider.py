@@ -1,6 +1,5 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import Any, Optional
-
 
 from software_factory_poc.application.core.agents.vcs.ports.vcs_gateway import VcsGateway
 

@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Any
+
 from software_factory_poc.application.core.agents.common.config.task_status import TaskStatus
+
 
 class TaskTrackerGateway(ABC):
     @abstractmethod

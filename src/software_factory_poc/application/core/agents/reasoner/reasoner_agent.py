@@ -1,9 +1,10 @@
 from dataclasses import dataclass
+
 from software_factory_poc.application.core.agents.base_agent import BaseAgent
-from software_factory_poc.application.core.agents.reasoner.ports.llm_gateway import LlmGateway
-from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 from software_factory_poc.application.core.agents.common.config.llm_provider_type import LlmProviderType
 from software_factory_poc.application.core.agents.common.value_objects.model_id import ModelId
+from software_factory_poc.application.core.agents.reasoner.ports.llm_gateway import LlmGateway
+from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 
 logger = LoggerFactoryService.build_logger(__name__)
 

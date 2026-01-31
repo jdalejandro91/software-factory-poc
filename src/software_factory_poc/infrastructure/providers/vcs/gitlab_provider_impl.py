@@ -1,15 +1,15 @@
 import urllib.parse
 from typing import Any, Optional
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-from software_factory_poc.application.core.agents.vcs.ports.vcs_gateway import VcsGateway
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+from software_factory_poc.application.core.agents.common.exceptions.provider_error import ProviderError
+from software_factory_poc.application.core.agents.vcs.config.vcs_provider_type import VcsProviderType
 from software_factory_poc.application.core.agents.vcs.dtos.vcs_dtos import BranchDTO, CommitResultDTO, MergeRequestDTO
+from software_factory_poc.application.core.agents.vcs.ports.vcs_gateway import VcsGateway
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 from software_factory_poc.infrastructure.providers.vcs.clients.gitlab_http_client import (
     GitLabHttpClient,
-)
-from software_factory_poc.infrastructure.providers.vcs.mappers.gitlab_payload_builder_service import (
-    GitLabPayloadBuilderService,
 )
 from software_factory_poc.infrastructure.providers.vcs.services.gitlab_branch_service import (
     GitLabBranchService,
@@ -20,8 +20,6 @@ from software_factory_poc.infrastructure.providers.vcs.services.gitlab_commit_se
 from software_factory_poc.infrastructure.providers.vcs.services.gitlab_mr_service import (
     GitLabMrService,
 )
-from software_factory_poc.application.core.agents.common.exceptions.provider_error import ProviderError
-from software_factory_poc.application.core.agents.vcs.config.vcs_provider_type import VcsProviderType
 
 logger = LoggerFactoryService.build_logger(__name__)
 

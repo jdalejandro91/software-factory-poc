@@ -1,8 +1,9 @@
 from software_factory_poc.application.core.agents.research.config.research_provider_type import ResearchProviderType
 from software_factory_poc.application.core.agents.research.ports.research_gateway import ResearchGateway
-from software_factory_poc.infrastructure.providers.research.confluence_provider_impl import ConfluenceProviderImpl
 # from software_factory_poc.infrastructure.providers.research.filesystem_provider_impl import FileSystemProviderImpl # If we move it
 from software_factory_poc.infrastructure.configuration.app_config import AppConfig
+from software_factory_poc.infrastructure.providers.research.confluence_provider_impl import ConfluenceProviderImpl
+
 
 class ResearchProviderFactory:
     """

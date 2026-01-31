@@ -1,9 +1,11 @@
 from __future__ import annotations
-from typing import Optional
 
 from dataclasses import dataclass
+from typing import Optional
 
 from software_factory_poc.application.core.agents.common.exceptions.infra_error import InfraError
+
+
 @dataclass(frozen=True)
 class ProviderError(InfraError):
     provider: str

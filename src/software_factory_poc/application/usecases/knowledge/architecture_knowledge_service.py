@@ -1,7 +1,7 @@
 from __future__ import annotations
-from typing import Optional
 
 import time
+from typing import Optional
 
 from software_factory_poc.application.core.agents.research.ports.confluence_provider import ConfluenceProvider
 from software_factory_poc.infrastructure.configuration.tool_settings import ToolSettings

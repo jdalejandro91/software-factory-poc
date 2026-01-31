@@ -1,46 +1,36 @@
 from typing import cast, Optional
-from pathlib import Path
 
-from software_factory_poc.application.core.agents.reporter.reporter_agent import ReporterAgent
-from software_factory_poc.application.core.agents.vcs.vcs_agent import VcsAgent
-from software_factory_poc.application.core.agents.research.research_agent import ResearchAgent
+from software_factory_poc.application.core.agents.reasoner.ports.llm_gateway import LlmGateway
 from software_factory_poc.application.core.agents.reasoner.reasoner_agent import ReasonerAgent
-from software_factory_poc.application.core.agents.scaffolding.scaffolding_agent import ScaffoldingAgent
-
-from software_factory_poc.application.core.agents.research.config.research_provider_type import (
-    ResearchProviderType,
-)
-from software_factory_poc.application.core.agents.common.config.llm_provider_type import (
-    LlmProviderType,
-)
-from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import (
-    ScaffoldingAgentConfig,
-)
 from software_factory_poc.application.core.agents.reporter.config.task_tracker_type import (
     TaskTrackerType,
 )
+from software_factory_poc.application.core.agents.reporter.ports.task_tracker_gateway import TaskTrackerGateway
+from software_factory_poc.application.core.agents.reporter.reporter_agent import ReporterAgent
+from software_factory_poc.application.core.agents.research.ports.research_gateway import ResearchGateway
+from software_factory_poc.application.core.agents.research.research_agent import ResearchAgent
+from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import (
+    ScaffoldingAgentConfig,
+)
+from software_factory_poc.application.core.agents.scaffolding.scaffolding_agent import ScaffoldingAgent
 from software_factory_poc.application.core.agents.vcs.config.vcs_provider_type import (
     VcsProviderType,
 )
-from software_factory_poc.application.core.agents.reasoner.ports.llm_gateway import LlmGateway
-from software_factory_poc.application.core.agents.research.ports.research_gateway import ResearchGateway
-
-from software_factory_poc.application.core.agents.reporter.ports.task_tracker_gateway import TaskTrackerGateway
 from software_factory_poc.application.core.agents.vcs.ports.vcs_gateway import VcsGateway
-from software_factory_poc.infrastructure.configuration.main_settings import Settings # Legacy or remove
-from software_factory_poc.infrastructure.configuration.app_config import AppConfig
+from software_factory_poc.application.core.agents.vcs.vcs_agent import VcsAgent
 from software_factory_poc.infrastructure.common.retry.retry_policy import RetryPolicy
+from software_factory_poc.infrastructure.configuration.app_config import AppConfig
+from software_factory_poc.infrastructure.configuration.main_settings import Settings  # Legacy or remove
 from software_factory_poc.infrastructure.observability.logging.correlation_id_context import (
     CorrelationIdContext,
 )
 from software_factory_poc.infrastructure.providers.llms.facade.llm_provider_factory import (
     LlmProviderFactory,
 )
-from software_factory_poc.infrastructure.providers.research.research_provider_factory import ResearchProviderFactory
-
 from software_factory_poc.infrastructure.providers.llms.gateway.composite_gateway import (
     CompositeLlmGateway,
 )
+from software_factory_poc.infrastructure.providers.research.research_provider_factory import ResearchProviderFactory
 from software_factory_poc.infrastructure.providers.tracker.clients.jira_http_client import (
     JiraHttpClient,
 )
@@ -53,6 +43,9 @@ from software_factory_poc.infrastructure.providers.vcs.clients.gitlab_http_clien
 from software_factory_poc.infrastructure.providers.vcs.gitlab_provider_impl import (
     GitLabProviderImpl,
 )
+from software_factory_poc.infrastructure.providers.vcs.mappers.gitlab_payload_builder_service import (
+    GitLabPayloadBuilderService,
+)
 from software_factory_poc.infrastructure.providers.vcs.services.gitlab_branch_service import (
     GitLabBranchService,
 )
@@ -61,9 +54,6 @@ from software_factory_poc.infrastructure.providers.vcs.services.gitlab_commit_se
 )
 from software_factory_poc.infrastructure.providers.vcs.services.gitlab_mr_service import (
     GitLabMrService,
-)
-from software_factory_poc.infrastructure.providers.vcs.mappers.gitlab_payload_builder_service import (
-    GitLabPayloadBuilderService,
 )
 
 
@@ -110,7 +100,7 @@ class ProviderResolver:
         """
         if self.config.tracker_provider == TaskTrackerType.JIRA:
             http_client = JiraHttpClient(self.app_config.jira)
-            return JiraProviderImpl(http_client, self.app_config.tools)
+            return JiraProviderImpl(http_client, self.app_config.jira)
             
         elif self.config.tracker_provider == TaskTrackerType.AZURE_DEVOPS:
             raise NotImplementedError("Azure DevOps adapter is not yet implemented.")

@@ -1,12 +1,14 @@
-from typing import List, Optional
 from pathlib import Path
+from typing import List, Optional
+
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
-from software_factory_poc.application.core.agents.vcs.config.vcs_provider_type import VcsProviderType
+from software_factory_poc.application.core.agents.common.value_objects.model_id import ModelId
 from software_factory_poc.application.core.agents.reporter.config.task_tracker_type import TaskTrackerType
 from software_factory_poc.application.core.agents.research.config.research_provider_type import ResearchProviderType
-from software_factory_poc.application.core.agents.common.value_objects.model_id import ModelId
+from software_factory_poc.application.core.agents.vcs.config.vcs_provider_type import VcsProviderType
+
 
 class ScaffoldingAgentConfig(BaseSettings):
     """

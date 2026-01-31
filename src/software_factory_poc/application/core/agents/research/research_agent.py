@@ -1,10 +1,10 @@
-from dataclasses import dataclass
-from typing import Dict
 import logging
+from dataclasses import dataclass
 
 from software_factory_poc.application.core.agents.base_agent import BaseAgent
 from software_factory_poc.application.core.agents.research.ports.research_gateway import ResearchGateway
-from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import ScaffoldingAgentConfig
+from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import \
+    ScaffoldingAgentConfig
 
 logger = logging.getLogger(__name__)
 

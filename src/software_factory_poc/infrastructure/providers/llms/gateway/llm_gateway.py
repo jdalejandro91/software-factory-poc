@@ -3,13 +3,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from software_factory_poc.application.core.agents.reasoner.llm_request import LlmRequest
-from software_factory_poc.application.core.agents.reasoner.llm_response import LlmResponse
+from software_factory_poc.application.core.agents.common.config.llm_provider_type import LlmProviderType
 from software_factory_poc.application.core.agents.common.exceptions.configuration_error import (
     ConfigurationError,
 )
-from software_factory_poc.application.core.agents.common.config.llm_provider_type import LlmProviderType
-from software_factory_poc.application.core.agents.reasoner.ports.llm_gateway import LlmGateway
+from software_factory_poc.application.core.agents.reasoner.llm_request import LlmRequest
+from software_factory_poc.application.core.agents.reasoner.llm_response import LlmResponse
 from software_factory_poc.application.core.agents.reasoner.ports.llm_provider import LlmProvider
 from software_factory_poc.infrastructure.providers.llms.gateway.model_allowlist import (
     ModelAllowlist,

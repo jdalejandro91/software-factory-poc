@@ -1,10 +1,9 @@
-import re
 import json
-import yaml
+import re
 from typing import Any, Optional
 
+import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator, ValidationError
-
 from software_factory_poc.application.core.agents.scaffolding.exceptions.contract_parse_error import ContractParseError
 
 

@@ -1,5 +1,6 @@
-from typing import Any, Optional
 import urllib.parse
+from typing import Any, Optional
+
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 from software_factory_poc.infrastructure.providers.vcs.clients.gitlab_http_client import GitLabHttpClient
 

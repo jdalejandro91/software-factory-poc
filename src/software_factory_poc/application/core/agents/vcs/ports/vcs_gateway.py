@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Optional
+
 from software_factory_poc.application.core.agents.vcs.dtos.vcs_dtos import BranchDTO, CommitResultDTO, MergeRequestDTO
 
 

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Optional
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Optional
 
 from software_factory_poc.application.core.agents.reasoner.value_objects.output_format import OutputFormat
 

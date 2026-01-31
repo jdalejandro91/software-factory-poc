@@ -1,9 +1,7 @@
 from functools import lru_cache
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Security, status, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, status, Request
 from fastapi.responses import JSONResponse
-from fastapi.security import APIKeyHeader
-from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService 
 
 from software_factory_poc.application.core.agents.scaffolding.value_objects.scaffolding_order import (
     ScaffoldingOrder,
@@ -11,14 +9,14 @@ from software_factory_poc.application.core.agents.scaffolding.value_objects.scaf
 from software_factory_poc.application.usecases.scaffolding.create_scaffolding_usecase import (
     CreateScaffoldingUseCase,
 )
-from software_factory_poc.infrastructure.configuration.main_settings import Settings
 from software_factory_poc.infrastructure.configuration.app_config import AppConfig
+from software_factory_poc.infrastructure.configuration.main_settings import Settings
 from software_factory_poc.infrastructure.entrypoints.api.dtos.jira_webhook_dto import JiraWebhookDTO
 # from software_factory_poc.infrastructure.entrypoints.api.mappers.jira_mapper import JiraMapper # Legacy mapper removed/deprecated
 from software_factory_poc.infrastructure.entrypoints.api.mappers.jira_payload_mapper import JiraPayloadMapper
-from software_factory_poc.infrastructure.resolution.provider_resolver import ProviderResolver
 from software_factory_poc.infrastructure.entrypoints.api.security import validate_api_key
-
+from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
+from software_factory_poc.infrastructure.resolution.provider_resolver import ProviderResolver
 
 logger = LoggerFactoryService.build_logger(__name__)
 router = APIRouter()

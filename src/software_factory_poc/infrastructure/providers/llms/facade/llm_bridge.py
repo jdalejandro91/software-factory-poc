@@ -5,8 +5,8 @@ from dataclasses import dataclass
 
 from software_factory_poc.application.core.agents.reasoner.llm_request import LlmRequest
 from software_factory_poc.application.core.agents.reasoner.llm_response import LlmResponse
-from software_factory_poc.infrastructure.configuration.llm_settings import LlmSettings
 from software_factory_poc.infrastructure.common.retry.retry_policy import RetryPolicy
+from software_factory_poc.infrastructure.configuration.llm_settings import LlmSettings
 from software_factory_poc.infrastructure.observability.logging.correlation_id_context import (
     CorrelationIdContext,
 )

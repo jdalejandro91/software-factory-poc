@@ -1,7 +1,7 @@
 from __future__ import annotations
-from typing import Optional
 
 from dataclasses import dataclass
+from typing import Optional
 
 from software_factory_poc.application.core.agents.reasoner.value_objects.output_format import OutputFormat
 from software_factory_poc.application.core.agents.reasoner.value_objects.structured_output_schema import (

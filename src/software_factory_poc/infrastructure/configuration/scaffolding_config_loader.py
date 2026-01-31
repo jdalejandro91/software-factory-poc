@@ -3,21 +3,21 @@ import os
 from pathlib import Path
 from typing import Any
 
-from software_factory_poc.application.core.agents.common.value_objects.model_id import ModelId
-from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import (
-    ScaffoldingAgentConfig,
+from software_factory_poc.application.core.agents.common.config.llm_provider_type import (
+    LlmProviderType,
 )
+from software_factory_poc.application.core.agents.common.value_objects.model_id import ModelId
 from software_factory_poc.application.core.agents.reporter.config.task_tracker_type import (
     TaskTrackerType,
-)
-from software_factory_poc.application.core.agents.vcs.config.vcs_provider_type import (
-    VcsProviderType,
 )
 from software_factory_poc.application.core.agents.research.config.research_provider_type import (
     ResearchProviderType,
 )
-from software_factory_poc.application.core.agents.common.config.llm_provider_type import (
-    LlmProviderType,
+from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import (
+    ScaffoldingAgentConfig,
+)
+from software_factory_poc.application.core.agents.vcs.config.vcs_provider_type import (
+    VcsProviderType,
 )
 from software_factory_poc.infrastructure.observability.logger_factory_service import (
     LoggerFactoryService,

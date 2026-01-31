@@ -1,6 +1,8 @@
 
 from typing import Any, List, Dict
+
 from software_factory_poc.infrastructure.providers.knowledge.clients.vector_store_client import VectorStoreClient
+
 
 class KnowledgeProviderImpl:
     """

@@ -1,8 +1,8 @@
 from __future__ import annotations
-from typing import Optional
 
 from contextvars import ContextVar
 from dataclasses import dataclass
+from typing import Optional
 from uuid import uuid4
 
 _CORRELATION_ID:Optional[ ContextVar[str]] = ContextVar("_CORRELATION_ID", default=None)

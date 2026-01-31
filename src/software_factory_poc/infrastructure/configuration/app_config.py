@@ -2,10 +2,11 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .confluence_settings import ConfluenceSettings
-from .jira_settings import JiraSettings
 from .gitlab_settings import GitLabSettings
+from .jira_settings import JiraSettings
 from .llm_settings import LlmSettings
 from .scaffolding_settings import ScaffoldingSettings
+
 
 class AppConfig(BaseSettings):
     """

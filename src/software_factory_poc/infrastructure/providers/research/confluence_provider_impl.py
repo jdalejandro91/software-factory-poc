@@ -1,12 +1,12 @@
 import re
 from typing import Any
 
-from software_factory_poc.application.core.agents.research.ports.research_gateway import ResearchGateway
-from software_factory_poc.application.core.agents.research.config.research_provider_type import ResearchProviderType
-from software_factory_poc.infrastructure.configuration.confluence_settings import ConfluenceSettings
-from software_factory_poc.infrastructure.providers.research.clients.confluence_http_client import ConfluenceHttpClient
 from software_factory_poc.application.core.agents.common.exceptions.provider_error import ProviderError
+from software_factory_poc.application.core.agents.research.config.research_provider_type import ResearchProviderType
+from software_factory_poc.application.core.agents.research.ports.research_gateway import ResearchGateway
+from software_factory_poc.infrastructure.configuration.confluence_settings import ConfluenceSettings
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
+from software_factory_poc.infrastructure.providers.research.clients.confluence_http_client import ConfluenceHttpClient
 
 logger = LoggerFactoryService.build_logger(__name__)
 

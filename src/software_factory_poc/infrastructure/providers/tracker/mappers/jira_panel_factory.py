@@ -1,7 +1,8 @@
-from typing import Any, Dict
 import re
+from typing import Any, Dict
 
 from software_factory_poc.infrastructure.providers.tracker.mappers.jira_adf_builder import JiraAdfBuilder
+
 
 class JiraPanelFactory:
     """

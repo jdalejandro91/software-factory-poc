@@ -1,10 +1,8 @@
-from collections.abc import Mapping
-
-import logging
 from software_factory_poc.application.core.agents.common.config.llm_provider_type import LlmProviderType
 from software_factory_poc.application.core.agents.reasoner.ports.llm_provider import LlmProvider
-from software_factory_poc.infrastructure.configuration.llm_settings import LlmSettings
 from software_factory_poc.infrastructure.common.retry.retry_policy import RetryPolicy
+from software_factory_poc.infrastructure.configuration.llm_settings import LlmSettings
+from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 from software_factory_poc.infrastructure.observability.logging.correlation_id_context import (
     CorrelationIdContext,
 )
@@ -68,9 +66,6 @@ from software_factory_poc.infrastructure.providers.llms.openai.mappers.openai_re
 from software_factory_poc.infrastructure.providers.llms.openai.openai_provider_impl import (
     OpenAiProvider,
 )
-
-
-from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 
 logger = LoggerFactoryService.build_logger(__name__)
 

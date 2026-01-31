@@ -23,6 +23,8 @@ class JiraSettings(BaseSettings):
     api_token:Optional[ SecretStr] = Field(default=None)
     bearer_token:Optional[ SecretStr] = Field(default=None)
     webhook_secret: SecretStr = Field(..., description="Token to validate incoming Jira webhooks")
+    transition_in_review: str = Field(default="In Review",
+                                      description="Name of the transition to move issue to In Review")
 
     def validate_credentials(self) -> None:
         """

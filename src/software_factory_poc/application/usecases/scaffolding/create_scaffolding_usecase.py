@@ -1,26 +1,23 @@
-from typing import cast, Any, Optional
-
-from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import (
-    ScaffoldingAgentConfig,
-)
-from software_factory_poc.application.core.agents.scaffolding.value_objects.scaffolding_order import (
-    ScaffoldingOrder,
-)
-
-# Domain Agents (Imports removed, handled by Resolver Factory)
-
-# Domain Entity Config (Imports removed, handled by Resolver Factory)
+from typing import Any, Optional
 
 # Gateways
 # from software_factory_poc.application.core.agents.reporter.ports.task_tracker_gateway import (
 #     TaskTrackerGateway,
 # )
 from software_factory_poc.application.core.agents.common.config.task_status import TaskStatus
-
+from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import (
+    ScaffoldingAgentConfig,
+)
+from software_factory_poc.application.core.agents.scaffolding.value_objects.scaffolding_order import (
+    ScaffoldingOrder,
+)
 from software_factory_poc.infrastructure.observability.logger_factory_service import (
     LoggerFactoryService,
 )
 from software_factory_poc.infrastructure.resolution.provider_resolver import ProviderResolver
+
+# Domain Agents (Imports removed, handled by Resolver Factory)
+# Domain Entity Config (Imports removed, handled by Resolver Factory)
 
 logger = LoggerFactoryService.build_logger(__name__)
 

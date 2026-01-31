@@ -1,9 +1,8 @@
-from typing import Any, Union 
+from typing import Union
 
 from software_factory_poc.application.core.agents.scaffolding.value_objects.scaffolding_order import (
     ScaffoldingOrder,
 )
-
 from software_factory_poc.infrastructure.entrypoints.api.dtos.jira_webhook_dto import JiraWebhookDTO
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 
