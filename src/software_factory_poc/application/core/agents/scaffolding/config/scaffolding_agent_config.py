@@ -1,7 +1,8 @@
+import json
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Any
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
 from software_factory_poc.application.core.agents.common.value_objects.model_id import ModelId
@@ -24,15 +25,43 @@ class ScaffoldingAgentConfig(BaseSettings):
     work_dir: Path = Field(..., description="Working directory")
     default_target_branch: str = Field(default="main", description="Target branch for Merge Requests")
     architecture_page_id: Optional[str] = Field(default=None, description="Confluence Page ID for Architecture")
-    
-    # Keep original fields if they are still relevant, user didn't say to remove them but "Update this class".
-    # Original: model_name, temperature, extra_params.
-    # User instructions implied specific new fields. I'll keep the old ones as Optional/Default to be safe 
-    # or replace them if the new ones cover them. 
-    # 'model_name' might be covered by 'llm_model_priority' logic, but let's keep them to avoid breaking too much if used.
+
+    # Original fields kept for compatibility
     model_name: Optional[str] = None
     temperature: float = 0.0
     extra_params: dict = Field(default_factory=dict)
+
+    @field_validator("project_allowlist", mode="before")
+    @classmethod
+    def parse_allowlist(cls, v: Any) -> List[str]:
+        """
+        Robustly parses allowlist from various formats:
+        - List[str]: ['group1'] (Already parsed)
+        - JSON string: '["group1", "group2"]'
+        - CSV string: 'group1,group2'
+        """
+        if isinstance(v, list):
+            return v
+
+        if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                return []
+
+            # 1. Try JSON parsing (handles '["item"]' formats common in Docker envs)
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return [str(item) for item in parsed]
+            except json.JSONDecodeError:
+                pass
+
+            # 2. Fallback to CSV splitting
+            # Remove potential quotes if they were part of the string but not valid JSON
+            clean_str = v.replace("'", "").replace('"', "")
+            return [g.strip() for g in clean_str.split(",") if g.strip()]
+
+        return []
 
     model_config = {
         "env_prefix": "SCAFFOLDING_",
