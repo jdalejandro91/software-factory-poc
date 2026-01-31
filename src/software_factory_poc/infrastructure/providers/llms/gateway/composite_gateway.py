@@ -51,19 +51,16 @@ class CompositeLlmGateway(LlmGateway):
         logger.info(f"--- [DEBUG] CompositeGateway initialized with providers: {registered_providers}")
 
     def generate_code(self, prompt: str, context: str, model_hints: list[ModelId]) -> Any:
-        # Note: Return type is LlmResponse, imported locally or Any to avoid circular deps if needed,
-        # but LlmGateway says -> LlmResponse.
-
         last_exception = None
 
-        # Priority: Hints > Config Priority
-        # If hints are provided, we should probably try them?
-        # Or does config override? Usually hints from agent are specific.
-        # But 'config.priority_list' is the main strategy.
-        # Let's verify requirement: "Asegura que ReasonerAgent pase correctamente los model_hints basados en la configuración".
-        # If hints are passed, we use them. If not, use priority list.
+        candidates = []
+        if model_hints:
+            candidates.extend(model_hints)
 
-        candidates = model_hints if model_hints else self.priority_list
+        if self.priority_list:
+            candidates.extend(self.priority_list)
+
+        logger.info(f"Generation plan: Trying {len(candidates)} candidates (Hints + Priority List).")
 
         for item in candidates:
             try:
@@ -71,11 +68,11 @@ class CompositeLlmGateway(LlmGateway):
                 if result:
                     return result
             except (RetryableError, LLMError) as e:
-                logger.warning(f"Provider failed with recoverable error: {e}. Falling back...")
+                logger.warning(f"Provider/Model failed with recoverable error: {e}. Falling back...")
                 last_exception = e
                 continue
             except Exception as e:
-                logger.error(f"Provider failed with unexpected error: {e}. Falling back...", exc_info=True)
+                logger.error(f"Provider/Model failed with unexpected error: {e}. Falling back...", exc_info=True)
                 last_exception = e
                 continue
 
@@ -85,16 +82,11 @@ class CompositeLlmGateway(LlmGateway):
         )
 
     def _attempt_generation_with_provider(self, item: Any, prompt: str) -> Any:
-        """
-        Attempts to generate code using a single provider configuration item.
-        Returns the LlmResponse if successful, or raises exception if failed.
-        """
         provider_enum = None
         model_name = None
 
-        # Case 0: String Parsing (Fix for .env JSON lists)
+        # Case 0: String Parsing
         if isinstance(item, str):
-            # Format "provider:model" (e.g., "gemini:gemini-3-flash-preview")
             if ":" in item:
                 parts = item.split(":", 1)
                 provider_str = parts[0].lower()
@@ -105,7 +97,6 @@ class CompositeLlmGateway(LlmGateway):
                     logger.warning(f"Unknown provider in string '{provider_str}'.")
                     return None
             else:
-                # Fallback: Infer provider from model name if no prefix
                 model_lower = item.lower()
                 if "gemini" in model_lower:
                     provider_enum = LlmProviderType.GEMINI
@@ -114,45 +105,37 @@ class CompositeLlmGateway(LlmGateway):
                 elif "deepseek" in model_lower:
                     provider_enum = LlmProviderType.DEEPSEEK
                 else:
-                    # Default risky fallback
                     provider_enum = LlmProviderType.OPENAI
                 model_name = item
 
-        # Case 1: ModelId object (Expected)
+        # Case 1: ModelId object
         elif hasattr(item, "provider") and hasattr(item, "name"):
             provider_enum = item.provider
             model_name = item.name
 
-        # Case 2: Dictionary (Pydantic artifacts)
+        # Case 2: Dictionary
         elif isinstance(item, dict):
             provider_val = item.get("provider")
             model_name = item.get("name")
-
             if isinstance(provider_val, str):
                 try:
                     provider_enum = LlmProviderType(provider_val.lower())
                 except ValueError:
-                    logger.warning(f"Invalid provider string in dict: {provider_val}")
                     return None
             elif isinstance(provider_val, LlmProviderType):
                 provider_enum = provider_val
 
-        # Case 3: Enum only (Legacy config)
+        # Case 3: Enum only
         elif isinstance(item, LlmProviderType):
             provider_enum = item
-            # We don't have 'default_model' passed easily here unless we pass it down.
-            # But hints usually have names.
-            model_name = "gpt-4-turbo"  # Fallback default
+            model_name = "gpt-4-turbo"
 
-        # Validation
         if not provider_enum:
-            logger.warning(f"Skipping invalid priority item: {item} (Type: {type(item)})")
             return None
 
-        # Find client
         client = self.clients.get(provider_enum)
         if not client:
-            logger.warning(f"Client for provider '{provider_enum}' not found. Available: {list(self.clients.keys())}")
+            logger.debug(f"Client for provider '{provider_enum}' not found. Skipping.")
             return None
 
         target_model = model_name if model_name else "gpt-4-turbo"
@@ -160,19 +143,16 @@ class CompositeLlmGateway(LlmGateway):
         logger.info(f"Using Provider: {provider_enum.value} | Model: {target_model}")
         self._log_token_usage_estimate(prompt)
 
-        # BRIDGE: Construct Domain Request
         request = LlmRequest(
             model=ModelId(provider=provider_enum, name=target_model),
             messages=(Message(role=MessageRole.USER, content=prompt),),
             generation=GenerationConfig(max_output_tokens=4000)
         )
 
-        # BRIDGE: Async to Sync execution
         response = asyncio.run(client.generate(request))
         return response
 
     def _log_token_usage_estimate(self, text: str):
-        # Basic character count / 4 estimation
         chars = len(text)
         est_tokens = chars // 4
         logger.debug(f"Estimated prompt tokens: {est_tokens}")
