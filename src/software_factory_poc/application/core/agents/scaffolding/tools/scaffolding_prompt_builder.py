@@ -19,8 +19,9 @@ class ScaffoldingPromptBuilder:
         example_section = self._get_example_output()
 
         full_prompt = f"{system_section}\n{context_section}\n{task_section}\n{example_section}"
-
         logger.info(f"--- [DEBUG] PROMPT GENERATED FOR STACK: {request.technology_stack} ---")
+        logger.info(f"⬇️ --- FULL PROMPT START --- ⬇️\n{full_prompt}\n⬆️ --- FULL PROMPT END --- ⬆️")
+
         return full_prompt
 
     def _validate_context(self, context: str, issue_key: str) -> str:

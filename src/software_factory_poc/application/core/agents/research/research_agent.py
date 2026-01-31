@@ -24,10 +24,10 @@ class ResearchAgent(BaseAgent):
                 f"🕵️ ARCHITECTURE QUERY DETECTED. Fetching Confluence Page ID: {self.config.architecture_page_id}")
             try:
                 context = self.gateway.get_page_content(self.config.architecture_page_id)
-                # LOGGING IMPROVEMENT: Print preview of what was found
                 logger.info(f"CONFLUENCE CONTENT RETRIEVED ({len(context)} chars).")
                 logger.info(
-                    f"PREVIEW:\n{context[:500]}...\n(Check if 'Modular Monolith' or specific modules are mentioned above)")
+                    f"⬇️ --- FULL CONFLUENCE CONTENT START --- ⬇️\n{context}\n⬆️ --- FULL CONFLUENCE CONTENT END --- ⬆️")
+
             except Exception as e:
                 logger.error(f"Error fetching architecture page: {e}")
                 context = "Error retrieving architecture. Use standard defaults."
