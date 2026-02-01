@@ -44,7 +44,7 @@ class CodeReviewerAgent(BaseAgent):
         
         try:
             # 3.1 Report Start
-            self.reporter.report_start(order.issue_key, message="🧐 Iniciando revisión de código con IA...")
+            self.reporter.report_start(order.issue_key, message="🧐 Iniciando revisión de código...")
             
             # 3.2 Validate Provider
             if order.vcs_provider.upper() != "GITLAB":

@@ -57,10 +57,12 @@ class CodeReviewPromptBuilder:
         return full_prompt
 
     def _get_system_role(self) -> str:
+        return (
             "You are a Senior Software Architect & Security Expert reviewing code changes.\n"
             "Your goal is to identify bugs, security vulnerabilities, design flaws, and code style issues.\n"
             "Focus processes primarily on the logic within the PROVIDED diffs/code changes. Use the historical context only for reference.\n"
             "IMPORTANT: You must output your analysis, comments, and suggestions strictly in SPANISH (Español). The code snippets can remain in English."
+        )
 
     def _format_requirements(self, reqs: str) -> str:
         return f"## Requirements / Task Description\n{reqs}"
