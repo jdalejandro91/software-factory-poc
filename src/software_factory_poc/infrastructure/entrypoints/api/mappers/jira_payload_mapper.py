@@ -37,7 +37,20 @@ class JiraPayloadMapper:
         target_config = params.get("target", {})
         extra_params = params.get("parameters", {})
         
-        # 3. Build Order
+        # 3. Resolve Project Info Safely
+        project_data = None
+        # Priority 1: Project inside fields (Standard)
+        if payload.issue.fields and payload.issue.fields.project:
+            project_data = payload.issue.fields.project
+        # Priority 2: Project at root (Automation/System)
+        elif payload.issue.project:
+            project_data = payload.issue.project
+            
+        p_key = project_data.key if project_data else "UNKNOWN"
+        # Ensure ID is string (some payloads send it as int)
+        p_id = str(project_data.id) if (project_data and hasattr(project_data, 'id') and project_data.id) else "0"
+
+        # 4. Build Order
         return ScaffoldingOrder(
             issue_key=issue_key,
             raw_instruction=task_desc.human_text, # Use clean text
@@ -46,8 +59,8 @@ class JiraPayloadMapper:
             extra_params=extra_params,
             summary=payload.issue.fields.summary,
             reporter=payload.user.display_name,
-            project_key=payload.issue.project.key,
-            project_id=payload.issue.project.id
+            project_key=p_key,
+            project_id=p_id
         )
 
     @classmethod

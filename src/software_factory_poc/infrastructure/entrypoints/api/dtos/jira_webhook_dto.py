@@ -28,6 +28,7 @@ class JiraIssueDTO(BaseModel):
     id: Optional[str] = None  # Optional for automation payloads
     key: str
     fields: Optional[JiraIssueFieldsDTO] = None
+    project: Optional[JiraProjectDTO] = None
 
 
 class JiraChangelogItem(BaseModel):
