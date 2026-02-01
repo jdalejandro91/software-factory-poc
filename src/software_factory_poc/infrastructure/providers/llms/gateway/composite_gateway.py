@@ -23,6 +23,8 @@ from software_factory_poc.infrastructure.observability.logger_factory_service im
 logger = LoggerFactoryService.build_logger(__name__)
 
 
+from software_factory_poc.application.core.agents.reasoner.value_objects.output_format import OutputFormat
+
 class CompositeLlmGateway(LlmGateway):
     """
     Gateway that iterates over a priority list of providers to generate code.
@@ -146,7 +148,10 @@ class CompositeLlmGateway(LlmGateway):
         request = LlmRequest(
             model=ModelId(provider=provider_enum, name=target_model),
             messages=(Message(role=MessageRole.USER, content=prompt),),
-            generation=GenerationConfig(max_output_tokens=4000)
+            generation=GenerationConfig(
+                max_output_tokens=15000,
+                format=OutputFormat.JSON
+            )
         )
 
         response = asyncio.run(client.generate(request))
