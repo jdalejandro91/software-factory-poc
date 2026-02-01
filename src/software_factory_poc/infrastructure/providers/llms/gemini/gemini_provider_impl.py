@@ -13,6 +13,9 @@ from software_factory_poc.infrastructure.common.retry.retry_policy import RetryP
 from software_factory_poc.infrastructure.observability.logging.correlation_id_context import (
     CorrelationIdContext,
 )
+from software_factory_poc.infrastructure.providers.llms.gemini.clients.gemini_client_factory import (
+    GeminiClientFactory,
+)
 from software_factory_poc.infrastructure.providers.llms.gemini.mappers.gemini_request_mapper import (
     GeminiRequestMapper,
 )
@@ -23,7 +26,7 @@ from software_factory_poc.infrastructure.providers.llms.gemini.mappers.gemini_re
 
 @dataclass(frozen=True)
 class GeminiProviderImpl(LlmProvider):
-    client: Any
+    client_factory: GeminiClientFactory
     retry: RetryPolicy
     request_mapper: GeminiRequestMapper
     response_mapper: GeminiResponseMapper
@@ -37,20 +40,21 @@ class GeminiProviderImpl(LlmProvider):
         cid = self.correlation.set(request.trace.correlation_id if request.trace else None)
         logging.getLogger(__name__).debug("Gemini request model=%s cid=%s", request.model.name, cid)
         
+        # 1. Crear cliente efímero para esta solicitud
+        client = self.client_factory.create()
+        
         try:
-            return await self.retry.run(lambda: self._call(request))
+            # 2. Pasar el cliente explícitamente a _call
+            return await self.retry.run(lambda: self._call(client, request))
         finally:
-            # CRITICAL: Close the client to prevent "Event loop is closed" errors during GC.
-            # The google-genai Client keeps an internal async session that must be closed 
-            # while the loop is still active.
+            # 3. Cerrar cliente inmediatamente antes de que muera el Event Loop
             try:
-                # Try calling close() which typically tears down the transport
-                if hasattr(self.client, "close"):
-                    self.client.close()
+                if hasattr(client, "close"):
+                    client.close()
             except Exception as e:
-                logging.getLogger(__name__).warning(f"Error closing Gemini client: {e}")
+                logging.getLogger(__name__).warning(f"Error closing ephemeral Gemini client: {e}")
 
-    async def _call(self, request: LlmRequest) -> LlmResponse:
+    async def _call(self, client: Any, request: LlmRequest) -> LlmResponse:
         try:
             # 1. Prepare payload
             kwargs = self.request_mapper.to_kwargs(request)
@@ -63,7 +67,7 @@ class GeminiProviderImpl(LlmProvider):
             )
 
             # 3. Execute ASYNC using .aio property
-            resp = await self.client.aio.models.generate_content(**kwargs)
+            resp = await client.aio.models.generate_content(**kwargs)
 
         except Exception as exc:
             raise self._map_error(exc)

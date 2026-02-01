@@ -117,7 +117,7 @@ class CodeReviewerAgent(BaseAgent):
             report_payload = {
                 "type": "code_review_completion",
                 "title": f"Code Review Finalizado: {verdict_emoji} {review_result.verdict.name}",
-                "summary": f"Se completó la revisión de código. Veredicto: {review_result.verdict.name}. Los comentarios se publicaron en el MR.",
+                "summary": f"Se completó la revisión de código. Los comentarios se publicaron en el MR.",
                 "links": {
                     "🔗 Ver Merge Request": mr_link
                 }
