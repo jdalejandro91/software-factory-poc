@@ -59,6 +59,7 @@ class ScaffoldingAgent(BaseAgent):
                 return
 
             target_repo = self._resolve_target_repo(request, contract)
+            project_id = vcs.resolve_project_id(target_repo)
 
             # STEP 2: SECURITY CHECK
             self._check_permissions(target_repo)
@@ -71,12 +72,12 @@ class ScaffoldingAgent(BaseAgent):
             artifacts = self._generate_scaffolding_artifacts(request, researcher, reasoner)
 
             # STEP 5: VCS OPERATIONS
-            mr_link, branch_link = self._apply_changes_to_vcs(request, vcs, artifacts, target_repo)
+            mr_link, branch_link, branch_name = self._apply_changes_to_vcs(request, vcs, artifacts, project_id)
 
             if not mr_link or not mr_link.startswith("http"):
                 raise ValueError(f"Invalid MR Link generated: '{mr_link}'. Cannot complete task.")
 
-            self._finalize_task_success(request, reporter, mr_link, branch_link)
+            self._finalize_task_success(request, reporter, mr_link, project_id, branch_name)
 
         except Exception as e:
             self._handle_error(request, e, reporter)
@@ -155,11 +156,10 @@ class ScaffoldingAgent(BaseAgent):
         return self.artifact_parser_tool.parse_response(raw_response)
 
     def _apply_changes_to_vcs(self, request: ScaffoldingOrder, vcs: VcsAgent, artifacts: List[FileContentDTO],
-                              target_repo: str) -> tuple[str, str]:
+                              project_id: int) -> tuple[str, str, str]:
         if not artifacts:
             raise ValueError("No artifacts generated to publish.")
 
-        project_id = vcs.resolve_project_id(target_repo)
         branch_name = self._get_branch_name(request)
 
         branch_dto = vcs.create_branch(project_id, branch_name, ref=self.config.default_target_branch)
@@ -175,7 +175,9 @@ class ScaffoldingAgent(BaseAgent):
             target_branch=self.config.default_target_branch
         )
         logger.info(f"MR Created successfully. Link: {mr.web_url}")
-        return mr.web_url, branch_dto.web_url
+        )
+        logger.info(f"MR Created successfully. Link: {mr.web_url}")
+        return mr.web_url, branch_dto.web_url, branch_name
 
     def _get_branch_name(self, request: ScaffoldingOrder) -> str:
         safe_key = re.sub(r'[^a-z0-9\-]', '', request.issue_key.lower())
@@ -191,7 +193,7 @@ class ScaffoldingAgent(BaseAgent):
         return files_map
 
     def _finalize_task_success(self, request: ScaffoldingOrder, reporter: ReporterAgent, mr_link: str,
-                               branch_link: str) -> None:
+                               project_id: int, branch_name: str) -> None:
         message_payload = {
             "type": "scaffolding_success",
             "title": "Scaffolding Completado Exitosamente",
@@ -200,12 +202,15 @@ class ScaffoldingAgent(BaseAgent):
         }
 
         # Build Status Block for Code Review Agent
+        from datetime import datetime
         automation_state = (
             f"\n\n```yaml\n"
-            f"# --- AUTOMATION STATE ---\n"
+            f"# --- AUTOMATION STATE (Machine Readable) ---\n"
             f"automation_result:\n"
-            f"  source_branch_url: \"{branch_link}\"\n"
+            f"  gitlab_project_id: {project_id}\n"
+            f"  source_branch_name: \"{branch_name}\"\n"
             f"  review_request_url: \"{mr_link}\"\n"
+            f"  generated_at: \"{datetime.utcnow().isoformat()}\"\n"
             f"```"
         )
         

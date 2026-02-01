@@ -23,5 +23,5 @@ class PerformCodeReviewUseCase:
         """
         Executes the code review process for the given order.
         """
-        self.logger.info(f"Executing Code Review Use Case for {order.issue_key}")
+        self.logger.info(f"Orchestrating code review for MR {order.mr_id} in Project {order.project_id}")
         self.agent.execute_flow(order)
