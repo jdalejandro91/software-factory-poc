@@ -1,5 +1,5 @@
 import re
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 import yaml
 
@@ -15,11 +15,10 @@ from software_factory_poc.infrastructure.observability.logger_factory_service im
 
 logger = LoggerFactoryService.build_logger(__name__)
 
-
 class JiraCodeReviewMapper:
     """
     Maps incoming Jira Webhooks to Domain CodeReviewOrders.
-    Extracts automation state injected by ScaffoldingAgent from the task description.
+    Extracts automation state (code_review_params) from the task description.
     """
 
     @staticmethod
@@ -32,23 +31,22 @@ class JiraCodeReviewMapper:
             # 1. Extract context
             data = JiraCodeReviewMapper._extract_automation_context(desc)
             if not data:
-                raise ValueError("Extracted automation context is empty")
+                raise ValueError("Extracted automation context (code_review_params) is empty")
 
-            # 2. Build Order
-            # Ensure project_id is int
+            # 2. Extract Fields safely
             pid = data.get("gitlab_project_id")
             if not pid:
-                raise ValueError("Missing 'gitlab_project_id' in automation context")
-                
+                raise ValueError("Missing 'gitlab_project_id'")
+            
             mr_url = data.get("review_request_url", "")
-            if not mr_url:
-                raise ValueError("Missing 'review_request_url' in automation context")
+            # Support both keys just in case
+            source_branch = data.get("source_branch_name") or data.get("source_branch", "unknown")
 
             return CodeReviewOrder(
                 issue_key=payload.issue.key, 
                 project_id=int(pid),
                 mr_id=JiraCodeReviewMapper._extract_mr_id(mr_url),
-                source_branch=data.get("source_branch_name", "unknown"),
+                source_branch=source_branch,
                 vcs_provider="GITLAB",
                 summary=payload.issue.fields.summary or "Code Review Task", 
                 description=desc,
@@ -56,81 +54,49 @@ class JiraCodeReviewMapper:
                 requesting_user=payload.user.name if payload.user else None
             )
         except (KeyError, ValueError, TypeError) as e: 
-             # Use a safe fallback for logging data if it was partially extracted
-             safe_data = locals().get("data", "Not Extracted")
-             logger.error(f"Mapping failed for {payload.issue.key}: {e}. Data extracted: {safe_data}")
-             raise ValueError(f"Mapping failed: {e}. Ensure Scaffolding completed successfully.")
+             logger.error(f"Mapping failed for {payload.issue.key}: {e}")
+             raise ValueError(f"Mapping failed: {e}")
 
     @staticmethod
     def _extract_automation_context(description: str) -> Dict[str, Any]:
         """
-        Robustly finds the Automation Context searching for 'code_review_params'.
+        Scans for YAML blocks and looks for 'code_review_params'.
         """
-        # 1. Find ANY code block with 'yaml' hint or just generically
+        # 1. Regex for Code Blocks (Markdown or Jira style)
+        # Matches content inside ```yaml ... ``` or {code:yaml} ... {code}
         code_block_iter = re.finditer(r"```(?:yaml)?\s*([\s\S]*?)\s*```", description, re.DOTALL | re.IGNORECASE)
         
         for match in code_block_iter:
-            raw_yaml = match.group(1).strip()
             try:
-                parsed = yaml.safe_load(raw_yaml)
+                parsed = yaml.safe_load(match.group(1).strip())
                 if isinstance(parsed, dict):
-                    # TARGET: Check for 'code_review_params' key
-                    if "code_review_params" in parsed and isinstance(parsed["code_review_params"], dict):
+                    # PRIORIDAD 1: Clave exacta
+                    if "code_review_params" in parsed:
                         return parsed["code_review_params"]
-                    
-                    # Fallback: Maybe the block IS the params directly (legacy or manual edit)
+                    # PRIORIDAD 2: Estructura plana (si el bloque contiene solo los params)
                     if "gitlab_project_id" in parsed:
                         return parsed
-                        
             except yaml.YAMLError:
                 continue
 
-        # 2. Fallback: Jira {code} style
-        jira_match = re.search(r"\{code(?::yaml)?\}\s*([\s\S]*?)\s*\{code\}", description, re.DOTALL | re.IGNORECASE)
-        if jira_match:
-            try:
-                parsed = yaml.safe_load(jira_match.group(1).strip())
-                if isinstance(parsed, dict) and "code_review_params" in parsed:
-                    return parsed["code_review_params"]
-            except yaml.YAMLError:
+        # Fallback for Jira {code} format if regex above didn't catch it
+        jira_iter = re.finditer(r"\{code(?::yaml)?\}\s*([\s\S]*?)\s*\{code\}", description, re.DOTALL | re.IGNORECASE)
+        for match in jira_iter:
+             try:
+                parsed = yaml.safe_load(match.group(1).strip())
+                if isinstance(parsed, dict):
+                    if "code_review_params" in parsed:
+                        return parsed["code_review_params"]
+                    if "gitlab_project_id" in parsed:
+                        return parsed
+             except yaml.YAMLError:
                 pass
-
-        logger.warning("YAML parsing failed or 'code_review_params' not found. Attempting regex fallback.")
-        return JiraCodeReviewMapper._extract_via_regex(description)
-
-    @staticmethod
-    def _extract_via_regex(text: str) -> Dict[str, Any]:
-        """Manual regex fallback for broken YAML."""
-        context = {}
         
-        # Project ID
-        pid_match = re.search(r"gitlab_project_id:\s*['\"]?(\d+)['\"]?", text)
-        if pid_match:
-            context["gitlab_project_id"] = pid_match.group(1)
-            
-        # Review URL
-        url_match = re.search(r"review_request_url:\s*['\"]?(https?://[^\s\"']+)['\"]?", text)
-        if url_match:
-            context["review_request_url"] = url_match.group(1)
-            
-        # Source Branch
-        branch_match = re.search(r"source_branch_name:\s*['\"]?([^\s\"']+)['\"]?", text)
-        if branch_match:
-            context["source_branch_name"] = branch_match.group(1)
-
-        if "gitlab_project_id" not in context:
-            # If we strictly can't find ID, we can't proceed.
-            logger.error("Regex extraction failed to find gitlab_project_id")
-            return {}
-            
-        return context
+        logger.warning("No valid YAML block found with 'code_review_params'.")
+        return {}
 
     @staticmethod
     def _extract_mr_id(mr_url: str) -> str:
-        # Supports /merge_requests/123 or /pull/123
+        if not mr_url: return "0"
         match = re.search(r"/(?:merge_requests|pull)/(\d+)", mr_url)
-        if not match:
-            # If standard pattern fails, return '0' or raise? 
-            # Raising is better to stop early.
-            raise ValueError(f"Could not extract MR ID from URL: {mr_url}")
-        return match.group(1)
+        return match.group(1) if match else "0"

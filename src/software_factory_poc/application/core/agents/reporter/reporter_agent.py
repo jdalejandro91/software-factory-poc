@@ -15,8 +15,8 @@ class ReporterAgent(BaseAgent):
     """
     tracker: TaskTrackerGateway
 
-    def report_start(self, task_id: str) -> None:
-        self.tracker.add_comment(task_id, ReporterMessages.START_SCAFFOLDING)
+    def report_start(self, task_id: str, message: str = "🤖 Iniciando tarea...") -> None:
+        self.tracker.add_comment(task_id, message)
 
     def report_success(self, task_id: str, message: Any) -> None:
         if isinstance(message, dict):

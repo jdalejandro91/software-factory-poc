@@ -43,7 +43,7 @@ class ScaffoldingAgent(BaseAgent):
             reasoner: ReasonerAgent,
     ) -> None:
         try:
-            reporter.report_start(request.issue_key)
+            reporter.report_start(request.issue_key, message="🚀 Iniciando generación de scaffolding...")
 
             # STEP 1: PARSE CONTRACT
             try:
