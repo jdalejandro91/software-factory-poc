@@ -1,6 +1,6 @@
 [project]
 name = "software-factory-poc"
-version = "0.1.1"
+version = "0.2.0"
 description = "PoC 1 sprint: Jira-triggered Scaffold Engineer"
 readme = "README.md"
 requires-python = ">=3.12"

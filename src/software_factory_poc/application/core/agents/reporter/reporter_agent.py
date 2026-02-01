@@ -41,5 +41,18 @@ class ReporterAgent(BaseAgent):
         self.tracker.update_task_description(task_id, description)
 
     def save_automation_context(self, issue_key: str, context: AutomationContextDTO) -> None:
-        self.tracker.append_issue_description(issue_key, context.to_yaml_block())
+        """
+        Saves the Automation Context to the issue description using safe Domain logic.
+        """
+        # 1. Fetch current task (Domain Entity)
+        # This parses existing content safely
+        current_task = self.tracker.get_task(issue_key)
+        
+        # 2. Create updated instance (Pure Logic)
+        # Replaces or adds the automation metadata while keeping human text
+        updated_task = current_task.update_metadata(context.model_dump())
+        
+        # 3. Persist changes (Infrastructure)
+        # Mapper handles ADF conversion and Code Block injection
+        self.tracker.update_task_description(issue_key, updated_task.description)
 

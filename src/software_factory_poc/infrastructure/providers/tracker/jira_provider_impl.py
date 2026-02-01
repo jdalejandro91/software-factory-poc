@@ -30,15 +30,41 @@ STATUS_MAPPING = {
 
 from software_factory_poc.infrastructure.configuration.jira_settings import JiraSettings
 
+from software_factory_poc.application.core.domain.entities.task import Task, TaskDescription
+from software_factory_poc.infrastructure.providers.tracker.mappers.jira_description_mapper import JiraDescriptionMapper
+
 class JiraProviderImpl(TaskTrackerGateway):
     def __init__(self, http_client: JiraHttpClient, settings: JiraSettings):
         self.client = http_client
         self.settings = settings
         self._logger = logger
+        self.mapper = JiraDescriptionMapper()
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
+    def get_task(self, issue_key: str) -> Task:
+        """Retrieves a Domain Task entity."""
+        self._logger.info(f"Fetching Task Entity: {issue_key}")
+        try:
+             json_data = self.get_issue(issue_key)
+             fields = json_data.get("fields", {})
+             
+             # Map Description using ADF Mapper
+             adf_desc = fields.get("description")
+             domain_desc = self.mapper.to_domain(adf_desc)
+             
+             return Task(
+                 id=json_data.get("key"),
+                 summary=fields.get("summary", ""),
+                 status=fields.get("status", {}).get("name", "Unknown"),
+                 description=domain_desc
+             )
+        except Exception as e:
+             self._handle_error(e, f"get_task({issue_key})")
+             raise
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
     def get_issue(self, issue_key: str) -> dict[str, Any]:
-        self._logger.info(f"Fetching Jira issue: {issue_key}")
+        self._logger.info(f"Fetching Jira issue JSON: {issue_key}")
         try:
              response = self.client.get(f"rest/api/3/issue/{issue_key}")
              response.raise_for_status()
@@ -155,22 +181,19 @@ class JiraProviderImpl(TaskTrackerGateway):
         ) from error
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
-    def update_task_description(self, task_id: str, description: str) -> None:
+    def update_task_description(self, task_id: str, description: TaskDescription) -> None:
+        """Updates the task description using ADF mapping."""
         self._logger.info(f"Updating description for task: {task_id}")
         try:
-            # Jira Cloud V3 requires ADF (Atlassian Document Format)
+            # Convert Domain Object -> ADF JSON
+            adf_content = self.mapper.to_adf(description)
+            
             payload = {
                 "fields": {
-                    "description": {
-                        "type": "doc",
-                        "version": 1,
-                        "content": [{
-                            "type": "paragraph",
-                            "content": [{"type": "text", "text": description}]
-                        }]
-                    }
+                    "description": adf_content
                 }
             }
+            # PUT replaces the entire description, but since we fetched->merged, it's safe.
             response = self.client.put(f"rest/api/3/issue/{task_id}", payload)
             response.raise_for_status()
         except Exception as e:
