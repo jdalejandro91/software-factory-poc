@@ -71,12 +71,12 @@ class ScaffoldingAgent(BaseAgent):
             artifacts = self._generate_scaffolding_artifacts(request, researcher, reasoner)
 
             # STEP 5: VCS OPERATIONS
-            mr_link = self._apply_changes_to_vcs(request, vcs, artifacts, target_repo)
+            mr_link, branch_link = self._apply_changes_to_vcs(request, vcs, artifacts, target_repo)
 
             if not mr_link or not mr_link.startswith("http"):
                 raise ValueError(f"Invalid MR Link generated: '{mr_link}'. Cannot complete task.")
 
-            self._finalize_task_success(request, reporter, mr_link)
+            self._finalize_task_success(request, reporter, mr_link, branch_link)
 
         except Exception as e:
             self._handle_error(request, e, reporter)
@@ -155,14 +155,14 @@ class ScaffoldingAgent(BaseAgent):
         return self.artifact_parser_tool.parse_response(raw_response)
 
     def _apply_changes_to_vcs(self, request: ScaffoldingOrder, vcs: VcsAgent, artifacts: List[FileContentDTO],
-                              target_repo: str) -> str:
+                              target_repo: str) -> tuple[str, str]:
         if not artifacts:
             raise ValueError("No artifacts generated to publish.")
 
         project_id = vcs.resolve_project_id(target_repo)
         branch_name = self._get_branch_name(request)
 
-        vcs.create_branch(project_id, branch_name, ref=self.config.default_target_branch)
+        branch_dto = vcs.create_branch(project_id, branch_name, ref=self.config.default_target_branch)
 
         files_map = self._prepare_commit_payload(artifacts)
         vcs.commit_files(project_id, branch_name, files_map, f"Scaffolding for {request.issue_key}", force_create=False)
@@ -175,7 +175,7 @@ class ScaffoldingAgent(BaseAgent):
             target_branch=self.config.default_target_branch
         )
         logger.info(f"MR Created successfully. Link: {mr.web_url}")
-        return mr.web_url
+        return mr.web_url, branch_dto.web_url
 
     def _get_branch_name(self, request: ScaffoldingOrder) -> str:
         safe_key = re.sub(r'[^a-z0-9\-]', '', request.issue_key.lower())
@@ -190,7 +190,8 @@ class ScaffoldingAgent(BaseAgent):
             files_map[clean_path] = artifact.content
         return files_map
 
-    def _finalize_task_success(self, request: ScaffoldingOrder, reporter: ReporterAgent, mr_link: str) -> None:
+    def _finalize_task_success(self, request: ScaffoldingOrder, reporter: ReporterAgent, mr_link: str,
+                               branch_link: str) -> None:
         message_payload = {
             "type": "scaffolding_success",
             "title": "Scaffolding Completado Exitosamente",
@@ -198,6 +199,21 @@ class ScaffoldingAgent(BaseAgent):
             "links": {"🔗 Ver Merge Request": mr_link}
         }
 
+        # Build Status Block for Code Review Agent
+        automation_state = (
+            f"\n\n```yaml\n"
+            f"# --- AUTOMATION STATE ---\n"
+            f"automation_result:\n"
+            f"  source_branch_url: \"{branch_link}\"\n"
+            f"  review_request_url: \"{mr_link}\"\n"
+            f"```"
+        )
+        
+        # Inject into Jira Description as Single Source of Truth
+        final_description = request.raw_instruction + automation_state
+        reporter.update_task_description(request.issue_key, final_description)
+        
+        # Transition Issue
         reporter.report_success(request.issue_key, message_payload)
         reporter.transition_task(request.issue_key, TaskStatus.IN_REVIEW)
         logger.info(f"Task {request.issue_key} completed. MR: {mr_link}")

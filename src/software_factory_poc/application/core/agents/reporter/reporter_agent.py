@@ -36,3 +36,6 @@ class ReporterAgent(BaseAgent):
     def transition_task(self, task_id: str, status: TaskStatus) -> None:
         self.tracker.transition_status(task_id, status)
 
+    def update_task_description(self, task_id: str, description: str) -> None:
+        self.tracker.update_task_description(task_id, description)
+
