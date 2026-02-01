@@ -13,6 +13,7 @@ class CodeReviewOrder(BaseModel):
     summary: str
     description: str
     technical_doc_id: Optional[str] = None
+    mr_url: Optional[str] = None
     requesting_user: Optional[str] = None
     
     class Config:

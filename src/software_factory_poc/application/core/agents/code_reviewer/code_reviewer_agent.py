@@ -100,6 +100,28 @@ class CodeReviewerAgent(BaseAgent):
             review_result = self.parser.parse(raw_response)
             self.logger.info(f"Review parsed successfully. Verdict: {review_result.verdict}. Comments: {len(review_result.comments)}")
 
+            # 3.11 Submit Review
+            self.vcs.submit_review(order.project_id, order.mr_id, review_result.comments)
+            self.logger.info("Review comments submitted to VCS.")
+
+            # 3.12 Report Success
+            verdict_emoji = {
+                "APPROVE": "✅",
+                "COMMENT": "💬",
+                "REQUEST_CHANGES": "🛑"
+            }.get(review_result.verdict.name, "📋")
+
+            report_payload = {
+                "type": "scaffolding_success",
+                "title": f"Code Review Completado: {verdict_emoji} {review_result.verdict.name}",
+                "summary": review_result.summary,
+                "links": {
+                    "🔗 Ver Merge Request": order.mr_url or f"MR ID: {order.mr_id}"
+                }
+            }
+            self.reporter.report_success(order.issue_key, report_payload)
+            self.logger.info("Code review flow finished successfully.")
+
         except Exception as e:
             self.logger.error(f"Unexpected error in CodeReviewerAgent flow: {e}", exc_info=True)
             self.reporter.report_failure(order.issue_key, f"Unexpected error: {str(e)}")
