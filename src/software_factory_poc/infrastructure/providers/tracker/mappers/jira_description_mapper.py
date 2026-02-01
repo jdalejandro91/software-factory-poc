@@ -21,6 +21,7 @@ class JiraDescriptionMapper:
 
         human_text_parts = []
         automation_metadata = None
+        description_scaffolding_params = None
 
         # Iterate through top-level content nodes
         for node in adf_json.get("content", []):
@@ -43,19 +44,32 @@ class JiraDescriptionMapper:
                     [chunk.get("text", "") for chunk in node.get("content", []) if chunk.get("type") == "text"]
                 )
                 
-                # Heuristic: Check if it looks like our automation block
+                # Heuristic 1: Automation Result
                 if "automation_result:" in block_content:
                     try:
-                        # Try to parse the YAML content
                         parsed = yaml.safe_load(block_content)
                         if parsed and isinstance(parsed, dict) and "automation_result" in parsed:
                             automation_metadata = parsed["automation_result"]
                     except yaml.YAMLError:
                         logger.warning("Found potential automation code block but failed to parse YAML.")
+                
+                # Heuristic 2: Scaffolding Configuration (Lossless Restoration)
+                elif "technology_stack:" in block_content or "target:" in block_content or "version:" in block_content:
+                    try:
+                        parsed = yaml.safe_load(block_content)
+                        if isinstance(parsed, dict):
+                            # It's likely our valid scaffolding config
+                            # We assign it to scaffolding_params so it persists
+                            # Note: In a real scenario we might merge, but here we assume one config block.
+                            if not description_scaffolding_params:
+                                description_scaffolding_params = parsed
+                    except yaml.YAMLError:
+                         pass
 
         return TaskDescription(
             human_text="\n\n".join(human_text_parts),
-            automation_metadata=automation_metadata
+            automation_metadata=automation_metadata,
+            scaffolding_params=description_scaffolding_params
         )
 
     def to_adf(self, description: TaskDescription) -> Dict[str, Any]:
@@ -83,7 +97,31 @@ class JiraDescriptionMapper:
             }
             adf["content"].append(paragraph_node)
 
-        # 2. Add Automation Context (Code Block)
+        # 2. Add Scaffolding Request (Preserve Original Config)
+        if description.has_scaffolding_params():
+            # Add Header
+            header_node = {
+                "type": "paragraph",
+                "content": [
+                    {
+                        "type": "text", 
+                        "text": "\n📋 Scaffolding Request (Configuration)",
+                        "marks": [{"type": "strong"}]
+                    }
+                ]
+            }
+            adf["content"].append(header_node)
+
+            # Dump as YAML block
+            yaml_str = yaml.dump(description.scaffolding_params, sort_keys=False, default_flow_style=False)
+            scaffold_node = {
+                "type": "codeBlock",
+                "attrs": {"language": "yaml"}, 
+                "content": [{"type": "text", "text": yaml_str}]
+            }
+            adf["content"].append(scaffold_node)
+
+        # 3. Add Automation Context (Machine Generated)
         if description.has_metadata():
             # Add Separator/Heading
             separator_node = {
