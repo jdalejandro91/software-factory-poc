@@ -19,3 +19,8 @@ class TaskTrackerGateway(ABC):
     def update_task_description(self, task_id: str, description: str) -> None:
         """Updates the text description of the task."""
         pass
+
+    @abstractmethod
+    def append_issue_description(self, task_id: str, content: str) -> None:
+        """Appends content to the task description without overwriting."""
+        pass

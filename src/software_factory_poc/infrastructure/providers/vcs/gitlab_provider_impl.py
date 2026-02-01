@@ -257,6 +257,14 @@ class GitLabProviderImpl(VcsGateway):
         self._logger.info(f"Fetching diffs for MR {mr_id} in project {project_id}")
         try:
             raw_changes = self.mr_service.get_mr_changes(project_id, mr_id)
+            
+            # Fetch MR details to get HEAD SHA for fetching file content
+            mr_details = self.mr_service.get_mr_details(project_id, mr_id)
+            head_sha = mr_details.get("diff_refs", {}).get("head_sha") 
+            # Fallback to current state if diff_refs is missing (which shouldn't happen on open MRs)
+            if not head_sha: 
+                head_sha = mr_details.get("sha")
+
             result_dtos = []
             
             for change in raw_changes:
@@ -286,15 +294,62 @@ class GitLabProviderImpl(VcsGateway):
                             additions += 1
                         elif line.startswith('-') and not line.startswith('---'):
                             deletions += 1
-                            
+                
+                # --- FETCH FULL CONTENT ---
+                full_content = None
+                is_binary = False
+                
+                # Filters: No content for deleted files, node_modules, or locks
+                should_fetch = (
+                    not deleted_file 
+                    and "node_modules" not in new_path 
+                    and not new_path.endswith(".lock")
+                )
+                
+                if should_fetch and head_sha:
+                    try:
+                        encoded_path = urllib.parse.quote(new_path, safe="")
+                        # HEAD request to check size first
+                        head_resp = self.client.head(
+                            f"api/v4/projects/{project_id}/repository/files/{encoded_path}",
+                            params={"ref": head_sha}
+                        )
+                        # Case insensitive header lookup
+                        size_header = next((v for k, v in head_resp.headers.items() if k.lower() == 'x-gitlab-size'), "0")
+                        size_bytes = int(size_header)
+                        
+                        if size_bytes > 102400: # > 100KB
+                             self._logger.info(f"Skipping content for {new_path}: Too large ({size_bytes} bytes)")
+                             is_binary = True # Treated as binary/skipped for review purposes
+                        else:
+                             # Get Content
+                             file_resp = self.client.get(
+                                 f"api/v4/projects/{project_id}/repository/files/{encoded_path}/raw",
+                                 params={"ref": head_sha}
+                             )
+                             file_resp.raise_for_status()
+                             # Check for binary content (null bytes)
+                             if "\0" in file_resp.text:
+                                 is_binary = True
+                             else:
+                                 full_content = file_resp.text
+
+                    except Exception as e:
+                        self._logger.warning(f"Could not fetch content for {new_path}: {e}")
+                        
                 dto = FileChangesDTO(
-                    file_path=new_path,
+                    file_path=new_path, # Legacy Alias
+                    new_path=new_path,
                     old_path=old_path,
                     change_type=change_type,
-                    diff_content=diff_content,
+                    is_new_file=new_file,
+                    is_deleted_file=deleted_file,
+                    is_binary=is_binary,
+                    diff_patch=diff_content,
+                    diff_content=diff_content, # Legacy Alias
+                    new_content=full_content,
                     additions=additions,
-                    deletions=deletions,
-                    is_binary=False # GitLab usually handles binary diffs separately/empty, defaulting False for safety
+                    deletions=deletions
                 )
                 result_dtos.append(dto)
                 
@@ -357,7 +412,9 @@ class GitLabProviderImpl(VcsGateway):
                 except Exception as e:
                     self._logger.warning(f"Failed to post comment at {comment.file_path}:{comment.line_number}. Retrying as general comment. Error: {e}")
                     if position:
-                         fallback_body = f"**[Ctx: {comment.file_path}:{comment.line_number}]**\n{body}"
+                         # Fallback format as requested: ⚠️ [En {file_path}:{line_number}] {comment}
+                         # We strip the body's internal severity since it's now a fallback note.
+                         fallback_body = f"⚠️ [En {comment.file_path}:{comment.line_number}] {comment.comment_body}"
                          try:
                              self.mr_service.create_discussion(project_id, mr_id, fallback_body, position=None)
                          except Exception as exc:

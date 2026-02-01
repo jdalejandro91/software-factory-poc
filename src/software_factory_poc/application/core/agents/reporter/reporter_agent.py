@@ -4,6 +4,7 @@ from typing import Any
 from software_factory_poc.application.core.agents.base_agent import BaseAgent
 from software_factory_poc.application.core.agents.reporter.ports.task_tracker_gateway import TaskTrackerGateway, \
     TaskStatus
+from software_factory_poc.application.core.agents.common.dtos.automation_context_dto import AutomationContextDTO
 from .config.reporter_constants import ReporterMessages
 
 
@@ -38,4 +39,7 @@ class ReporterAgent(BaseAgent):
 
     def update_task_description(self, task_id: str, description: str) -> None:
         self.tracker.update_task_description(task_id, description)
+
+    def save_automation_context(self, issue_key: str, context: AutomationContextDTO) -> None:
+        self.tracker.append_issue_description(issue_key, context.to_yaml_block())
 

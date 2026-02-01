@@ -63,7 +63,7 @@ class CodeReviewerAgent(BaseAgent):
 
             self.logger.info(f"MR {order.mr_id} validated. Proceeding with review...")
             
-            # 3.4 Fetch Artifacts
+            # 3.4 Fetch Artifacts and Validate Diff
             original_code, changes = self._fetch_review_artifacts(order)
             
             if not changes:
@@ -104,27 +104,32 @@ class CodeReviewerAgent(BaseAgent):
             self.vcs.submit_review(order.project_id, order.mr_id, review_result.comments)
             self.logger.info("Review comments submitted to VCS.")
 
-            # 3.12 Report Success
+            # 3.12 Report Success (Without transitioning)
             verdict_emoji = {
                 "APPROVE": "✅",
                 "COMMENT": "💬",
                 "REQUEST_CHANGES": "🛑"
             }.get(review_result.verdict.name, "📋")
 
+            # Format requested: "Code Review Completed. Comments posted on MR: {link}. Verdict: {verdict}."
+            mr_link = order.mr_url or f"MR ID: {order.mr_id}"
+            
             report_payload = {
-                "type": "scaffolding_success",
-                "title": f"Code Review Completado: {verdict_emoji} {review_result.verdict.name}",
-                "summary": review_result.summary,
+                "type": "code_review_completion",
+                "title": f"Code Review Finalizado: {verdict_emoji} {review_result.verdict.name}",
+                "summary": f"Code Review Completed. Comments posted on MR: {mr_link}. Verdict: {review_result.verdict.name}",
                 "links": {
-                    "🔗 Ver Merge Request": order.mr_url or f"MR ID: {order.mr_id}"
+                    "🔗 Ver Merge Request": mr_link
                 }
             }
+            # Note: We do NOT transition the task status here, as per requirements.
+            # It stays in 'In Review' until a human moves it.
             self.reporter.report_success(order.issue_key, report_payload)
             self.logger.info("Code review flow finished successfully.")
 
         except Exception as e:
-            self.logger.error(f"Unexpected error in CodeReviewerAgent flow: {e}", exc_info=True)
-            self.reporter.report_failure(order.issue_key, f"Unexpected error: {str(e)}")
+            self.logger.exception("Critical error in Code Review")
+            self.reporter.report_failure(order.issue_key, failure_reason=str(e))
 
     def _fetch_review_artifacts(self, order: CodeReviewOrder) -> Tuple[List[FileContentDTO], List[FileChangesDTO]]:
         """Fetches code context and diffs from VCS."""

@@ -176,3 +176,44 @@ class JiraProviderImpl(TaskTrackerGateway):
         except Exception as e:
             self._handle_error(e, f"update_task_description({task_id})")
             raise
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
+    def append_issue_description(self, task_id: str, content: str) -> None:
+        self._logger.info(f"Appending content to task: {task_id}")
+        try:
+            # 1. Fetch existing description (ADF)
+            issue = self.get_issue(task_id)
+            current_desc = issue.get("fields", {}).get("description")
+
+            new_paragraph = {
+                "type": "paragraph",
+                "content": [{"type": "text", "text": "\n" + content}]
+            }
+
+            # 2. Merge logic
+            if not current_desc:
+                updated_desc = {
+                    "type": "doc", 
+                    "version": 1, 
+                    "content": [new_paragraph]
+                }
+            elif current_desc.get("type") == "doc" and isinstance(current_desc.get("content"), list):
+                # Mutable modification of the dict retrieved from get_issue
+                current_desc["content"].append(new_paragraph)
+                updated_desc = current_desc
+            else:
+                self._logger.warning(f"Unknown description format for {task_id}. Resetting to valid ADF.")
+                updated_desc = {
+                    "type": "doc", 
+                    "version": 1, 
+                    "content": [new_paragraph]
+                }
+
+            # 3. Update result
+            payload = {"fields": {"description": updated_desc}}
+            response = self.client.put(f"rest/api/3/issue/{task_id}", payload)
+            response.raise_for_status()
+            
+        except Exception as e:
+            self._handle_error(e, f"append_issue_description({task_id})")
+            raise

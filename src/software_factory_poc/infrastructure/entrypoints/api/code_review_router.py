@@ -25,7 +25,7 @@ def get_settings() -> Settings:
     return Settings()
 
 
-def get_usecase(settings: Settings = Depends(get_settings)) -> PerformCodeReviewUseCase:
+def get_code_review_usecase(settings: Settings = Depends(get_settings)) -> PerformCodeReviewUseCase:
     from software_factory_poc.infrastructure.configuration.scaffolding_config_loader import ScaffoldingConfigLoader
     
     # We reuse ScaffoldingConfigLoader for now as the base config, 
@@ -41,25 +41,22 @@ def get_usecase(settings: Settings = Depends(get_settings)) -> PerformCodeReview
 async def trigger_code_review(
     request: Request,
     background_tasks: BackgroundTasks,
-    usecase: PerformCodeReviewUseCase = Depends(get_usecase)
+    usecase: PerformCodeReviewUseCase = Depends(get_code_review_usecase)
 ):
     try:
         body_bytes = await request.body()
-        logger.info(f"Incoming Code Review Payload: {len(body_bytes)} bytes")
-        
         # 1. Parse DTO
         payload = JiraWebhookDTO.model_validate_json(body_bytes)
+        logger.info(f"Received Code Review trigger for {payload.issue.key}")
         
         # 2. Map to Domain Order (Extracts Automation State from Description)
-        order = JiraCodeReviewMapper.map_from_webhook(payload)
-        logger.info(f"Code Review Order created for MR {order.mr_id} in {order.project_id}")
+        order = JiraCodeReviewMapper.to_order(payload)
         
         # 3. Execute Async
         background_tasks.add_task(usecase.execute, order)
         
         return {
             "status": "accepted", 
-            "message": "Code Review queued", 
             "issue_key": order.issue_key
         }
         

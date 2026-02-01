@@ -16,6 +16,8 @@ from software_factory_poc.application.core.agents.scaffolding.tools.scaffolding_
 from software_factory_poc.application.core.agents.vcs.vcs_agent import VcsAgent
 from .config.scaffolding_agent_config import ScaffoldingAgentConfig
 from .value_objects.scaffolding_order import ScaffoldingOrder
+from software_factory_poc.application.core.agents.common.dtos.automation_context_dto import AutomationContextDTO
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -175,8 +177,6 @@ class ScaffoldingAgent(BaseAgent):
             target_branch=self.config.default_target_branch
         )
         logger.info(f"MR Created successfully. Link: {mr.web_url}")
-        )
-        logger.info(f"MR Created successfully. Link: {mr.web_url}")
         return mr.web_url, branch_dto.web_url, branch_name
 
     def _get_branch_name(self, request: ScaffoldingOrder) -> str:
@@ -194,32 +194,27 @@ class ScaffoldingAgent(BaseAgent):
 
     def _finalize_task_success(self, request: ScaffoldingOrder, reporter: ReporterAgent, mr_link: str,
                                project_id: int, branch_name: str) -> None:
+        
+        # 1. Create Automation Context (DTO)
+        context = AutomationContextDTO.from_values(
+            project_id=str(project_id),
+            branch=branch_name,
+            mr_url=mr_link
+        )
+        
+        # 2. Inject Context into Jira (Append Mode)
+        reporter.save_automation_context(request.issue_key, context)
+        
+        # 3. Report Success Comment
         message_payload = {
             "type": "scaffolding_success",
             "title": "Scaffolding Completado Exitosamente",
             "summary": f"Se ha generado el código base para la tarea {request.issue_key}.\n{request.summary}",
             "links": {"🔗 Ver Merge Request": mr_link}
         }
-
-        # Build Status Block for Code Review Agent
-        from datetime import datetime
-        automation_state = (
-            f"\n\n```yaml\n"
-            f"# --- AUTOMATION STATE (Machine Readable) ---\n"
-            f"automation_result:\n"
-            f"  gitlab_project_id: {project_id}\n"
-            f"  source_branch_name: \"{branch_name}\"\n"
-            f"  review_request_url: \"{mr_link}\"\n"
-            f"  generated_at: \"{datetime.utcnow().isoformat()}\"\n"
-            f"```"
-        )
-        
-        # Inject into Jira Description as Single Source of Truth
-        final_description = request.raw_instruction + automation_state
-        reporter.update_task_description(request.issue_key, final_description)
-        
-        # Transition Issue
         reporter.report_success(request.issue_key, message_payload)
+
+        # 4. Transition to In Review
         reporter.transition_task(request.issue_key, TaskStatus.IN_REVIEW)
         logger.info(f"Task {request.issue_key} completed. MR: {mr_link}")
 
