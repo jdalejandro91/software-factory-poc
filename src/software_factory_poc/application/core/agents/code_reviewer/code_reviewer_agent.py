@@ -80,6 +80,26 @@ class CodeReviewerAgent(BaseAgent):
             )
             self.logger.info(f"Research complete. Context size: {len(technical_context)} chars")
 
+            # 3.8 Prompt Construction
+            prompt = self.prompt_builder.build_prompt(
+                diffs=changes,
+                original_files=original_code,
+                technical_context=technical_context,
+                requirements=f"{order.summary}\n\n{order.description}"
+            )
+            self.logger.info("Prompt constructed successfully.")
+
+            # 3.9 Reasoning (LLM)
+            raw_response = self.reasoner.reason(
+                prompt=prompt,
+                model_id=self.config.model
+            )
+            self.logger.info(f"LLM response received. Length: {len(raw_response)} chars")
+
+            # 3.10 Parse Result
+            review_result = self.parser.parse(raw_response)
+            self.logger.info(f"Review parsed successfully. Verdict: {review_result.verdict}. Comments: {len(review_result.comments)}")
+
         except Exception as e:
             self.logger.error(f"Unexpected error in CodeReviewerAgent flow: {e}", exc_info=True)
             self.reporter.report_failure(order.issue_key, f"Unexpected error: {str(e)}")
