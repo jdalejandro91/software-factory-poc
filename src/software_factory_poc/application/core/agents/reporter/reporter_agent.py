@@ -2,9 +2,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from software_factory_poc.application.core.agents.base_agent import BaseAgent
+from software_factory_poc.application.core.agents.common.dtos.automation_context_dto import AutomationContextDTO
 from software_factory_poc.application.core.agents.reporter.ports.task_tracker_gateway import TaskTrackerGateway, \
     TaskStatus
-from software_factory_poc.application.core.agents.common.dtos.automation_context_dto import AutomationContextDTO
 from .config.reporter_constants import ReporterMessages
 
 

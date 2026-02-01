@@ -1,13 +1,12 @@
 import urllib.parse
 from typing import Any, Optional, List
-from typing import Any, Optional, List
-from software_factory_poc.application.core.agents.common.dtos.change_type import ChangeType
-from software_factory_poc.application.core.agents.code_reviewer.dtos.code_review_result_dto import ReviewCommentDTO
-from software_factory_poc.application.core.agents.common.dtos.file_changes_dto import FileChangesDTO
-from software_factory_poc.application.core.agents.common.dtos.file_content_dto import FileContentDTO
 
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+from software_factory_poc.application.core.agents.code_reviewer.dtos.code_review_result_dto import ReviewCommentDTO
+from software_factory_poc.application.core.agents.common.dtos.change_type import ChangeType
+from software_factory_poc.application.core.agents.common.dtos.file_changes_dto import FileChangesDTO
+from software_factory_poc.application.core.agents.common.dtos.file_content_dto import FileContentDTO
 from software_factory_poc.application.core.agents.common.exceptions.provider_error import ProviderError
 from software_factory_poc.application.core.agents.vcs.config.vcs_provider_type import VcsProviderType
 from software_factory_poc.application.core.agents.vcs.dtos.vcs_dtos import BranchDTO, CommitResultDTO, MergeRequestDTO

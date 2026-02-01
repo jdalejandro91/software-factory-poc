@@ -5,6 +5,7 @@ from typing import List
 
 from software_factory_poc.application.core.agents.base_agent import BaseAgent
 from software_factory_poc.application.core.agents.common.config.task_status import TaskStatus
+from software_factory_poc.application.core.agents.common.dtos.automation_context_dto import AutomationContextDTO
 from software_factory_poc.application.core.agents.common.dtos.file_content_dto import FileContentDTO
 from software_factory_poc.application.core.agents.reasoner.reasoner_agent import ReasonerAgent
 from software_factory_poc.application.core.agents.reporter.reporter_agent import ReporterAgent
@@ -16,8 +17,6 @@ from software_factory_poc.application.core.agents.scaffolding.tools.scaffolding_
 from software_factory_poc.application.core.agents.vcs.vcs_agent import VcsAgent
 from .config.scaffolding_agent_config import ScaffoldingAgentConfig
 from .value_objects.scaffolding_order import ScaffoldingOrder
-from software_factory_poc.application.core.agents.common.dtos.automation_context_dto import AutomationContextDTO
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 

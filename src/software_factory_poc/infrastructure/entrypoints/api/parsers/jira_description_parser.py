@@ -1,6 +1,7 @@
 import re
+from typing import Optional
+
 import yaml
-from typing import Optional, Any, Dict
 
 from software_factory_poc.application.core.domain.entities.task import TaskDescription
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService

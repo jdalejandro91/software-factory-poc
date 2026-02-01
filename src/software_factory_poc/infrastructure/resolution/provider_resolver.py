@@ -4,10 +4,6 @@ from software_factory_poc.application.core.agents.code_reviewer.code_reviewer_ag
 from software_factory_poc.application.core.agents.code_reviewer.config.code_reviewer_agent_config import (
     CodeReviewerAgentConfig,
 )
-from software_factory_poc.application.usecases.code_review.perform_code_review_usecase import (
-    PerformCodeReviewUseCase,
-)
-
 from software_factory_poc.application.core.agents.reasoner.ports.llm_gateway import LlmGateway
 from software_factory_poc.application.core.agents.reasoner.reasoner_agent import ReasonerAgent
 from software_factory_poc.application.core.agents.reporter.config.task_tracker_type import (
@@ -26,6 +22,9 @@ from software_factory_poc.application.core.agents.vcs.config.vcs_provider_type i
 )
 from software_factory_poc.application.core.agents.vcs.ports.vcs_gateway import VcsGateway
 from software_factory_poc.application.core.agents.vcs.vcs_agent import VcsAgent
+from software_factory_poc.application.usecases.code_review.perform_code_review_usecase import (
+    PerformCodeReviewUseCase,
+)
 from software_factory_poc.infrastructure.common.retry.retry_policy import RetryPolicy
 from software_factory_poc.infrastructure.configuration.app_config import AppConfig
 from software_factory_poc.infrastructure.configuration.main_settings import Settings  # Legacy or remove

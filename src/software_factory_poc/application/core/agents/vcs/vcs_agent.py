@@ -1,11 +1,10 @@
 from dataclasses import dataclass
 from typing import Optional, List
 
+from software_factory_poc.application.core.agents.base_agent import BaseAgent
+from software_factory_poc.application.core.agents.code_reviewer.dtos.code_review_result_dto import ReviewCommentDTO
 from software_factory_poc.application.core.agents.common.dtos.file_changes_dto import FileChangesDTO
 from software_factory_poc.application.core.agents.common.dtos.file_content_dto import FileContentDTO
-from software_factory_poc.application.core.agents.code_reviewer.dtos.code_review_result_dto import ReviewCommentDTO
-
-from software_factory_poc.application.core.agents.base_agent import BaseAgent
 from software_factory_poc.application.core.agents.vcs.dtos.vcs_dtos import MergeRequestDTO, CommitResultDTO, BranchDTO
 from software_factory_poc.application.core.agents.vcs.ports.vcs_gateway import VcsGateway
 

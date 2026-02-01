@@ -5,14 +5,14 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from software_factory_poc.infrastructure.configuration.main_settings import Settings
+from software_factory_poc.infrastructure.entrypoints.api.code_review_router import (
+    router as code_review_router,
+)
 from software_factory_poc.infrastructure.entrypoints.api.health_router import (
     router as health_router,
 )
 from software_factory_poc.infrastructure.entrypoints.api.scaffolding_router import (
     router as scaffolding_router,
-)
-from software_factory_poc.infrastructure.entrypoints.api.code_review_router import (
-    router as code_review_router,
 )
 from software_factory_poc.infrastructure.observability.logger_factory_service import (
     LoggerFactoryService,
