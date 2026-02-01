@@ -44,7 +44,7 @@ def get_usecase(settings: Settings = Depends(get_settings)) -> CreateScaffolding
         resolver=resolver
     )
 
-@router.post("/jira-webhook", status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(validate_api_key)])
+@router.post("/webhooks/jira/scaffolding-trigger", status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(validate_api_key)])
 async def trigger_scaffold(
     request: Request,
     background_tasks: BackgroundTasks,

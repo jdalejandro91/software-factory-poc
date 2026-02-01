@@ -1,5 +1,13 @@
 from typing import cast, Optional
 
+from software_factory_poc.application.core.agents.code_reviewer.code_reviewer_agent import CodeReviewerAgent
+from software_factory_poc.application.core.agents.code_reviewer.config.code_reviewer_agent_config import (
+    CodeReviewerAgentConfig,
+)
+from software_factory_poc.application.usecases.code_review.perform_code_review_usecase import (
+    PerformCodeReviewUseCase,
+)
+
 from software_factory_poc.application.core.agents.reasoner.ports.llm_gateway import LlmGateway
 from software_factory_poc.application.core.agents.reasoner.reasoner_agent import ReasonerAgent
 from software_factory_poc.application.core.agents.reporter.config.task_tracker_type import (
@@ -184,3 +192,30 @@ class ProviderResolver:
             "extra_params": {"max_tokens": max_tokens}
         })
         return ScaffoldingAgent(config=orchestrator_config)
+
+    def create_code_reviewer_agent(self) -> CodeReviewerAgent:
+        # Resolve dependencies
+        reporter = self.create_reporter_agent()
+        vcs = self.create_vcs_agent()
+        researcher = self.create_research_agent()
+        reasoner = self.create_reasoner_agent()
+
+        # Build Config
+        # In a real scenario, this would come from AppConfig or Environment.
+        # We default to GPT-4 Turbo for code review tasks.
+        config = CodeReviewerAgentConfig(
+            api_key="",  # API Keys are handled by LlmGateway internally via Env/Settings
+            model="openai:gpt-4-turbo"
+        )
+
+        return CodeReviewerAgent(
+            config=config,
+            reporter=reporter,
+            vcs=vcs,
+            researcher=researcher,
+            reasoner=reasoner
+        )
+
+    def create_perform_code_review_usecase(self) -> PerformCodeReviewUseCase:
+        agent = self.create_code_reviewer_agent()
+        return PerformCodeReviewUseCase(agent)

@@ -11,6 +11,9 @@ from software_factory_poc.infrastructure.entrypoints.api.health_router import (
 from software_factory_poc.infrastructure.entrypoints.api.scaffolding_router import (
     router as scaffolding_router,
 )
+from software_factory_poc.infrastructure.entrypoints.api.code_review_router import (
+    router as code_review_router,
+)
 from software_factory_poc.infrastructure.observability.logger_factory_service import (
     LoggerFactoryService,
 )
@@ -56,5 +59,6 @@ def create_app(settings: Settings) -> FastAPI:
 
     app.include_router(health_router)
     app.include_router(scaffolding_router, prefix="/api/v1")
+    app.include_router(code_review_router, prefix="/api/v1")
 
     return app
