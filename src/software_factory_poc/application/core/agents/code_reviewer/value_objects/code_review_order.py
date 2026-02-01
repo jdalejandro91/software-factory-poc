@@ -5,6 +5,8 @@ from pydantic import BaseModel
 
 class CodeReviewOrder(BaseModel):
     """Value Object representing a Code Review Order."""
+    model_config = {"frozen": True}
+
     issue_key: str
     project_id: int
     mr_id: str
@@ -12,9 +14,6 @@ class CodeReviewOrder(BaseModel):
     vcs_provider: str
     summary: str
     description: str
-    technical_doc_id: Optional[str] = None
     mr_url: Optional[str] = None
+    technical_doc_id: Optional[str] = None
     requesting_user: Optional[str] = None
-    
-    class Config:
-        frozen = True
