@@ -14,3 +14,8 @@ class TaskTrackerGateway(ABC):
     def transition_status(self, task_id: str, status: TaskStatus) -> None:
         """Transitions the task to a new status."""
         pass
+
+    @abstractmethod
+    def update_task_description(self, task_id: str, description: str) -> None:
+        """Updates the text description of the task."""
+        pass

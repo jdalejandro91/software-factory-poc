@@ -153,3 +153,26 @@ class JiraProviderImpl(TaskTrackerGateway):
             message=f"Jira operation failed: {error}",
             retryable=retryable
         ) from error
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
+    def update_task_description(self, task_id: str, description: str) -> None:
+        self._logger.info(f"Updating description for task: {task_id}")
+        try:
+            # Jira Cloud V3 requires ADF (Atlassian Document Format)
+            payload = {
+                "fields": {
+                    "description": {
+                        "type": "doc",
+                        "version": 1,
+                        "content": [{
+                            "type": "paragraph",
+                            "content": [{"type": "text", "text": description}]
+                        }]
+                    }
+                }
+            }
+            response = self.client.put(f"rest/api/3/issue/{task_id}", payload)
+            response.raise_for_status()
+        except Exception as e:
+            self._handle_error(e, f"update_task_description({task_id})")
+            raise

@@ -54,3 +54,8 @@ class JiraHttpClient:
         url = f"{self.base_url}/{path.lstrip('/')}"
         with httpx.Client() as client:
             return client.post(url, headers=self._get_headers(), json=json_data, timeout=10.0)
+
+    def put(self, path: str, json_data: dict[str, Any]) -> httpx.Response:
+        url = f"{self.base_url}/{path.lstrip('/')}"
+        with httpx.Client() as client:
+            return client.put(url, headers=self._get_headers(), json=json_data, timeout=10.0)
