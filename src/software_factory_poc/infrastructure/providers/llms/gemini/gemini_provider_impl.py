@@ -36,7 +36,19 @@ class GeminiProviderImpl(LlmProvider):
     async def generate(self, request: LlmRequest) -> LlmResponse:
         cid = self.correlation.set(request.trace.correlation_id if request.trace else None)
         logging.getLogger(__name__).debug("Gemini request model=%s cid=%s", request.model.name, cid)
-        return await self.retry.run(lambda: self._call(request))
+        
+        try:
+            return await self.retry.run(lambda: self._call(request))
+        finally:
+            # CRITICAL: Close the client to prevent "Event loop is closed" errors during GC.
+            # The google-genai Client keeps an internal async session that must be closed 
+            # while the loop is still active.
+            try:
+                # Try calling close() which typically tears down the transport
+                if hasattr(self.client, "close"):
+                    self.client.close()
+            except Exception as e:
+                logging.getLogger(__name__).warning(f"Error closing Gemini client: {e}")
 
     async def _call(self, request: LlmRequest) -> LlmResponse:
         try:
