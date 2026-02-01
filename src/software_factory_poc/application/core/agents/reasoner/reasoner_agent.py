@@ -17,26 +17,32 @@ class ReasonerAgent(BaseAgent):
     """
     llm_gateway: LlmGateway
 
-    def reason(self, prompt: str, model_id: str) -> str:
+    def reason(self, prompt: str, model_id: str | list[str]) -> str:
         """
         Sends the prompt to the LLM and returns the raw response.
         Stateless operation.
         """
-        logger.info(f"Reasoning with model {model_id}...")
+        logger.info(f"Reasoning with models {model_id}...")
 
-        provider = LlmProviderType.OPENAI
-        name = model_id
-
-        if ":" in model_id:
-            parts = model_id.split(":", 1)
-            provider_str = parts[0].lower()
-            name = parts[1]
-            try:
-                provider = LlmProviderType(provider_str)
-            except ValueError:
-                logger.warning(f"Unknown provider '{provider_str}' in model_id '{model_id}'. Falling back to OPENAI.")
-
-        hints = [ModelId(provider=provider, name=name)]
+        hints = []
+        
+        # Normalize input to list
+        models = model_id if isinstance(model_id, list) else [model_id]
+        
+        for mid in models:
+            provider = LlmProviderType.OPENAI
+            name = mid
+            
+            if ":" in mid:
+                parts = mid.split(":", 1)
+                provider_str = parts[0].lower()
+                name = parts[1]
+                try:
+                    provider = LlmProviderType(provider_str)
+                except ValueError:
+                    logger.warning(f"Unknown provider '{provider_str}' in model_id '{mid}'. Defaults may apply.")
+            
+            hints.append(ModelId(provider=provider, name=name))
 
         response = self.llm_gateway.generate_code(
             prompt=prompt,

@@ -54,50 +54,60 @@ class JiraCodeReviewMapper:
     @staticmethod
     def _extract_automation_context(description: str) -> Dict[str, Any]:
         """
-        Finds the YAML block in the description and parses it using Regex/YAML.
+        Robustly finds the Automation Context in the description.
+        Tolerates manual edits, missing tildes, or extra spaces.
         """
-        # Strict Regex capture between automation_result: and closing block
-        # Corresponds to prompt instruction: "Use Regex to capture text between automation_result: and ```"
-        yaml_pattern = re.compile(r"automation_result:\s*\n(.*?)(?=```|$)", re.DOTALL)
+        # 1. Broad Lazy Capture
+        # Captures everything after "automation_result:" until the next code block or EOF
+        # Tolerates missing indentation or extra newlines
+        yaml_pattern = re.compile(r"automation_result:\s*\n+([\s\S]*?)(?=```|$)", re.MULTILINE)
         match = yaml_pattern.search(description)
 
         if not match:
-             # Try finding the block via the previous method (full yaml block) just in case
+             # Last resort fallback: try to find the old full-block format
              fallback_pattern = re.compile(r"```yaml\s+(.*?)\s+```", re.DOTALL)
-             fallback_match = fallback_pattern.search(description)
-             if fallback_match:
-                 match_content = fallback_match.group(1)
-             else:
+             match = fallback_pattern.search(description)
+             if not match:
                  raise ValueError("Automation state corrupted or missing ('automation_result' block not found)")
-        else:
-             match_content = match.group(1)
 
+        raw_content = match.group(1).replace("{code}", "").strip()
+        
         try:
-            clean_yaml = match_content.replace("{code}", "").strip()
-            # If we captured just the content inside automation_result, parse it directly.
-            # However, yaml.safe_load might expect keys. 
-            # If the user prompt implies parsing lines manually with regex, we can do that,
-            # but yaml.safe_load is more robust if available.
-            
-            # The capture group (.*?) inside "automation_result:\n(.*?)" essentially captures the indented block.
-            # To make it valid YAML to parse, we might need to dedent or just parse it.
-            # Let's try parsing the whole block if possible or constructing a wrapper.
-            
-            # Re-constructing valid yaml for robust parsing:
-            full_yaml_str = f"automation_result:\n{clean_yaml}"
+            # 2. Attempt YAML Parse (Preferred)
+            # We reconstruct the dict wrapper to be safe
+            full_yaml_str = f"automation_result:\n{raw_content}"
             data = yaml.safe_load(full_yaml_str)
             
-            if data and "automation_result" in data:
+            if data and isinstance(data, dict) and "automation_result" in data:
                 return data["automation_result"]
             
-            # Fallback: return data if it was parsed as flat dict (if capture was perfect)
-            if isinstance(data, dict): 
-                return data
-                
-            raise ValueError("Parsed YAML did not result in a dictionary")
-            
         except yaml.YAMLError:
-             raise ValueError("Extracted block is not valid YAML")
+            logger.warning("YAML parsing failed for automation context. Attempting manual regex extraction.")
+
+        # 3. Manual Regex Fallback (Fail-Safe)
+        # If the YAML is broken (e.g. wrong indentation), we grep the values directly.
+        context = {}
+        
+        # Project ID
+        pid_match = re.search(r"gitlab_project_id:\s*(\d+)", raw_content)
+        if pid_match:
+            context["gitlab_project_id"] = int(pid_match.group(1))
+            
+        # Review URL
+        url_match = re.search(r"review_request_url:\s*[\"']?([^\s\"']+)[\"']?", raw_content)
+        if url_match:
+            context["review_request_url"] = url_match.group(1)
+            
+        # Source Branch
+        branch_match = re.search(r"source_branch_name:\s*[\"']?([^\s\"']+)[\"']?", raw_content)
+        if branch_match:
+            context["source_branch_name"] = branch_match.group(1)
+            
+        # Validate critical fields
+        if "gitlab_project_id" in context and "review_request_url" in context:
+            return context
+            
+        raise ValueError("Critical automation fields missing. YAML invalid and manual fallback failed.")
 
     @staticmethod
     def _extract_mr_id(mr_url: str) -> str:

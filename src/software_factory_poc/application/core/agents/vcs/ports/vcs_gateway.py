@@ -42,8 +42,8 @@ class VcsGateway(ABC):
         pass
 
     @abstractmethod
-    def get_repository_files(self, project_id: int, branch_name: str) -> List[FileContentDTO]:
-        """Retrieves all text files from a specific branch."""
+    def get_repository_files(self, project_id: int, branch_name: str, max_files: int = 50, max_file_size_kb: int = 100) -> List[FileContentDTO]:
+        """Retrieves all text files from a specific branch with safety limits."""
         pass
 
     @abstractmethod

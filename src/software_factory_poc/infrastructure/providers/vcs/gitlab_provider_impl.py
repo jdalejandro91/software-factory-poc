@@ -170,15 +170,20 @@ class GitLabProviderImpl(VcsGateway):
             raise
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
-    def get_repository_files(self, project_id: int, branch_name: str) -> List[FileContentDTO]:
-        self._logger.info(f"Fetching file list for project {project_id} on branch {branch_name}...")
+    def get_repository_files(self, project_id: int, branch_name: str, max_files: int = 50, max_file_size_kb: int = 100) -> List[FileContentDTO]:
+        self._logger.info(f"Fetching file list for project {project_id} on branch {branch_name} (Limits: max_files={max_files}, max_kb={max_file_size_kb})...")
         
         all_files = []
         page = 1
         per_page = 100
         
         try:
+            # 1. Fetch File List (Recursive Tree)
             while True:
+                # Safety break for Tree Recursion to avoid infinite loops or memory pressure on metadata
+                if len(all_files) >= max_files * 2: # heuristic buffer since we filter later
+                    break
+
                 response = self.client.get(
                     f"api/v4/projects/{project_id}/repository/tree",
                     params={
@@ -205,11 +210,14 @@ class GitLabProviderImpl(VcsGateway):
                 all_files.extend(items)
                 page += 1
                 
-            # Filter and Download
+            # 2. Filter & Download
             result_dtos = []
+            
+            # Additional binary extension safety net
             binary_extensions = {
                 '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.pdf', 
-                '.zip', '.tar', '.gz', '.pyc', '.exe', '.dll', '.so', '.bin', '.lock'
+                '.zip', '.tar', '.gz', '.pyc', '.exe', '.dll', '.so', '.bin', '.lock',
+                '.parquet', '.avro', '.db', '.sqlite', '.sqlite3', '.class', '.jar'
             }
             
             filtered_files = []
@@ -222,30 +230,57 @@ class GitLabProviderImpl(VcsGateway):
                 if "." in path:
                     ext = "." + path.split(".")[-1].lower()
                 
-                if ext in binary_extensions:
+                if ext in binary_extensions or "node_modules/" in path or ".git/" in path:
                     continue
                     
                 filtered_files.append(path)
 
-            self._logger.info(f"Found {len(all_files)} items. Downloading {len(filtered_files)} text files...")
+            self._logger.info(f"Filtered {len(all_files)} tree items down to {len(filtered_files)} potential files.")
 
+            # 3. Download Loop with Hard Limits
             for file_path in filtered_files:
+                # A. MAX FILES CHECK
+                if len(result_dtos) >= max_files:
+                    self._logger.warning(f"Repo context truncated: max_files limit ({max_files}) reached.")
+                    break
+
                 try:
                     encoded_path = urllib.parse.quote(file_path, safe="")
-                    # Get raw content
+                    
+                    # B. SIZE CHECK (HEAD Request)
+                    head_resp = self.client.head(
+                        f"api/v4/projects/{project_id}/repository/files/{encoded_path}",
+                        params={"ref": branch_name}
+                    )
+                    
+                    size_header = next((v for k, v in head_resp.headers.items() if k.lower() == 'x-gitlab-size'), "0")
+                    file_size_kb = int(size_header) / 1024
+                    
+                    if file_size_kb > max_file_size_kb:
+                        self._logger.info(f"Skipping {file_path}: Size {file_size_kb:.2f}KB > {max_file_size_kb}KB limit.")
+                        # Optionally include a placeholder if we want to acknowledge existence
+                        result_dtos.append(FileContentDTO(path=file_path, content=f"<FILE_TOO_LARGE_OMITTED_SIZE_{int(file_size_kb)}KB>"))
+                        continue
+
+                    # C. GET CONTENT
                     resp = self.client.get(
                         f"api/v4/projects/{project_id}/repository/files/{encoded_path}/raw",
                         params={"ref": branch_name}
                     )
                     resp.raise_for_status()
                     
+                    # D. TEXT/BINARY CHEKC
                     content = resp.text
+                    if "\0" in content:
+                        self._logger.info(f"Skipping {file_path}: Binary content detected.")
+                        continue
+                        
                     result_dtos.append(FileContentDTO(path=file_path, content=content))
                     
                 except Exception as e:
                      self._logger.warning(f"Failed to download/decode {file_path}: {e}")
             
-            self._logger.info(f"Downloaded {len(result_dtos)} files.")
+            self._logger.info(f"Downloaded {len(result_dtos)} text files for context.")
             return result_dtos
 
         except Exception as e:

@@ -92,7 +92,7 @@ class CodeReviewerAgent(BaseAgent):
             # 3.9 Reasoning (LLM)
             raw_response = self.reasoner.reason(
                 prompt=prompt,
-                model_id=self.config.model
+                model_id=self.config.llm_model_priority
             )
             self.logger.info(f"LLM response received. Length: {len(raw_response)} chars")
 

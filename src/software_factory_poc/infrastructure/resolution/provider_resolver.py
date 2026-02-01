@@ -203,9 +203,25 @@ class ProviderResolver:
         # Build Config
         # In a real scenario, this would come from AppConfig or Environment.
         # We default to GPT-4 Turbo for code review tasks.
+        
+        # Parse Priority List
+        import json
+        priority_json = self.app_config.tools.code_review_llm_model_priority
+        try:
+             priority_list = json.loads(priority_json)
+             if not isinstance(priority_list, list):
+                 raise ValueError("Parsed JSON is not a list")
+        except Exception as e:
+             # Robust fallback
+             from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
+             logger = LoggerFactoryService.build_logger(__name__)
+             logger.warning(f"Failed to parse CODE_REVIEW_LLM_MODEL_PRIORITY: {priority_json}. Error: {e}. Defaulting to GPT-4 Turbo.")
+             priority_list = ["openai:gpt-4-turbo"]
+
         config = CodeReviewerAgentConfig(
             api_key="",  # API Keys are handled by LlmGateway internally via Env/Settings
-            model="openai:gpt-4-turbo"
+            model=self.app_config.tools.code_review_model, # Legacy support
+            llm_model_priority=priority_list
         )
 
         return CodeReviewerAgent(

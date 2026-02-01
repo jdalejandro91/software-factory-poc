@@ -56,10 +56,10 @@ class VcsAgent(BaseAgent):
             description=description
         )
 
-    def get_code_context(self, project_id: int, branch: str) -> List[FileContentDTO]:
-        """Retrieves code context (files) from the repository."""
+    def get_code_context(self, project_id: int, branch: str, max_files: int = 50, max_file_size_kb: int = 100) -> List[FileContentDTO]:
+        """Retrieves code context (files) from the repository with safety limits."""
         self.logger.info(f"Fetching code context from branch '{branch}' for project {project_id}")
-        return self.gateway.get_repository_files(project_id, branch)
+        return self.gateway.get_repository_files(project_id, branch, max_files, max_file_size_kb)
 
     def get_mr_changes(self, project_id: int, mr_id: str) -> List[FileChangesDTO]:
         """Retrieves file changes for a specific Merge Request."""
