@@ -8,6 +8,7 @@ from software_factory_poc.application.core.agents.common.dtos.file_content_dto i
 from software_factory_poc.application.core.agents.vcs.dtos.vcs_dtos import MergeRequestDTO, CommitResultDTO, BranchDTO
 from software_factory_poc.application.core.agents.vcs.ports.vcs_gateway import VcsGateway
 
+from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 
 @dataclass
 class VcsAgent(BaseAgent):
@@ -16,6 +17,10 @@ class VcsAgent(BaseAgent):
     Exposes atomic operations mapping 1:1 to the VCS Gateway.
     """
     gateway: VcsGateway
+
+    def __post_init__(self):
+        self.logger = LoggerFactoryService.build_logger(__name__)
+        self.logger.info("VcsAgent initialized")
 
     def resolve_project_id(self, repo_url: str) -> int:
         """Resolves the project ID for a given repository URL."""

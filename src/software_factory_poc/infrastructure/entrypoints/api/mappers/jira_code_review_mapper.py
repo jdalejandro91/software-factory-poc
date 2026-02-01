@@ -56,53 +56,46 @@ class JiraCodeReviewMapper:
                 requesting_user=payload.user.name if payload.user else None
             )
         except (KeyError, ValueError, TypeError) as e: 
-             logger.error(f"Mapping failed for {payload.issue.key}: {e}")
+             # Use a safe fallback for logging data if it was partially extracted
+             safe_data = locals().get("data", "Not Extracted")
+             logger.error(f"Mapping failed for {payload.issue.key}: {e}. Data extracted: {safe_data}")
              raise ValueError(f"Mapping failed: {e}. Ensure Scaffolding completed successfully.")
 
     @staticmethod
     def _extract_automation_context(description: str) -> Dict[str, Any]:
         """
-        Robustly finds the Automation Context.
-        Strategy: Find the YAML code block, parse it fully, and look for 'code_review_params' inside.
+        Robustly finds the Automation Context searching for 'code_review_params'.
         """
         # 1. Find ANY code block with 'yaml' hint or just generically
-        # This matches ```yaml ... ``` or {code:yaml} ... {code}
-        code_block_pattern = re.compile(r"```(?:yaml)?\s*([\s\S]*?)\s*```", re.DOTALL | re.IGNORECASE)
-        match = code_block_pattern.search(description)
+        code_block_iter = re.finditer(r"```(?:yaml)?\s*([\s\S]*?)\s*```", description, re.DOTALL | re.IGNORECASE)
         
-        if not match:
-            # Try Jira style
-            jira_pattern = re.compile(r"\{code(?::yaml)?\}\s*([\s\S]*?)\s*\{code\}", re.DOTALL | re.IGNORECASE)
-            match = jira_pattern.search(description)
+        for match in code_block_iter:
+            raw_yaml = match.group(1).strip()
+            try:
+                parsed = yaml.safe_load(raw_yaml)
+                if isinstance(parsed, dict):
+                    # TARGET: Check for 'code_review_params' key
+                    if "code_review_params" in parsed and isinstance(parsed["code_review_params"], dict):
+                        return parsed["code_review_params"]
+                    
+                    # Fallback: Maybe the block IS the params directly (legacy or manual edit)
+                    if "gitlab_project_id" in parsed:
+                        return parsed
+                        
+            except yaml.YAMLError:
+                continue
 
-        if not match:
-            # Last resort: Try finding the keys directly in the text without block (fallback)
-            return JiraCodeReviewMapper._extract_via_regex(description)
+        # 2. Fallback: Jira {code} style
+        jira_match = re.search(r"\{code(?::yaml)?\}\s*([\s\S]*?)\s*\{code\}", description, re.DOTALL | re.IGNORECASE)
+        if jira_match:
+            try:
+                parsed = yaml.safe_load(jira_match.group(1).strip())
+                if isinstance(parsed, dict) and "code_review_params" in parsed:
+                    return parsed["code_review_params"]
+            except yaml.YAMLError:
+                pass
 
-        raw_yaml = match.group(1).strip()
-        
-        try:
-            # 2. Parse the whole block
-            parsed = yaml.safe_load(raw_yaml)
-            if not isinstance(parsed, dict):
-                logger.warning("Parsed YAML is not a dict, trying regex fallback.")
-                return JiraCodeReviewMapper._extract_via_regex(description)
-            
-            # 3. Locate the params
-            # Case A: Nested under code_review_params (Unified Block)
-            if "code_review_params" in parsed and isinstance(parsed["code_review_params"], dict):
-                return parsed["code_review_params"]
-            
-            # Case B: Flat structure (Legacy or different format)
-            if "gitlab_project_id" in parsed:
-                return parsed
-                
-            # Case C: Not found in this block? Might be multiple blocks. 
-            # Ideally iterate all blocks, but for now fallback to regex.
-            
-        except yaml.YAMLError as e:
-            logger.warning(f"YAML parsing failed: {e}. Trying regex fallback.")
-            
+        logger.warning("YAML parsing failed or 'code_review_params' not found. Attempting regex fallback.")
         return JiraCodeReviewMapper._extract_via_regex(description)
 
     @staticmethod

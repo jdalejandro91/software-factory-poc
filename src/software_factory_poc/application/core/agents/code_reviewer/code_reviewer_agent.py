@@ -129,7 +129,7 @@ class CodeReviewerAgent(BaseAgent):
 
         except Exception as e:
             self.logger.exception("Critical error in Code Review")
-            self.reporter.report_failure(order.issue_key, failure_reason=str(e))
+            self.reporter.report_failure(order.issue_key, error_msg=str(e))
 
     def _fetch_review_artifacts(self, order: CodeReviewOrder) -> Tuple[List[FileContentDTO], List[FileChangesDTO]]:
         """Fetches code context and diffs from VCS."""
