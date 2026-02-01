@@ -12,12 +12,12 @@ class TaskDescription(BaseModel):
 
     human_text: str = Field(..., description="The description text written by a human user.")
     raw_content: str = Field(default="", description="The original raw content string.")
-    automation_metadata: Optional[Dict[str, Any]] = Field(default=None, description="Structured metadata for automation output.")
+    code_review_params: Optional[Dict[str, Any]] = Field(default=None, description="Structured metadata for automation output.")
     scaffolding_params: Optional[Dict[str, Any]] = Field(default=None, description="Parsed parameters for scaffolding input.")
 
     def has_metadata(self) -> bool:
         """Checks if the description contains automation metadata."""
-        return self.automation_metadata is not None and len(self.automation_metadata) > 0
+        return self.code_review_params is not None and len(self.code_review_params) > 0
 
     def has_scaffolding_params(self) -> bool:
         """Checks if the description contains scaffolding parameters."""
@@ -45,7 +45,7 @@ class Task(BaseModel):
             human_text=self.description.human_text,
             raw_content=self.description.raw_content,
             scaffolding_params=self.description.scaffolding_params,
-            automation_metadata=context
+            code_review_params=context
         )
         
         return self.model_copy(update={"description": new_description})

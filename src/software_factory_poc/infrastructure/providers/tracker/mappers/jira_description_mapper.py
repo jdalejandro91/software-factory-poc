@@ -20,10 +20,10 @@ class JiraDescriptionMapper:
         Supports Unified YAML Block (Extraction of both Scaffolding & Automation data from a single block).
         """
         if not adf_json or "content" not in adf_json:
-            return TaskDescription(human_text="", automation_metadata=None)
+            return TaskDescription(human_text="", code_review_params=None)
 
         human_text_parts = []
-        automation_metadata = None
+        code_review_params = None
         description_scaffolding_params = None
 
         # Iterate through top-level content nodes
@@ -49,8 +49,8 @@ class JiraDescriptionMapper:
                     parsed = yaml.safe_load(block_content)
                     if isinstance(parsed, dict):
                         # A. Extract Automation metadata if present
-                        if "automation_result" in parsed:
-                            automation_metadata = parsed["automation_result"]
+                        if "code_review_params" in parsed:
+                            code_review_params = parsed["code_review_params"]
 
                         # B. Extract Scaffolding Params
                         # Heuristic: Check for characteristic keys of scaffolding
@@ -60,8 +60,8 @@ class JiraDescriptionMapper:
                         if has_scaffolding_keys:
                             # Create a clean copy for scaffolding params (excluding the result to avoid duplication)
                             clean_params = parsed.copy()
-                            if "automation_result" in clean_params:
-                                del clean_params["automation_result"]
+                            if "code_review_params" in clean_params:
+                                del clean_params["code_review_params"]
 
                             # Assign if not already found (First Valid Block wins strategy)
                             if not description_scaffolding_params and clean_params:
@@ -72,7 +72,7 @@ class JiraDescriptionMapper:
 
         return TaskDescription(
             human_text="\n\n".join(human_text_parts),
-            automation_metadata=automation_metadata,
+            code_review_params=code_review_params,
             scaffolding_params=description_scaffolding_params
         )
 
@@ -110,7 +110,7 @@ class JiraDescriptionMapper:
 
         # Merge Automation Result (nested under its own key)
         if description.has_metadata():
-            combined_data["automation_result"] = description.automation_metadata
+            combined_data["code_review_params"] = description.code_review_params
 
         if combined_data:
             # Serialize to YAML

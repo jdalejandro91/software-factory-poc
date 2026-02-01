@@ -59,9 +59,9 @@ class JiraCodeReviewMapper:
         Tolerates manual edits, missing tildes, or extra spaces.
         """
         # 1. Broad Lazy Capture
-        # Captures everything after "automation_result:" until the next code block or EOF
+        # Captures everything after "code_review_params:" until the next code block or EOF
         # Tolerates missing indentation or extra newlines
-        yaml_pattern = re.compile(r"automation_result:\s*\n+([\s\S]*?)(?=```|$)", re.MULTILINE)
+        yaml_pattern = re.compile(r"code_review_params:\s*\n+([\s\S]*?)(?=```|$)", re.MULTILINE)
         match = yaml_pattern.search(description)
 
         if not match:
@@ -69,18 +69,18 @@ class JiraCodeReviewMapper:
              fallback_pattern = re.compile(r"```yaml\s+(.*?)\s+```", re.DOTALL)
              match = fallback_pattern.search(description)
              if not match:
-                 raise ValueError("Automation state corrupted or missing ('automation_result' block not found)")
+                 raise ValueError("Automation state corrupted or missing ('code_review_params' block not found)")
 
         raw_content = match.group(1).replace("{code}", "").strip()
         
         try:
             # 2. Attempt YAML Parse (Preferred)
             # We reconstruct the dict wrapper to be safe
-            full_yaml_str = f"automation_result:\n{raw_content}"
+            full_yaml_str = f"code_review_params:\n{raw_content}"
             data = yaml.safe_load(full_yaml_str)
             
-            if data and isinstance(data, dict) and "automation_result" in data:
-                return data["automation_result"]
+            if data and isinstance(data, dict) and "code_review_params" in data:
+                return data["code_review_params"]
             
         except yaml.YAMLError:
             logger.warning("YAML parsing failed for automation context. Attempting manual regex extraction.")

@@ -21,7 +21,7 @@ class AutomationContextDTO(BaseModel):
         Formats the context as a machine-readable YAML block for Jira descriptions.
         """
         data = {
-            "automation_result": {
+            "code_review_params": {
                 "gitlab_project_id": self.gitlab_project_id,
                 "source_branch_name": self.source_branch_name,
                 "review_request_url": self.review_request_url,
