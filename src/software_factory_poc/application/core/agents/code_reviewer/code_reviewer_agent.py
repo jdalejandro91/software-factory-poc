@@ -108,7 +108,7 @@ class CodeReviewerAgent(BaseAgent):
             verdict_emoji = {
                 "APPROVE": "✅",
                 "COMMENT": "💬",
-                "REQUEST_CHANGES": "🛑"
+                "REQUEST_CHANGES": "🚫"
             }.get(review_result.verdict.name, "📋")
 
             # Format requested: "Code Review Completed. Comments posted on MR: {link}. Verdict: {verdict}."
