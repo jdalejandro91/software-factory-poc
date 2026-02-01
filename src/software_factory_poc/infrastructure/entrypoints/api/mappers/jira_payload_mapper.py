@@ -22,15 +22,32 @@ class JiraPayloadMapper:
     @classmethod
     def _extract_from_dto(cls, payload: JiraWebhookDTO) -> ScaffoldingOrder:
         issue_key = payload.issue.key
-        description = payload.issue.fields.description or ""
+        raw_desc = payload.issue.fields.description or ""
         
-        logger.info(f"Processing Task {issue_key}. Raw Description: {repr(description)}")
+        logger.info(f"Processing Task {issue_key}. Raw Description Length: {len(raw_desc)}")
         
+        # 1. Parse Description for Scaffolding Block
+        from software_factory_poc.infrastructure.entrypoints.api.parsers.jira_description_parser import JiraDescriptionParser
+        task_desc = JiraDescriptionParser.parse(raw_desc)
+        
+        # 2. Extract Params
+        params = task_desc.scaffolding_params or {}
+        
+        tech_stack = params.get("technology_stack", "nestJS")
+        target_config = params.get("target", {})
+        extra_params = params.get("parameters", {})
+        
+        # 3. Build Order
         return ScaffoldingOrder(
             issue_key=issue_key,
-            raw_instruction=description,
+            raw_instruction=task_desc.human_text, # Use clean text
+            technology_stack=tech_stack,
+            target_config=target_config,
+            extra_params=extra_params,
             summary=payload.issue.fields.summary,
-            reporter=payload.user.display_name
+            reporter=payload.user.display_name,
+            project_key=payload.issue.project.key,
+            project_id=payload.issue.project.id
         )
 
     @classmethod
@@ -38,13 +55,26 @@ class JiraPayloadMapper:
         issue = payload.get("issue", {})
         fields = issue.get("fields", {})
         issue_key = issue.get("key", "UNKNOWN")
-        description = fields.get("description", "")
+        raw_desc = fields.get("description", "")
         
-        logger.info(f"Processing Task {issue_key}. Raw Description: {repr(description)}")
+        logger.info(f"Processing Task {issue_key}. Raw Description Length: {len(raw_desc)}")
 
+        # 1. Parse Description
+        from software_factory_poc.infrastructure.entrypoints.api.parsers.jira_description_parser import JiraDescriptionParser
+        task_desc = JiraDescriptionParser.parse(raw_desc)
+        
+        # 2. Extract Params
+        params = task_desc.scaffolding_params or {}
+        
+        # 3. Build Order
         return ScaffoldingOrder(
             issue_key=issue_key,
-            raw_instruction=description,
+            raw_instruction=task_desc.human_text,
+            technology_stack=params.get("technology_stack", "nestJS"),
+            target_config=params.get("target", {}),
+            extra_params=params.get("parameters", {}),
             summary=fields.get("summary", "No Summary"),
-            reporter=payload.get("user", {}).get("displayName", "Unknown")
+            reporter=payload.get("user", {}).get("displayName", "Unknown"),
+            project_key=fields.get("project", {}).get("key", ""),
+            project_id=fields.get("project", {}).get("id", "")
         )

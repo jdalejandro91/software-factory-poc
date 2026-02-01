@@ -8,8 +8,14 @@ class ScaffoldingOrder:
     technology_stack: str = "nestJS" # Default or Optional
     repository_url: str = ""
     project_id: str = ""
-    # Legacy fields kept optional or removed if unused?
-    # Keeping summary/reporter for now to avoid breaking other parsers if they exist, but making optional
+    target_config: dict = None
+    extra_params: dict = None
+    # Legacy fields
     summary: str = ""
     reporter: str = ""
     project_key: str = ""
+    
+    def __post_init__(self):
+        # Workaround for mutable defaults in dataclass if needed, 
+        # but since frozen=True and we assign in mapper, None is safer default
+        pass

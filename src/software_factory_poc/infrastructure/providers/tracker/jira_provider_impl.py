@@ -54,6 +54,7 @@ class JiraProviderImpl(TaskTrackerGateway):
              
              return Task(
                  id=json_data.get("key"),
+                 project_id=fields.get("project", {}).get("key", "UNKNOWN"),
                  summary=fields.get("summary", ""),
                  status=fields.get("status", {}).get("name", "Unknown"),
                  description=domain_desc
