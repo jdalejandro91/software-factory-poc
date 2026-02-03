@@ -53,8 +53,10 @@ class JiraProviderImpl(TaskTrackerGateway):
              domain_desc = self.mapper.to_domain(adf_desc)
              
              return Task(
-                 id=json_data.get("key"),
-                 project_id=fields.get("project", {}).get("key", "UNKNOWN"),
+                 id=json_data.get("id", "0"),
+                 key=json_data.get("key"),
+                 project_key=fields.get("project", {}).get("key", "UNKNOWN"),
+                 issue_type=fields.get("issuetype", {}).get("name", "Task"),
                  summary=fields.get("summary", ""),
                  status=fields.get("status", {}).get("name", "Unknown"),
                  description=domain_desc

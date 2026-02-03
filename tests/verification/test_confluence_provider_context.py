@@ -62,29 +62,88 @@ class TestConfluenceProviderContext(unittest.TestCase):
         self.assertIn("Content 1 is sufficiently long", ctx.documents[0].content)
 
     def test_get_project_context_root_not_found(self):
-        # 1. Setup Empty Result for Root
+        # 1. Setup Empty Result for Root AND Direct (Fallback)
         self.provider.http_client.search.return_value = []
 
         # 2. Execute & Assert
         with self.assertRaises(ProviderError) as cm:
             self.provider.get_project_context("unknown")
         
-        self.assertIn("Root folder 'projects' not found", str(cm.exception))
+        # New robust error message
+        self.assertIn("Project folder 'unknown' NOT FOUND", str(cm.exception))
 
     def test_get_project_context_project_not_found(self):
-        # 1. Setup Root Found but Project Not Found
+        # 1. Setup Root Found but Project Not Found, AND Direct Search Not Found
         self.provider.http_client.search.side_effect = [
-            [{"id": "root-123", "title": "Projects"}],
-            [] # Project Not Found
+            [{"id": "root-123", "title": "Projects"}], # Root -> Found
+            [], # Project under Root -> Not Found
+            []  # Direct Search (Fallback) -> Not Found
         ]
 
-        # 2. Execute
-        ctx = self.provider.get_project_context("new-service")
+        # 2. Execute & Assert
+        with self.assertRaises(ProviderError) as cm:
+            self.provider.get_project_context("new-service")
+        
+        self.assertIn("Project folder 'new-service' NOT FOUND", str(cm.exception))
 
-        # 3. Verify Empty Context
-        self.assertEqual(ctx.project_name, "new-service")
-        self.assertEqual(ctx.root_page_id, "N/A")
-        self.assertEqual(len(ctx.documents), 0)
+    def test_fallback_strategy_fetches_children(self):
+        # 1. Setup Failure for Root Finding (Hierarchical Search fails)
+        # First call returns [], causing fall through to direct search
+        # 2. Setup Success for Direct Search
+        # Second call returns the project folder directly
+        self.provider.http_client.search.side_effect = [
+            [], # Root Query -> Empty
+            [{"id": "999", "title": "shopping-cart"}] # Direct Query -> Found
+        ]
+        
+        # 3. Setup Children Fetch
+        self.provider.http_client.get_child_pages.return_value = [
+            {
+                "id": "doc-A", 
+                "title": "Doc A", 
+                "body": {"storage": {"value": "<p>Content A is sufficiently long to pass the 50 characters validation threshold required by the extractor.</p>"}}, 
+                "_links": {"webui": "/doc/A"},
+                "space": {"key": "DDS"}
+            },
+            {
+                "id": "doc-B", 
+                "title": "Doc B", 
+                "body": {"storage": {"value": "<p>Content B is also sufficiently long to pass the 50 characters validation threshold required by the extractor.</p>"}}, 
+                "_links": {"webui": "/doc/B"},
+                "space": {"key": "DDS"}
+            }
+        ]
+
+        # 4. Execute
+        ctx = self.provider.get_project_context("shopping-cart")
+
+        # 5. Verify
+        # Check call sequence
+        call_args_list = self.provider.http_client.search.call_args_list
+        self.assertEqual(len(call_args_list), 2)
+        # First query was root
+        self.assertIn('title in ("projects", "Projects")', call_args_list[0][0][0])
+        # Second query was direct
+        self.assertIn('space = "DDS" AND type = "page" AND title = "shopping-cart"', call_args_list[1][0][0])
+        
+        # Check Context Populated
+        self.assertEqual(ctx.project_name, "shopping-cart")
+        self.assertEqual(ctx.root_page_id, "999")
+        self.assertEqual(len(ctx.documents), 2)
+        self.assertEqual(ctx.documents[0].title, "Doc A")
+
+    def test_project_not_found_even_with_fallback(self):
+        # 1. Setup Failure for ALL Searches
+        self.provider.http_client.search.side_effect = [
+            [], # Root Query -> Empty
+            []  # Direct Query -> Empty
+        ]
+
+        # 2. Execute & Assert
+        with self.assertRaises(ProviderError) as cm:
+            self.provider.get_project_context("phantom-project")
+        
+        self.assertIn("NOT FOUND (searched hierarchically & directly", str(cm.exception))
 
 if __name__ == "__main__":
     unittest.main()

@@ -150,35 +150,45 @@ class ConfluenceProviderImpl(ResearchGateway):
         try:
             logger.info(f"Retrieving Project Context for: '{project_name}' (Space: {self.space_key})")
             
-            # Step A: Localizar la Página Raíz ("projects")
-            root_cql = f'space = "{self.space_key}" AND type = "page" AND title in ("projects", "Projects")'
-            root_results = self.http_client.search(root_cql)
+            # Strategy: 
+            # 1. Try to find via hierarchical root ("projects/name")
+            # 2. Fallback to direct search ("name")
             
-            if not root_results:
+            project_folder_id = None
+            
+            # Attempt 1: Hierarchical Search
+            try:
+                root_cql = f'space = "{self.space_key}" AND type = "page" AND title in ("projects", "Projects")'
+                root_results = self.http_client.search(root_cql)
+                
+                if root_results:
+                    root_id = root_results[0]["id"]
+                    project_cql = f'parent = {root_id} AND type = "page" AND title = "{project_name}"'
+                    project_results = self.http_client.search(project_cql)
+                    
+                    if project_results:
+                        project_folder_id = project_results[0]["id"]
+                        logger.info(f"📂 Found Project Folder '{project_name}' via Root (ID: {project_folder_id})")
+            except Exception as e:
+                logger.warning(f"Hierarchical search failed: {e}")
+
+            # Attempt 2: Direct Search (Fallback)
+            if not project_folder_id:
+                logger.info("⚠️ Hierarchical search failed/empty. Attempting Direct Search strategy...")
+                direct_cql = f'space = "{self.space_key}" AND type = "page" AND title = "{project_name}"'
+                direct_results = self.http_client.search(direct_cql)
+                
+                if direct_results:
+                    project_folder_id = direct_results[0]["id"]
+                    logger.info(f"🎯 Found project folder directly: {project_name} (ID: {project_folder_id})")
+
+            # Validate Result
+            if not project_folder_id:
                 raise ProviderError(
                     provider=ResearchProviderType.CONFLUENCE,
-                    message=f"Root folder 'projects' not found in space {self.space_key}",
+                    message=f"Project folder '{project_name}' NOT FOUND (searched hierarchically & directly in space {self.space_key})",
                     retryable=False
                 )
-            
-            root_id = root_results[0]["id"]
-            logger.info(f"📂 Found Root 'projects' (ID: {root_id})")
-            
-            # Step B: Localizar la Carpeta del Proyecto
-            # Strict exact match as requested
-            project_cql = f'parent = {root_id} AND type = "page" AND title = "{project_name}"'
-            project_results = self.http_client.search(project_cql)
-            
-            if not project_results:
-                logger.warning(f"⚠️ Project folder '{project_name}' NOT FOUND in Confluence under parent {root_id}.")
-                return ProjectContextDTO(
-                    project_name=project_name,
-                    root_page_id="N/A",
-                    documents=[],
-                )
-            
-            project_folder_id = project_results[0]["id"]
-            logger.info(f"📂 Found Project Folder '{project_name}' (ID: {project_folder_id})")
             
             # Step C: Recuperación Masiva de Hijos (Documentos)
             all_pages = []
@@ -226,6 +236,8 @@ class ConfluenceProviderImpl(ResearchGateway):
                 docs.append(doc)
                 
             logger.info(f"✅ Retrieved {len(docs)} documents for project '{project_name}'")
+            for doc in docs:
+                logger.debug(f"   - Found Doc: {doc.title} (ID: {doc.metadata.get('id')})")
             
             return ProjectContextDTO(
                 project_name=project_name,

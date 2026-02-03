@@ -190,6 +190,13 @@ class ScaffoldingAgent(BaseAgent):
         try:
             logger.info(f"🔎 Researching Project Context: '{service_name}'")
             ctx = self.researcher.research_project_technical_context(service_name)
+            
+            if ctx:
+                logger.info(f"📚 Project Context Loaded. Length: {len(ctx)} chars.")
+                logger.debug(f"Context Preview:\n{ctx[:500]}...")
+            else:
+                logger.warning(f"⚠️ No technical context found for service '{service_name}'")
+
             if "ADVERTENCIA" in ctx or "ERROR" in ctx:
                 return f"=== REQUISITOS DEL PROYECTO (ADVERTENCIA) ===\n{ctx}"
             return f"=== REQUISITOS DEL PROYECTO ===\n{ctx}"
