@@ -2,6 +2,7 @@ import logging
 import re
 from dataclasses import replace
 from typing import List, Optional
+from pydantic import ValidationError
 
 from software_factory_poc.application.core.agents.base_agent import BaseAgent
 from software_factory_poc.application.core.agents.common.config.task_status import TaskStatus
@@ -12,6 +13,7 @@ from software_factory_poc.application.core.agents.reporter.config.reporter_const
 from software_factory_poc.application.core.agents.reporter.reporter_agent import ReporterAgent
 from software_factory_poc.application.core.agents.research.research_agent import ResearchAgent
 from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import ScaffoldingAgentConfig
+from software_factory_poc.application.core.agents.scaffolding.exceptions.contract_parse_error import ContractParseError
 from software_factory_poc.application.core.agents.scaffolding.scaffolding_contract import ScaffoldingContractModel
 from software_factory_poc.application.core.agents.scaffolding.tools.artifact_parser import ArtifactParser
 from software_factory_poc.application.core.agents.scaffolding.tools.scaffolding_prompt_builder import ScaffoldingPromptBuilder
@@ -124,8 +126,35 @@ class ScaffoldingAgent(BaseAgent):
     def _parse_contract_or_fail(self, request: ScaffoldingOrder) -> ScaffoldingContractModel:
         try:
             return ScaffoldingContractModel.from_raw_text(request.raw_instruction)
-        except Exception as e:
-            logger.error(f"Contract parsing failed: {e}")
+        except (ContractParseError, ValueError, ValidationError) as e:
+            logger.warning(f"⚠️ YAML Contract parsing failed ({e}). Attempting to reconstruct from Mapper DTO...")
+            
+            # Fallback: Reconstruct from trusted params if available
+            if request.technology_stack and request.extra_params and request.extra_params.get("service_name"):
+                service_name = request.extra_params.get("service_name")
+                
+                # Synthetic reconstruction
+                try:
+                    contract = ScaffoldingContractModel(
+                        version="1.0",
+                        technology_stack=request.technology_stack,
+                        target={
+                            "gitlab_project_path": "unknown/manual-review",
+                            "branch_slug": f"feature/{service_name}-scaffolding"
+                        },
+                        parameters={
+                            "service_name": service_name,
+                            "description": f"Scaffolding for {service_name} ({request.technology_stack})",
+                            "owner_team": "Unknown"
+                        }
+                    )
+                    logger.info(f"✅ Contract reconstructed successfully using DTO params. Service: {service_name}")
+                    return contract
+                except Exception as reconstruction_error:
+                    logger.error(f"Fallback reconstruction failed: {reconstruction_error}")
+            
+            # If fallback fails or data is missing, fail hard.
+            logger.error(f"Contract parsing failed and fallback data missing: {e}")
             raise ValueError(f"Invalid Contract: {e}")
 
     def _apply_tech_stack_override(self, request: ScaffoldingOrder, contract: ScaffoldingContractModel) -> ScaffoldingOrder:
