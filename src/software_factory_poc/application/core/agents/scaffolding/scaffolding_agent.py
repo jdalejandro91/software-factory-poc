@@ -131,13 +131,29 @@ class ScaffoldingAgent(BaseAgent):
             reasoner: ReasonerAgent,
     ) -> List[FileContentDTO]:
         # Thanks to the replace(), request.technology_stack is now correctly updated (e.g. "TypeScript con NestJS")
-        query = f"Architecture standards for {request.technology_stack} enterprise projects"
-
-        logger.info(f"Researching: {query}")
-        research_ctx = researcher.investigate(query)
+        
+        # --- RESEARCH STRATEGY ---
+        research_ctx = ""
+        service_name = request.extra_params.get("service_name") if request.extra_params else None
+        page_id = request.extra_params.get("confluence_page_id") if request.extra_params else None
+        
+        if service_name:
+            logger.info(f"📚 Strategy: Project Context Research -> {service_name}")
+            research_ctx = researcher.research_project_technical_context(service_name)
+        elif page_id:
+             logger.info(f"🔍 Strategy: Specific Page Research -> {page_id}")
+             # We use the public investigate method which handles IDs via separate arg logic if needed,
+             # but here we can pass it directly or rely on the agent's logic.
+             # ResearchAgent.investigate(query, specific_page_id=None)
+             research_ctx = researcher.investigate("", specific_page_id=page_id)
+        else:
+            query = f"Architecture standards for {request.technology_stack} enterprise projects"
+            logger.info(f"🔎 Strategy: General Query Research -> {query}")
+            research_ctx = researcher.investigate(query)
+            
         logger.info(f"Research result length: {len(research_ctx)}")
 
-        full_context = f"Research:\n{research_ctx}"
+        full_context = f"Research (Technical Context):\n{research_ctx}"
         prompt = self.prompt_builder_tool.build_prompt(request, full_context)
 
         # --- MODEL SELECTION LOGIC ---

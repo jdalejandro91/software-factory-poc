@@ -14,6 +14,25 @@ logger = LoggerFactoryService.build_logger(__name__)
 from software_factory_poc.application.core.agents.research.dtos.document_content_dto import DocumentContentDTO
 from software_factory_poc.application.core.agents.research.dtos.project_context_dto import ProjectContextDTO
 
+from html.parser import HTMLParser
+
+class _ConfluenceHTMLParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.text_parts = []
+    
+    def handle_starttag(self, tag, attrs):
+        if tag in ['br', 'p', 'div', 'tr']:
+            self.text_parts.append('\n')
+        elif tag in ['td', 'th']:
+            self.text_parts.append(' | ')
+            
+    def handle_data(self, data):
+        self.text_parts.append(data)
+        
+    def get_text(self):
+        return "".join(self.text_parts).strip()
+
 class ConfluenceProviderImpl(ResearchGateway):
     """
     Adapter to retrieve knowledge from Confluence.
@@ -93,7 +112,9 @@ class ConfluenceProviderImpl(ResearchGateway):
                     break
             
             if val and isinstance(val, str) and len(val.strip()) > 50:
-                return self._sanitize_content(val)
+                parser = _ConfluenceHTMLParser()
+                parser.feed(val)
+                return self._sanitize_content(parser.get_text())
 
         # Fallback to string repr if nothing else matches, but sanitize it too
         return self._sanitize_content(str(page_obj))
@@ -159,25 +180,31 @@ class ConfluenceProviderImpl(ResearchGateway):
             project_page_id = project_results[0]["id"]
             
             # Step 3: Fetch Children with Content (Batch Optimization)
-            # 'expand=body.storage' puts the content in the response
-            # Note: We rely on the low-level client's get_page_children logic.
-            # If the client doesn't support expand, we might need N+1 calls, but let's assume valid client usage.
-            # Standard Atlassian API allows expand on children endpoint.
-            # self.http_client.confluence.get_page_child_by_type(page_id, type='page', expand='body.storage')
+            all_pages = []
+            start = 0
+            limit = 50
             
-            # Since we only have access to `self.http_client` wrapper, let's look at it.
-            # Wait, `ConfluenceHttpClient` is custom wrapper. We might need to access the underlying API or methods.
-            # Assuming `self.http_client.confluence` is the `atlassian.Confluence` object.
-            
-            children = self.http_client.get_child_pages(
-                page_id=project_page_id, 
-                limit=50, 
-                expand='body.storage'
-            )
+            while True:
+                results = self.http_client.get_child_pages(
+                    page_id=project_page_id, 
+                    limit=limit, 
+                    expand='body.storage'
+                )
+                
+                if not results:
+                    break
+                    
+                all_pages.extend(results)
+                start += limit
+                
+                # Check pagination via implicit rule: if less than limit returned, no more pages
+                # However, the user asked for explicit increment and break on empty results, which is safer
+                if len(results) < limit:
+                     break
             
             docs = []
-            for child in children:
-                raw_html = self._extract_text(child) # Reuse extraction/sanitization logic which handles dict navigation
+            for child in all_pages:
+                raw_html = self._extract_text(child) # Reuse extraction logic which uses _ConfluenceHTMLParser
                 
                 doc = DocumentContentDTO(
                     title=child.get("title", "Untitled"),
