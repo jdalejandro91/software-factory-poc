@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from software_factory_poc.application.core.agents.common.config.task_status import TaskStatus
+from software_factory_poc.application.core.domain.entities.task import Task
 
 
 class TaskTrackerGateway(ABC):
@@ -30,6 +31,6 @@ class TaskTrackerGateway(ABC):
         pass
 
     @abstractmethod
-    def get_task(self, task_id: str) -> Any:
+    def get_task(self, task_id: str) -> Task:
         """Retrieves the Task domain entity."""
         pass
