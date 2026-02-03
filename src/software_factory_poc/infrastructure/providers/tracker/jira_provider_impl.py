@@ -185,18 +185,42 @@ class JiraProviderImpl(TaskTrackerGateway):
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
     def update_task_description(self, task_id: str, description: TaskDescription) -> None:
-        """Updates the task description using ADF mapping."""
+        """Updates the task description by re-assembling Text + YAML Config."""
         self._logger.info(f"Updating description for task: {task_id}")
+        import yaml
+        
         try:
-            # Convert Domain Object -> ADF JSON
-            adf_content = self.mapper.to_adf(description)
+            # 1. Generate YAML Block from Config
+            yaml_str = yaml.dump(
+                description.config, 
+                default_flow_style=False, 
+                allow_unicode=True, 
+                sort_keys=False
+            ).strip()
+            
+            # 2. Assemble Final String (Raw Plain Text + Jira Macro YAML)
+            # Use {code:yaml} for Jira compatibility (Infrastructure concern)
+            yaml_block = f"{{code:yaml}}\n{yaml_str}\n{{code}}"
+            
+            final_description_text = f"{description.raw_content.strip()}\n\n{yaml_block}"
+            
+            # 3. Create Temporary Object for Mapping (or pass string if Mapper supports it, 
+            # but Mapper expects TaskDescription).
+            # We create a transient TaskDescription just for transport to ADF.
+            transient_desc = TaskDescription(
+                raw_content=final_description_text,
+                config=description.config
+            )
+
+            # 4. Map to ADF
+            adf_content = self.mapper.to_adf(transient_desc)
             
             payload = {
                 "fields": {
                     "description": adf_content
                 }
             }
-            # PUT replaces the entire description, but since we fetched->merged, it's safe.
+            # PUT replaces the entire description
             response = self.client.put(f"rest/api/3/issue/{task_id}", payload)
             response.raise_for_status()
         except Exception as e:

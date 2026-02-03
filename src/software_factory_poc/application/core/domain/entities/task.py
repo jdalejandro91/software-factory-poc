@@ -43,21 +43,11 @@ class Task:
                 target[key] = value
         return target
 
-    def _generate_yaml_block(self, data: Dict[str, Any], start_tag: str, end_tag: str) -> str:
-        """
-        Generates a clean YAML block encapsulated in tags.
-        """
-        import yaml
-        yaml_str = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False).strip()
-        return f"{start_tag}\n{yaml_str}\n{end_tag}"
-
     def update_metadata(self, new_context: Dict[str, Any]) -> "Task":
         """
-        Creates a new Task instance with merged configuration and updated raw content.
-        Safely preserves existing human text while updating the automation YAML block.
-        Preserves the formatting style (Jira {code} vs Markdown ```).
+        Creates a new Task instance with merged configuration.
+        Does NOT modify raw_content string (assumes it is pure text).
         """
-        import re
         from dataclasses import replace
         import copy
 
@@ -65,32 +55,6 @@ class Task:
         current_config = copy.deepcopy(self.description.config)
         self._merge_dictionaries(current_config, new_context)
 
-        # 2. Detect and Preserve Block Style
-        current_raw = self.description.raw_content
-        
-        # Robust Regex to capture delimiters
-        complex_pattern = r"(?P<start>```(?:yaml|yml|scaffolding)?|\{code(?::(?:yaml|yml|scaffolding))?(?:\|[\w=]+)*\})\s*(?P<content>[\s\S]*?)\s*(?P<end>```|\{code\})"
-        
-        match = re.search(complex_pattern, current_raw, re.IGNORECASE)
-        
-        if match:
-            start_tag = match.group("start")
-            end_tag = match.group("end")
-            
-            # Generate new block
-            new_block = self._generate_yaml_block(current_config, start_tag, end_tag)
-            
-            # Surgical Replacement
-            new_raw = current_raw.replace(match.group(0), new_block, 1)
-            
-        else:
-            # Default to Jira style if no block found
-            start_tag = "{code:yaml}"
-            end_tag = "{code}"
-            
-            formatted_yaml_block = self._generate_yaml_block(current_config, start_tag, end_tag)
-            new_raw = f"{current_raw.rstrip()}\n\n{formatted_yaml_block}"
-
-        # 3. Return new Task
-        new_description = replace(self.description, config=current_config, raw_content=new_raw)
+        # 2. Return new Task with updated config but same raw_content
+        new_description = replace(self.description, config=current_config, raw_content=self.description.raw_content)
         return replace(self, description=new_description)

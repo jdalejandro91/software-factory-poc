@@ -112,9 +112,11 @@ class JiraPayloadMapper:
     def _parse_description_config(cls, text: str) -> TaskDescription:
         """
         Extracts YAML config from text using robust Regex.
+        Separates the configuration block from the human-readable text.
         """
         match = cls.CODE_BLOCK_PATTERN.search(text)
         config: Dict[str, Any] = {}
+        clean_text = text
 
         if match:
             # Extract content
@@ -131,10 +133,14 @@ class JiraPayloadMapper:
                     logger.warning("Parsed YAML is not a dictionary. Ignoring.")
             except yaml.YAMLError as e:
                 logger.warning(f"Failed to parse YAML block in description: {e}")
+            
+            # Remove the configuration block from the raw text
+            # We replace the *entire match* (delimiters + content) with empty string
+            clean_text = text.replace(match.group(0), "").strip()
         else:
             logger.debug("No configuration block found in description.")
 
         return TaskDescription(
-            raw_content=text,
+            raw_content=clean_text,
             config=config
         )

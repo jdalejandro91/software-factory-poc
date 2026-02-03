@@ -15,7 +15,7 @@ class TestTaskMetadata(unittest.TestCase):
             )
         )
 
-    def test_update_metadata_replaces_block(self):
+    def test_update_metadata_merges_config_only(self):
         new_ctx = {"param2": "value2"}
         updated_task = self.task.update_metadata(new_ctx)
 
@@ -23,47 +23,9 @@ class TestTaskMetadata(unittest.TestCase):
         self.assertEqual(updated_task.description.config["param1"], "value1")
         self.assertEqual(updated_task.description.config["param2"], "value2")
 
-        # 2. Check Raw Content Updated
-        self.assertIn("param2: value2", updated_task.description.raw_content)
-        # Should preserve surrounding text
-        self.assertIn("Start description", updated_task.description.raw_content)
-        self.assertIn("End description", updated_task.description.raw_content)
-        # Should NOT have duplicate blocks (rough check)
-        self.assertEqual(updated_task.description.raw_content.count("```yaml"), 1)
+        # 2. Check Raw Content UNCHANGED
+        self.assertEqual(updated_task.description.raw_content, self.base_raw)
 
-    def test_jira_block_preservation(self):
-        jira_raw = "Initial text\n{code:yaml}\nold: data\n{code}\nFooter"
-        task_jira = Task(
-             id="3", key="T-3", summary="Jira", status="Todo", project_key="PROJ", issue_type="Task",
-             description=TaskDescription(raw_content=jira_raw, config={"old": "data"})
-        )
-        
-        updated_task = task_jira.update_metadata({"new": "data"})
-        
-        # Should PRESERVE Jira tags
-        self.assertIn("{code:yaml}", updated_task.description.raw_content)
-        self.assertIn("{code}", updated_task.description.raw_content)
-        self.assertNotIn("```", updated_task.description.raw_content)
-        
-        self.assertIn("new: data", updated_task.description.raw_content)
-        self.assertIn("Initial text", updated_task.description.raw_content)
-
-    def test_markdown_block_preservation(self):
-        md_raw = "Initial text\n```yaml\nold: data\n```\nFooter"
-        task_md = Task(
-             id="5", key="T-5", summary="Markdown", status="Todo", project_key="PROJ", issue_type="Task",
-             description=TaskDescription(raw_content=md_raw, config={"old": "data"})
-        )
-        
-        updated_task = task_md.update_metadata({"new": "data"})
-        
-        # Should PRESERVE Markdown tags
-        self.assertIn("```yaml", updated_task.description.raw_content)
-        self.assertIn("```", updated_task.description.raw_content)
-        self.assertNotIn("{code", updated_task.description.raw_content)
-        
-        self.assertIn("new: data", updated_task.description.raw_content)
-        
     def test_smart_merge_logic(self):
         base_cfg = {
             "root_val": 1,
@@ -92,20 +54,6 @@ class TestTaskMetadata(unittest.TestCase):
         self.assertEqual(new_cfg["code_review_params"]["new_param"], "add_me")
         # Check overwrite
         self.assertEqual(new_cfg["root_val"], 2)
-
-    def test_update_metadata_appends_block_if_missing(self):
-        task_no_yaml = Task(
-            id="2", key="T-2", summary="NoYaml", status="Todo", project_key="PROJ", issue_type="Task",
-            description=TaskDescription(raw_content="Just text", config={})
-        )
-        
-        updated_task = task_no_yaml.update_metadata({"new": "data"})
-        
-        self.assertIn("Just text", updated_task.description.raw_content)
-        self.assertIn("new: data", updated_task.description.raw_content)
-        # Defaults to Jira style now
-        self.assertIn("{code:yaml}", updated_task.description.raw_content)
-        self.assertIn("{code}", updated_task.description.raw_content)
 
     def test_immutability(self):
         new_ctx = {"changed": True}
