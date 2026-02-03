@@ -139,46 +139,106 @@ class ConfluenceProviderImpl(ResearchGateway):
 
         return clean_text
 
+    def _traverse_path(self, segments: list[str]) -> str | None:
+        """
+        Traverses a hierarchical path in Confluence segment by segment.
+        Returns the ID of the final node if found, else None.
+        Query logic:
+        - Root: space="{key}" AND title="{segment}"
+        - Child: parent={id} AND title="{segment}"
+        Note: We omit 'type="page"' to support "folders" or other content types acting as containers.
+        """
+        current_parent_id = None
+        
+        path_str = " / ".join(segments)
+        logger.debug(f"Starting Path Traversal: {path_str}")
+
+        for i, segment in enumerate(segments):
+            if current_parent_id is None:
+                # Root Search
+                cql = f'space = "{self.space_key}" AND title = "{segment}"'
+            else:
+                # Child Search
+                cql = f'parent = {current_parent_id} AND title = "{segment}"'
+                
+            try:
+                # We use strict search first.
+                results = self.http_client.search(cql)
+                
+                if not results:
+                     # Attempt case-insensitive match/normalization search if strict fails?
+                     # For now, strict title match as per requirements for "Explicit Path"
+                     logger.debug(f"Path traversal broken at segment '{segment}'.")
+                     return None
+                
+                # Assume first match is correct (titles should be unique under a parent)
+                node = results[0]
+                current_parent_id = node['id']
+                # logger.debug(f"   + Resolved '{segment}' -> ID: {current_parent_id}")
+                
+            except Exception as e:
+                logger.warning(f"Error traversing path at segment '{segment}': {e}")
+                return None
+                
+        return current_parent_id
+
     def get_project_context(self, project_name: str) -> ProjectContextDTO:
         """
         Retrieves project-specific documentation from Confluence.
         Algorithm:
-        1. Find "projects" root page in strict Space.
-        2. Find specific project folder (child of root).
-        3. Fetch all children documents recursively or flatly.
+        1. Explicit Path Traversal (Full & Short)
+        2. Direct Search (Fuzzy)
+        3. Bag of Words Search
+        4. List & Filter
         """
         try:
             logger.info(f"Retrieving Project Context for: '{project_name}' (Space: {self.space_key})")
             
-            # Strategy: 
-            # 1. Try to find via hierarchical root ("projects/name")
-            # 2. Fallback to direct search ("name")
-            
             project_folder_id = None
             
-            # Attempt 1: Hierarchical Search
-            try:
-                root_cql = f'space = "{self.space_key}" AND type = "page" AND title in ("projects", "Projects")'
-                root_results = self.http_client.search(root_cql)
-                
-                if root_results:
-                    root_id = root_results[0]["id"]
-                    project_cql = f'parent = {root_id} AND type = "page" AND title = "{project_name}"'
-                    project_results = self.http_client.search(project_cql)
-                    
-                    if project_results:
-                        project_folder_id = project_results[0]["id"]
-                        logger.info(f"📂 Found Project Folder '{project_name}' via Root (ID: {project_folder_id})")
-            except Exception as e:
-                logger.warning(f"Hierarchical search failed: {e}")
-
-            # Attempt 2: Direct Search (Fallback with Fuzzy)
+            # Strategies defined in order of precision/safety
+            
+            # Strategy 1: Full Explicit Path
+            # Path: Desarrollo de software / projects / {project_name}
             if not project_folder_id:
-                logger.info("⚠️ Hierarchical search failed/empty. Attempting Direct Search strategy (Fuzzy)...")
+                full_path = ["Desarrollo de software", "projects", project_name]
+                project_folder_id = self._traverse_path(full_path)
+                if project_folder_id:
+                    logger.info(f"📍 Context found via Full Path Traversal: /{' / '.join(full_path)} (ID: {project_folder_id})")
+
+            # Strategy 2: Short Explicit Path
+            # Path: projects / {project_name}
+            if not project_folder_id:
+                short_path = ["projects", project_name]
+                project_folder_id = self._traverse_path(short_path)
+                if project_folder_id:
+                    logger.info(f"📍 Context found via Short Path Traversal: /{' / '.join(short_path)} (ID: {project_folder_id})")
+
+            # Strategy 3: Legacy Hierarchical (Root "projects" (fuzzy) -> Child)
+            # This is essentially covered by Strategy 2 but uses 'IN ("projects", "Projects")' logic
+            if not project_folder_id:
+                try:
+                    root_cql = f'space = "{self.space_key}" AND title in ("projects", "Projects")'
+                    root_results = self.http_client.search(root_cql)
+                    
+                    if root_results:
+                        root_id = root_results[0]["id"]
+                        project_cql = f'parent = {root_id} AND title = "{project_name}"'
+                        project_results = self.http_client.search(project_cql)
+                        
+                        if project_results:
+                            project_folder_id = project_results[0]["id"]
+                            logger.info(f"📂 Found Project Folder '{project_name}' via Legacy Root Search (ID: {project_folder_id})")
+                except Exception as e:
+                    logger.warning(f"Legacy Hierarchical search failed: {e}")
+
+            # Strategy 4: Direct Search (Fuzzy)
+            if not project_folder_id:
+                logger.info("⚠️ Hierarchical strategies failed. Attempting Direct Search strategy (Fuzzy)...")
                 logger.info(f"Trying Fuzzy Search for '{project_name}'...")
                 
                 # Use CONTAINS operator (~) to handle hyphens tokenization
-                direct_cql = f'space = "{self.space_key}" AND type = "page" AND title ~ "{project_name}"'
+                direct_cql = f'space = "{self.space_key}" AND title ~ "{project_name}"'
                 direct_results = self.http_client.search(direct_cql)
                 
                 if direct_results:
@@ -194,20 +254,20 @@ class ConfluenceProviderImpl(ResearchGateway):
                     if not project_folder_id:
                         logger.warning(f"Fuzzy search returned {len(direct_results)} results but no exact title match for '{project_name}'.")
 
-            # Attempt 3: Bag of Words Search (Hyphen-Agnostic)
+            # Strategy 5: Bag of Words Search (Hyphen-Agnostic)
             if not project_folder_id:
                 parts = re.split(r'[-_ ]+', project_name)
-                parts = [p for p in parts if p.strip()]  # Remove empty strings
+                parts = [p.strip().lower() for p in parts if p.strip()]  # Remove empty strings & lowercase for CQL safety
                 
                 if len(parts) > 1:
                     logger.info(f"⚠️ Direct Fuzzy search failed. Attempting Bag of Words strategy for parts: {parts}...")
                     
-                    # Construct AND query for all parts
-                    # title ~ "part1" AND title ~ "part2"
-                    and_clauses = [f'title ~ "{part}"' for part in parts]
-                    bag_cql = f'space = "{self.space_key}" AND type = "page" AND {" AND ".join(and_clauses)}'
+                    # Construct OR query for all parts to be resilient against tokenization issues
+                    # title ~ "part1" OR title ~ "part2"
+                    or_clauses = [f'title ~ "{part}"' for part in parts]
+                    bag_cql = f'space = "{self.space_key}" AND ({" OR ".join(or_clauses)})'
                     
-                    bag_results = self.http_client.search(bag_cql)
+                    bag_results = self.http_client.search(bag_cql, limit=50)
                     
                     if bag_results:
                         # Filter: "shopping cart" in "project shopping cart".normalized()
@@ -225,12 +285,12 @@ class ConfluenceProviderImpl(ResearchGateway):
                         if not project_folder_id:
                              logger.warning(f"Bag of Words returned {len(bag_results)} candidates but none matched normalized target '{target_norm}'.")
 
-            # Attempt 4: List & Filter Recent Pages (Last Resort)
+            # Strategy 6: List & Filter Recent Pages (Last Resort)
             if not project_folder_id:
                 logger.info("⚠️ Bag of Words failed. Attempting 'List & Filter' strategy usage recent pages...")
                 # Fetch recent pages (e.g., last 50-100 modified/created)
                 # Note: 'recentlyUpdated' might be better than created if it's active.
-                list_cql = f'space = "{self.space_key}" AND type = "page" order by lastModified desc'
+                list_cql = f'space = "{self.space_key}" order by lastModified desc'
                 # We assume http_client.search uses a default limit (often 10-25). 
                 # Ideally we want more assurance, but let's trust "limit=50" if search supports it or default is sufficient.
                 # Since search takes just cql string in current interface, we rely on default or string limit if supported.

@@ -39,9 +39,9 @@ class ConfluenceHttpClient:
         data = response.json()
         return data.get("results", [])
 
-    def get_child_pages(self, page_id: str, limit: int = 50, expand: str = "body.storage") -> list[dict]:
+    def get_child_pages(self, page_id: str, start: int = 0, limit: int = 50, expand: str = "body.storage") -> list[dict]:
         """Obtiene las páginas hijas directas."""
         path = f"rest/api/content/{page_id}/child/page"
-        response = self.get(path, params={"limit": limit, "expand": expand})
+        response = self.get(path, params={"start": start, "limit": limit, "expand": expand})
         response.raise_for_status()
         return response.json().get("results", [])
