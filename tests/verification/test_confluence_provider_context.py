@@ -123,14 +123,41 @@ class TestConfluenceProviderContext(unittest.TestCase):
         self.assertEqual(len(call_args_list), 2)
         # First query was root
         self.assertIn('title in ("projects", "Projects")', call_args_list[0][0][0])
-        # Second query was direct
-        self.assertIn('space = "DDS" AND type = "page" AND title = "shopping-cart"', call_args_list[1][0][0])
+        # Second query was direct (Fuzzy)
+        self.assertIn('space = "DDS" AND type = "page" AND title ~ "shopping-cart"', call_args_list[1][0][0])
         
         # Check Context Populated
         self.assertEqual(ctx.project_name, "shopping-cart")
         self.assertEqual(ctx.root_page_id, "999")
         self.assertEqual(len(ctx.documents), 2)
         self.assertEqual(ctx.documents[0].title, "Doc A")
+
+    def test_fuzzy_search_resolves_folder_and_children(self):
+        # 1. Setup Failure for Root
+        # 2. Setup Success for Fuzzy Search (returns noise + correct match)
+        self.provider.http_client.search.side_effect = [
+            [], # Root -> Empty
+            [
+                {"id": "888", "title": "Start Shopping Cart Now"}, # Noise
+                {"id": "999", "title": "Shopping Cart"} # Exact Match (after normalization)
+            ] 
+        ]
+        
+        # 3. Setup Children
+        self.provider.http_client.get_child_pages.return_value = [
+            {"id": "d1", "title": "T1", "body": "...", "_links": {}, "space": {}}
+        ]
+
+        # 4. Execute
+        ctx = self.provider.get_project_context("shopping-cart")
+
+        # 5. Verify
+        self.assertEqual(ctx.root_page_id, "999") # Should pick the exact match
+        self.assertEqual(len(ctx.documents), 1)
+        
+        # Check fuzzy query syntax
+        call_args = self.provider.http_client.search.call_args_list[1]
+        self.assertIn('title ~ "shopping-cart"', call_args[0][0])
 
     def test_project_not_found_even_with_fallback(self):
         # 1. Setup Failure for ALL Searches

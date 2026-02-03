@@ -172,15 +172,27 @@ class ConfluenceProviderImpl(ResearchGateway):
             except Exception as e:
                 logger.warning(f"Hierarchical search failed: {e}")
 
-            # Attempt 2: Direct Search (Fallback)
+            # Attempt 2: Direct Search (Fallback with Fuzzy)
             if not project_folder_id:
-                logger.info("⚠️ Hierarchical search failed/empty. Attempting Direct Search strategy...")
-                direct_cql = f'space = "{self.space_key}" AND type = "page" AND title = "{project_name}"'
+                logger.info("⚠️ Hierarchical search failed/empty. Attempting Direct Search strategy (Fuzzy)...")
+                logger.info(f"Trying Fuzzy Search for '{project_name}'...")
+                
+                # Use CONTAINS operator (~) to handle hyphens tokenization
+                direct_cql = f'space = "{self.space_key}" AND type = "page" AND title ~ "{project_name}"'
                 direct_results = self.http_client.search(direct_cql)
                 
                 if direct_results:
-                    project_folder_id = direct_results[0]["id"]
-                    logger.info(f"🎯 Found project folder directly: {project_name} (ID: {project_folder_id})")
+                    # Filter: Find the best match where normalized title equals project_name
+                    normalized_target = project_name.lower().strip()
+                    for res in direct_results:
+                        res_title = res.get("title", "").lower().replace(" ", "-") # normalize Confluence title to kebab-case
+                        if res_title == normalized_target:
+                            project_folder_id = res["id"]
+                            logger.info(f"🎯 Found project folder directly: {project_name} (ID: {project_folder_id}). Fetching children...")
+                            break
+                    
+                    if not project_folder_id:
+                        logger.warning(f"Fuzzy search returned {len(direct_results)} results but no exact title match for '{project_name}'.")
 
             # Validate Result
             if not project_folder_id:
