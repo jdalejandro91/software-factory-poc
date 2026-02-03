@@ -1,13 +1,11 @@
-import logging
 import re
+from datetime import datetime
 from typing import List, Optional, Any, Dict
 
 from software_factory_poc.application.core.agents.base_agent import BaseAgent
 from software_factory_poc.application.core.agents.common.config.task_status import TaskStatus
-from software_factory_poc.application.core.agents.common.dtos.automation_context_dto import AutomationContextDTO
 from software_factory_poc.application.core.agents.common.dtos.file_content_dto import FileContentDTO
 from software_factory_poc.application.core.agents.reasoner.reasoner_agent import ReasonerAgent
-from software_factory_poc.application.core.agents.reporter.config.reporter_constants import ReporterMessages
 from software_factory_poc.application.core.agents.reporter.reporter_agent import ReporterAgent
 from software_factory_poc.application.core.agents.research.research_agent import ResearchAgent
 from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import \
@@ -17,8 +15,9 @@ from software_factory_poc.application.core.agents.scaffolding.tools.scaffolding_
     ScaffoldingPromptBuilder
 from software_factory_poc.application.core.agents.vcs.vcs_agent import VcsAgent
 from software_factory_poc.application.core.domain.entities.task import Task
+from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 
-logger = logging.getLogger(__name__)
+logger = LoggerFactoryService.build_logger(__name__)
 
 
 class ScaffoldingAgent(BaseAgent):
@@ -28,22 +27,22 @@ class ScaffoldingAgent(BaseAgent):
     """
 
     def __init__(
-        self,
-        config: ScaffoldingAgentConfig,
-        reporter: ReporterAgent,
-        vcs: VcsAgent,
-        researcher: ResearchAgent,
-        reasoner: ReasonerAgent
+            self,
+            config: ScaffoldingAgentConfig,
+            reporter: ReporterAgent,
+            vcs: VcsAgent,
+            researcher: ResearchAgent,
+            reasoner: ReasonerAgent
     ):
         super().__init__(name="ScaffoldingAgent", role="Orchestrator", goal="Orchestrate scaffolding creation")
-        
+
         # Dependencies (Composition)
         self.config = config
         self.reporter = reporter
         self.vcs = vcs
         self.researcher = researcher
         self.reasoner = reasoner
-        
+
         # Internal Tools
         self.prompt_builder_tool = ScaffoldingPromptBuilder()
         self.artifact_parser_tool = ArtifactParser()
@@ -58,29 +57,27 @@ class ScaffoldingAgent(BaseAgent):
             # Phase 1: Preparation & Validation
             # Config is already parsed in task.description.config
             task_config = task.description.config
-            
+
             # extract key parameters
             tech_stack = task_config.get("technology_stack", "unknown")
             service_name = task_config.get("parameters", {}).get("service_name")
-            
+
             target_repo, project_id, continue_flow = self._validate_preconditions(task, task_config)
-            
+
             if not continue_flow:
                 return
 
             # Phase 2: Intelligence (Research & Reasoning)
             research_context = self._execute_research_strategy(tech_stack, service_name)
-            
-            # Pass full config/task to prompt builder? 
-            # Assuming prompt builder needs to be updated or we pass relevant data. 
-            # For now passing task and config.
+
+            # Pass full config/task to prompt builder
             artifacts = self._generate_artifacts(task, research_context)
 
             # Phase 3: Execution (VCS Operations)
             branch_name = self._get_branch_name(task)
             self._create_feature_branch(project_id, branch_name)
             self._commit_artifacts(project_id, branch_name, artifacts, task)
-            
+
             mr_link = self._create_merge_request(project_id, branch_name, task)
 
             # Phase 4: Finalization
@@ -101,7 +98,7 @@ class ScaffoldingAgent(BaseAgent):
         # 1. Target Repo Resolution
         target_repo = self._resolve_target_repo(task, config)
         project_id = self.vcs.resolve_project_id(target_repo)
-        
+
         # 2. Security Check
         self._check_security_permissions(target_repo)
 
@@ -111,9 +108,9 @@ class ScaffoldingAgent(BaseAgent):
 
         if existing_url:
             self._report_branch_exists(task, branch_name, existing_url, project_id)
-            return target_repo, project_id, False # Stop execution
-            
-        return target_repo, project_id, True # Continue execution
+            return target_repo, project_id, False  # Stop execution
+
+        return target_repo, project_id, True  # Continue execution
 
     def _resolve_target_repo(self, task: Task, config: Dict[str, Any]) -> str:
         # Check config "target" -> "gitlab_project_path" or "gitlab_project_id"
@@ -122,15 +119,10 @@ class ScaffoldingAgent(BaseAgent):
             return target.get("gitlab_project_path")
         if target.get("gitlab_project_id"):
             return str(target.get("gitlab_project_id"))
-        
-        # Fallback to project key if mappable? or fail.
-        # Check task.project_key? 
-        # For POC, assuming strict config or known repo.
-        # Return a default/fallback if needed or raise.
+
         if task.project_key:
-             # This is weak, but matching legacy behavior fallback
-             return f"generated/{task.project_key.lower()}"
-             
+            return f"generated/{task.project_key.lower()}"
+
         raise ValueError("Target repository not found in Task Configuration.")
 
     def _check_security_permissions(self, target_repo: str) -> None:
@@ -144,11 +136,12 @@ class ScaffoldingAgent(BaseAgent):
             raise PermissionError(f"Security Policy Violation: Group '{group}' is not authorized.")
 
     def _report_branch_exists(self, task: Task, branch_name: str, url: str, project_id: int) -> None:
-        logger.warning(f"🛑 STOPPING FLOW: Branch '{branch_name}' already exists. URL: {url}. To regenerate, delete this branch in GitLab.")
-        
+        logger.warning(
+            f"🛑 STOPPING FLOW: Branch '{branch_name}' already exists. URL: {url}. To regenerate, delete this branch in GitLab.")
+
         # Check for active MR
         mr_url = self.vcs.gateway.get_active_mr_url(project_id, branch_name)
-        
+
         links = {}
         if mr_url:
             links["🔗 Ver Merge Request Existing"] = mr_url
@@ -161,7 +154,7 @@ class ScaffoldingAgent(BaseAgent):
             "summary": "Se detectó que la rama ya existe en el repositorio. No se realizaron cambios nuevos.",
             "links": links
         }
-        
+
         self.reporter.report_success(task.key, message_payload)
         self.reporter.transition_task(task.key, TaskStatus.IN_REVIEW)
 
@@ -190,7 +183,7 @@ class ScaffoldingAgent(BaseAgent):
         try:
             logger.info(f"🔎 Researching Project Context: '{service_name}'")
             ctx = self.researcher.research_project_technical_context(service_name)
-            
+
             if ctx:
                 logger.info(f"📚 Project Context Loaded. Length: {len(ctx)} chars.")
                 logger.debug(f"Context Preview:\n{ctx[:500]}...")
@@ -219,32 +212,24 @@ class ScaffoldingAgent(BaseAgent):
         return f"=== CONTEXTO GENERAL ===\n{self.researcher.investigate(query)}"
 
     def _generate_artifacts(self, task: Task, context: str) -> List[FileContentDTO]:
-        # NOTE: Prompt builder needs to be compatible with Task or receive strings
-        # Currently ScaffoldingPromptBuilder likely expects ScaffoldingOrder.
-        # We might need to adapter or update it. 
-        # For now, converting Task to a simple object or updating builder is needed.
-        # Assuming we can mock/pass a dict-like or standard object.
-        # OR better: update Prompt Builder to accept Task. 
-        # I will update the call here to be generic or assume Builder handles it.
-        # Let's pass the Task object, assuming I will fix Builder if broken.
         prompt = self.prompt_builder_tool.build_prompt_from_task(task, context)
         model_id = self._resolve_model_id()
-        
+
         raw_response = self.reasoner.reason(prompt, model_id)
         artifacts = self.artifact_parser_tool.parse_response(raw_response)
-        
+
         if not artifacts:
             raise ValueError("LLM generated 0 artifacts. Cannot proceed.")
-        
+
         return artifacts
 
     def _resolve_model_id(self) -> str | List[str]:
         if self.config.llm_model_priority:
             return [m.qualified_name for m in self.config.llm_model_priority]
-        
+
         if self.config.model_name:
             return self.config.model_name
-            
+
         logger.warning("No model configured. Fallback to default.")
         return "openai:gpt-4-turbo"
 
@@ -285,26 +270,40 @@ class ScaffoldingAgent(BaseAgent):
             target_branch=self.config.default_target_branch
         )
         logger.info(f"MR Created successfully. Link: {mr.web_url}")
-        
+
         if not mr.web_url or not mr.web_url.startswith("http"):
             raise ValueError(f"Invalid MR Link generated: '{mr.web_url}'")
-            
+
         return mr.web_url
 
     # --- Phase 4: Finalization Methods ---
 
     def _finalize_success(self, task: Task, project_id: int, branch_name: str, mr_link: str) -> None:
-        # 1. Inject Automation Context
-        context = AutomationContextDTO.from_values(
-            project_id=str(project_id),
-            branch=branch_name,
-            mr_url=mr_link
-        )
-        updated_task = task.update_metadata(context.model_dump())
-        logger.info(f"New description: {updated_task.description.config}")
+        """
+        Finalizes the task by updating metadata and transitioning status.
+        Constructs a nested 'code_review_params' dictionary to ensure correct YAML structure.
+        """
+        # 1. Prepare Context Dictionary (Nested Structure)
+        # We explicitly nest parameters under 'code_review_params' so deep_merge
+        # adds them as a child object, not at the root.
+        context = {
+            "code_review_params": {
+                "gitlab_project_id": str(project_id),
+                "source_branch_name": branch_name,
+                "review_request_url": mr_link,
+                "generated_at": datetime.utcnow().isoformat()
+            }
+        }
+
+        # 2. Update Task Entity (Deep Merge)
+        updated_task = task.update_metadata(context)
+        logger.info(f"Metadata updated. New Config Keys: {list(updated_task.description.config.keys())}")
+
+        # 3. Update Jira Description
+        # This will trigger JiraProvider to re-render the YAML with the new nested structure
         self.reporter.update_task_description(task.key, updated_task.description)
 
-        # 2. Report Success Comment
+        # 4. Report Success Comment
         message_payload = {
             "type": "scaffolding_success",
             "title": "Scaffolding Completado Exitosamente",
@@ -313,7 +312,7 @@ class ScaffoldingAgent(BaseAgent):
         }
         self.reporter.report_success(task.key, message_payload)
 
-        # 3. Transition
+        # 5. Transition
         self._transition_to_review(task)
         logger.info(f"Task {task.key} completed successfully.")
 
@@ -323,7 +322,6 @@ class ScaffoldingAgent(BaseAgent):
     def _handle_critical_failure(self, task: Task, error: Exception) -> None:
         logger.error(f"Task {task.key} failed: {error}", exc_info=True)
         self.reporter.report_failure(task.key, str(error))
-        
-        # Optional: Transition back to TODO or keep in Progress depending on business rule
+
         self.reporter.transition_task(task.key, TaskStatus.TO_DO)
         logger.info(f"Error handled gracefully for task {task.key}. Flow terminated.")

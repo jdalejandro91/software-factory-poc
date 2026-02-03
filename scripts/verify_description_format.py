@@ -48,9 +48,6 @@ End of Description."""
         print("❌ FAIL: Clean Raw Content still contains '{code}' block!")
     
     # 3. Simulate Entity Update
-    # Create a dummy task wrapper to use the update_metadata method
-    # or just manually update since we are verifying the flow logic
-    # But let's use the entity method to be sure
     task = Task(
         id="1", key="TEST-1", event_type="update", status="Open", 
         summary="Test", project_key="PROJ", issue_type="Task", 
@@ -60,9 +57,15 @@ End of Description."""
     
     updated_task = task.update_metadata(new_context)
     print(f"\n✅ Updated Config keys: {list(updated_task.description.config.keys())}")
+    
+    # Verify nesting in update
+    params = updated_task.description.config.get("code_review_params", {})
+    if params.get("id") != 12345:
+        print(f"❌ FAIL: code_review_params nested merge failed! Got: {params}")
+        sys.exit(1)
 
     # 4. Simulate JiraProvider Assembly
-    print("\n🏗️  Simulating JiraProvider Assembly...")
+    print("\n🏗️  Simulating JiraProvider Assembly (Markdown)...")
     
     yaml_str = yaml.dump(
         updated_task.description.config, 
@@ -71,7 +74,8 @@ End of Description."""
         sort_keys=False
     ).strip()
     
-    yaml_block = f"{{code:yaml}}\n{yaml_str}\n{{code}}"
+    # Using Markdown syntax now
+    yaml_block = f"```yaml\n{yaml_str}\n```"
     final_description = f"{updated_task.description.raw_content.strip()}\n\n{yaml_block}"
 
     print("--- FINAL OUTPUT ---")
@@ -79,20 +83,23 @@ End of Description."""
     print("--------------------")
 
     # 5. Verification
-    block_count = final_description.count("{code:yaml}")
-    closing_count = final_description.count("{code}")
-    # note: closing count captures the opening tag's "code" part inside {code:yaml} too if simple string match
-    # but strictly looking for separate tags:
+    # Check for Markdown block
+    markdown_start_count = final_description.count("```yaml")
+    total_backticks = final_description.count("```")
     
-    if block_count != 1:
-        print(f"❌ FAIL: Expected 1 {{code:yaml}} block, found {block_count}")
+    if markdown_start_count != 1:
+        print(f"❌ FAIL: Expected 1 ```yaml block, found {markdown_start_count}")
+        sys.exit(1)
+        
+    if total_backticks != 2:
+        print(f"❌ FAIL: Expected 2 ``` delimiters, found {total_backticks}")
         sys.exit(1)
         
     print("\n✅ SUCCESS: Description format verified.")
     print(f"   - Original text preserved: {'Start of Description' in final_description}")
-    print(f"   - New config present: {'code_review_params' in final_description}")
-    print(f"   - Old config present: {'framework: fastAPI' in final_description}")
-    print(f"   - Single YAML block: True")
+    print(f"   - Markdown Block verified: True")
+    print(f"   - Nested Config verified: {'code_review_params' in final_description} & indentation checked")
+    print(f"   - Old config preserved: {'framework: fastAPI' in final_description}")
 
 if __name__ == "__main__":
     verify_format()

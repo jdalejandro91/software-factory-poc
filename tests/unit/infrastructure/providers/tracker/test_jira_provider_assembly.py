@@ -15,7 +15,13 @@ class TestJiraProviderAssembly(unittest.TestCase):
     def test_update_task_description_format(self):
         # 1. SETUP
         clean_raw_content = "Requerimiento de arquitectura..."
-        config = {"version": "1.0", "new_param": "value"}
+        # Nested config simulation
+        config = {
+            "version": "1.0", 
+            "code_review_params": {
+                "gitlab_project_id": 999
+            }
+        }
         
         description = TaskDescription(
             raw_content=clean_raw_content,
@@ -34,44 +40,34 @@ class TestJiraProviderAssembly(unittest.TestCase):
         args, kwargs = self.mock_client.put.call_args
         payload = args[1]
         
-        # Extract the content sent to Jira
-        # The mapper wraps it in a paragraph, let's find the text node.
-        # Structure is {"fields": {"description": {"content": [{"content": [{"text": "..."}]}]}}}
         adf_content = payload["fields"]["description"]["content"]
         paragraph = adf_content[0]
         text_node = paragraph["content"][0]
         sent_text = text_node["text"]
         
-        print(f"\n[DEBUG] Final Assembled Text: {sent_text}")
-        print(f"[DEBUG] Repr: {repr(sent_text)}")
+        print(f"\n[DEBUG] Final Assembled Text:\n{repr(sent_text)}")
         
-        count_yaml_start = sent_text.count("{code:yaml}")
-        count_code = sent_text.count("{code}")
+        # Assertions for "Markdown Output"
+        # 1. Start Tag: Expect markdown ```yaml
+        self.assertEqual(sent_text.count("```yaml"), 1, "Should have exactly one opening ```yaml block")
         
-        print(f"[DEBUG] count({{code:yaml}}) = {count_yaml_start}")
-        print(f"[DEBUG] count({{code}}) = {count_code}")
-        
-        # Assertions for "Perfect Format"
-        # 1. Start Tag Count
-        self.assertEqual(count_yaml_start, 1, f"Should have exactly one opening code:yaml tag. Found {count_yaml_start}")
-        
-        # 2. Closing Tag Count
-        # Note: "{code:yaml}" does NOT contain "{code}" as a substring (the brace is after yaml).
-        # So we expect exactly ONE "{code}" which is the closing tag.
-        self.assertEqual(count_code, 1, f"Should have exactly one closing {{code}} tag. Found {count_code}")
+        # 2. Total Backtick Triplets: Expect 2 (Start + End)
+        self.assertEqual(sent_text.count("```"), 2, "Should have exactly two ``` delimiters")
         
         # 3. Content Checks
         self.assertIn("Requerimiento de arquitectura...", sent_text)
-        self.assertIn("version: '1.0'", sent_text) # yaml dump quotes strings often, check loosely or exacting
-        self.assertIn("new_param: value", sent_text)
+        self.assertIn("version: '1.0'", sent_text)
+        self.assertIn("code_review_params:", sent_text)
         
-        # 4. Order Check: Text first, then double newline, then code block
-        # We can spli and check parts
-        parts = sent_text.split("\n\n{code:yaml}")
-        self.assertEqual(len(parts), 2, "Should be split exactly once by double newline + code start")
+        # 4. Indentation Check (YAML nesting)
+        # We expect "  gitlab_project_id: 999" (2 spaces indent)
+        self.assertIn("  gitlab_project_id: 999", sent_text)
         
+        # 5. Order Check
+        parts = sent_text.split("\n\n```yaml")
+        self.assertEqual(len(parts), 2, "Should be split exactly once by double newline + markdown start")
         self.assertEqual(parts[0].strip(), clean_raw_content)
-        self.assertTrue(parts[1].strip().endswith("{code}"), "Code block should end with closing tag")
+        self.assertTrue(parts[1].strip().endswith("```"), "Block should end with closing backticks")
 
 if __name__ == "__main__":
     unittest.main()
