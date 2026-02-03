@@ -78,7 +78,8 @@ class TestConfluenceProviderContext(unittest.TestCase):
             [{"id": "root-123", "title": "Projects"}], # Root -> Found
             [], # Project under Root -> Not Found
             [], # Direct Search (Fallback) -> Not Found
-            []  # Bag of Words (Fallback 2) -> Not Found
+            [], # Bag of Words (Fallback 2) -> Not Found
+            []  # List & Filter (Fallback 3) -> Not Found
         ]
 
         # 2. Execute & Assert
@@ -188,12 +189,40 @@ class TestConfluenceProviderContext(unittest.TestCase):
         self.assertIn('title ~ "shopping"', call_args[0][0])
         self.assertIn('title ~ "cart"', call_args[0][0])
 
+    def test_list_filter_fallback_resolves_folder(self):
+        # 1. Setup Failures for Root, Direct Fuzzy, Bag of Words
+        # 2. Setup Success for List & Filter
+        self.provider.http_client.search.side_effect = [
+            [], # Root -> Empty
+            [], # Direct Fuzzy -> Empty
+            [], # Bag of Words -> Empty
+            [   # List & Filter -> Found via Python normalization
+                {"id": "666", "title": "Project - Shopping Cart"} 
+            ]
+        ]
+        
+        self.provider.http_client.get_child_pages.return_value = []
+        
+        # 3. Execute
+        ctx = self.provider.get_project_context("shopping-cart")
+        
+        # 4. Verify
+        self.assertEqual(ctx.root_page_id, "666")
+        
+        # Check call args for 4th call
+        call_args = self.provider.http_client.search.call_args_list[3]
+        params = call_args[1] if len(call_args) > 1 else {} 
+        # Since I changed signature to search(query, limit=25), check kwargs or args
+        # check limit arg
+        self.assertEqual(call_args[1].get('limit'), 50)
+        
     def test_project_not_found_even_with_fallback(self):
-        # 1. Setup Failure for ALL Searches (Root, Direct Fuzzy, Bag of Words)
+        # 1. Setup Failure for ALL Searches (Root, Direct Fuzzy, Bag of Words, List & Filter)
         self.provider.http_client.search.side_effect = [
             [], # Root Query -> Empty
             [], # Direct Fuzzy -> Empty
-            []  # Bag of Words -> Empty
+            [], # Bag of Words -> Empty
+            []  # List & Filter -> Empty
         ]
 
         # 2. Execute & Assert

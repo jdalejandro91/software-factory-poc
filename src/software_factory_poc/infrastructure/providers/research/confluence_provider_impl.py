@@ -210,20 +210,47 @@ class ConfluenceProviderImpl(ResearchGateway):
                     bag_results = self.http_client.search(bag_cql)
                     
                     if bag_results:
-                        # Filter: "shoppingcart" in "Start Shopping Cart Now".normalized()
-                        target_norm = project_name.lower().replace(" ", "").replace("-", "").replace("_", "")
+                        # Filter: "shopping cart" in "project shopping cart".normalized()
+                        # Normalization: lower, replace -/_ with SPACE
+                        target_norm = project_name.lower().replace("-", " ").replace("_", " ").strip()
                         
                         for res in bag_results:
-                            found_title_norm = res.get("title", "").lower().replace(" ", "").replace("-", "").replace("_", "")
+                            found_title_norm = res.get("title", "").lower().replace("-", " ").replace("_", " ").strip()
                             
                             if target_norm in found_title_norm:
                                 project_folder_id = res["id"]
-                                logger.info(f"🎯 Found project folder via Bag of Words: {res.get('title')} (ID: {project_folder_id}). Fetching children...")
+                                logger.info(f"✅ Found folder '{res.get('title')}' (ID: {project_folder_id}) using Tokenized Search.")
                                 break
                         
                         if not project_folder_id:
                              logger.warning(f"Bag of Words returned {len(bag_results)} candidates but none matched normalized target '{target_norm}'.")
 
+            # Attempt 4: List & Filter Recent Pages (Last Resort)
+            if not project_folder_id:
+                logger.info("⚠️ Bag of Words failed. Attempting 'List & Filter' strategy usage recent pages...")
+                # Fetch recent pages (e.g., last 50-100 modified/created)
+                # Note: 'recentlyUpdated' might be better than created if it's active.
+                list_cql = f'space = "{self.space_key}" AND type = "page" order by lastModified desc'
+                # We assume http_client.search uses a default limit (often 10-25). 
+                # Ideally we want more assurance, but let's trust "limit=50" if search supports it or default is sufficient.
+                # Since search takes just cql string in current interface, we rely on default or string limit if supported.
+                # Confluence CQL supports 'limit X' but provider might wrap it. 
+                # We use the explicit limit parameter of the client.
+                
+                recent_results = self.http_client.search(list_cql, limit=50)
+                
+                if recent_results:
+                     target_norm = project_name.lower().replace(" ", "").replace("-", "").replace("_", "")
+                     for res in recent_results:
+                        found_title_norm = res.get("title", "").lower().replace(" ", "").replace("-", "").replace("_", "")
+                        
+                        # Exact normalized match check specifically here to be safer than "in" for this broad list
+                        # Or 'in' if we want to catch "Project: Shopping Cart"
+                        if target_norm in found_title_norm:
+                            project_folder_id = res["id"]
+                            logger.info(f"🎯 Found project folder via List & Filter: {res.get('title')} (ID: {project_folder_id}). Fetching children...")
+                            break
+                            
             # Validate Result
             if not project_folder_id:
                 raise ProviderError(

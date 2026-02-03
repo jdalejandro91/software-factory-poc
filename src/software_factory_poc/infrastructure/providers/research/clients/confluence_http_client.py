@@ -28,13 +28,13 @@ class ConfluenceHttpClient:
         response.raise_for_status()
         return response.json()
 
-    def search(self, query: str) -> list[dict]:
+    def search(self, query: str, limit: int = 25) -> list[dict]:
         """Busca páginas usando CQL (Confluence Query Language)."""
         # Asumimos búsqueda por título o texto si no es CQL puro
         cql_expression = f'text ~ "{query}"' if "=" not in query else query
         
         path = "rest/api/content/search"
-        response = self.get(path, params={"cql": cql_expression, "limit": 1, "expand": "body.storage,body.view"})
+        response = self.get(path, params={"cql": cql_expression, "limit": limit, "expand": "body.storage,body.view"})
         response.raise_for_status()
         data = response.json()
         return data.get("results", [])
