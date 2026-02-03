@@ -24,6 +24,11 @@ class VcsGateway(ABC):
         pass
 
     @abstractmethod
+    def get_branch_details(self, project_id: int, branch_name: str) -> Optional[BranchDTO]:
+        """Retrieves branch details including web URL."""
+        pass
+
+    @abstractmethod
     @abstractmethod
     def commit_files(self, project_id: int, branch_name: str, files_map: dict[str, str], commit_message: str, force_create: bool = False) -> CommitResultDTO:
         """Commits files to a branch."""
@@ -59,4 +64,9 @@ class VcsGateway(ABC):
     @abstractmethod
     def validate_mr_exists(self, project_id: int, mr_id: str) -> bool:
         """Checks if a Merge Request exists and is accessible."""
+        pass
+
+    @abstractmethod
+    def get_active_mr_url(self, project_id: int, source_branch: str) -> Optional[str]:
+        """Retrieves the URL of an active MR for a specific branch."""
         pass

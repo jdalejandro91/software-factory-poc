@@ -26,21 +26,12 @@ class VcsAgent(BaseAgent):
         """Resolves the project ID for a given repository URL."""
         return self.gateway.resolve_project_id(repo_url)
 
-    def validate_branch(self, project_id: int, branch_name: str, repo_url_hint: str = "") -> Optional[str]:
+    def validate_branch(self, project_id: int, branch_name: str) -> Optional[str]:
         """Checks if a branch exists and returns its URL if it does."""
-        if not self.gateway.branch_exists(project_id, branch_name):
-            return None
-            
-        # Construct URL manually for robustness
-        # Strip .git suffix if present
-        base_repo = repo_url_hint
-        if base_repo.endswith(".git"):
-            base_repo = base_repo[:-4]
-        base_repo = base_repo.rstrip("/")
-        
-        # Determine separator based on provider hint in URL
-        separator = "/-/tree/" if "gitlab" in base_repo else "/tree/"
-        return f"{base_repo}{separator}{branch_name}"
+        dto = self.gateway.get_branch_details(project_id, branch_name)
+        if dto:
+            return dto.web_url
+        return None
 
     def create_branch(self, project_id: int, branch_name: str, ref: str = "main") -> BranchDTO:
         """Creates a new branch from main."""

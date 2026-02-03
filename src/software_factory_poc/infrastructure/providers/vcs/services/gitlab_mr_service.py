@@ -75,3 +75,8 @@ class GitLabMrService:
             
         response = self.client.post(path, payload)
         response.raise_for_status()
+    def list_mrs(self, project_id: int, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        path = f"api/v4/projects/{project_id}/merge_requests"
+        response = self.client.get(path, params=params)
+        response.raise_for_status()
+        return response.json()

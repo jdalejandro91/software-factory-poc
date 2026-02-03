@@ -93,6 +93,33 @@ class GitLabProviderImpl(VcsGateway):
             raise
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
+    def get_branch_details(self, project_id: int, branch_name: str) -> Optional[BranchDTO]:
+        self._logger.info(f"Getting branch details: {branch_name} (Project: {project_id})")
+        try:
+            result = self.branch_service.get_branch(project_id, branch_name)
+            if not result:
+                return None
+            return BranchDTO(
+                name=result.get("name", branch_name),
+                web_url=result.get("web_url", "")
+            )
+        except Exception as e:
+            self._handle_error(e, f"get_branch_details({branch_name})")
+            raise
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
+    def get_active_mr_url(self, project_id: int, source_branch: str) -> Optional[str]:
+        self._logger.info(f"Looking for active MR for branch '{source_branch}' (Project: {project_id})")
+        try:
+            mrs = self.mr_service.list_mrs(project_id, {"source_branch": source_branch, "state": "opened"})
+            if mrs:
+                return mrs[0].get("web_url")
+            return None
+        except Exception as e:
+            self._handle_error(e, f"get_active_mr_url({source_branch})")
+            raise
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
     def branch_exists(self, project_id: int, branch_name: str) -> bool:
         self._logger.info(f"Checking if branch exists: {branch_name} (Project: {project_id})")
         try:

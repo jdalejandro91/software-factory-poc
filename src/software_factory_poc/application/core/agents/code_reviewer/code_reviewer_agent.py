@@ -57,7 +57,7 @@ class CodeReviewerAgent(BaseAgent):
         logger.info(f"Starting code review for Task {task.key}")
         
         try:
-            self.reporter.report_start(task.key, message="🧐 Iniciando revisión de código (Entity-Based)...")
+            self.reporter.report_start(task.key, message="🧐 Iniciando revisión de código...")
 
             # Extract Params from Task Config
             cr_params = task.description.config.get("code_review_params", {})

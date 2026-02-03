@@ -92,7 +92,7 @@ class ScaffoldingAgent(BaseAgent):
     # --- Phase 1: Analysis & Validation Methods ---
 
     def _report_start(self, task: Task) -> None:
-        self.reporter.report_start(task.key, message="🚀 Iniciando generación de scaffolding (Entity-Based)...")
+        self.reporter.report_start(task.key, message="🚀 Iniciando generación de scaffolding...")
 
     def _validate_preconditions(self, task: Task, config: Dict[str, Any]) -> tuple[str, int, bool]:
         """
@@ -107,10 +107,10 @@ class ScaffoldingAgent(BaseAgent):
 
         # 3. Branch Existence Check
         branch_name = self._get_branch_name(task)
-        existing_url = self.vcs.validate_branch(project_id, branch_name, target_repo)
+        existing_url = self.vcs.validate_branch(project_id, branch_name)
 
         if existing_url:
-            self._report_branch_exists(task, branch_name, existing_url)
+            self._report_branch_exists(task, branch_name, existing_url, project_id)
             return target_repo, project_id, False # Stop execution
             
         return target_repo, project_id, True # Continue execution
@@ -143,9 +143,26 @@ class ScaffoldingAgent(BaseAgent):
             logger.warning(f"Security Block: Group '{group}' not in allowlist.")
             raise PermissionError(f"Security Policy Violation: Group '{group}' is not authorized.")
 
-    def _report_branch_exists(self, task: Task, branch_name: str, url: str) -> None:
-        msg = f"{ReporterMessages.BRANCH_EXISTS_PREFIX}{branch_name}|{url}"
-        self.reporter.report_success(task.key, msg)
+    def _report_branch_exists(self, task: Task, branch_name: str, url: str, project_id: int) -> None:
+        logger.warning(f"🛑 STOPPING FLOW: Branch '{branch_name}' already exists. URL: {url}. To regenerate, delete this branch in GitLab.")
+        
+        # Check for active MR
+        mr_url = self.vcs.gateway.get_active_mr_url(project_id, branch_name)
+        
+        links = {}
+        if mr_url:
+            links["🔗 Ver Merge Request Existing"] = mr_url
+        else:
+            links["🔗 Ver Rama Existente"] = url
+
+        message_payload = {
+            "type": "scaffolding_exists",
+            "title": "⚠️ El Scaffolding ya existe",
+            "summary": "Se detectó que la rama ya existe en el repositorio. No se realizaron cambios nuevos.",
+            "links": links
+        }
+        
+        self.reporter.report_success(task.key, message_payload)
         self.reporter.transition_task(task.key, TaskStatus.IN_REVIEW)
 
     # --- Phase 2: Intelligence Methods ---
