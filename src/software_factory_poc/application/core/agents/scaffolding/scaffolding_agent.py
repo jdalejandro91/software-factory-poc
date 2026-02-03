@@ -281,11 +281,9 @@ class ScaffoldingAgent(BaseAgent):
     def _finalize_success(self, task: Task, project_id: int, branch_name: str, mr_link: str) -> None:
         """
         Finalizes the task by updating metadata and transitioning status.
-        Constructs a nested 'code_review_params' dictionary to ensure correct YAML structure.
         """
-        # 1. Prepare Context Dictionary (Nested Structure)
-        # We explicitly nest parameters under 'code_review_params' so deep_merge
-        # adds them as a child object, not at the root.
+        # 1. Prepare Explicit Context Dictionary (Nested)
+        # This ensures parameters appear under 'code_review_params' key in the final YAML
         context = {
             "code_review_params": {
                 "gitlab_project_id": str(project_id),
@@ -297,10 +295,9 @@ class ScaffoldingAgent(BaseAgent):
 
         # 2. Update Task Entity (Deep Merge)
         updated_task = task.update_metadata(context)
-        logger.info(f"Metadata updated. New Config Keys: {list(updated_task.description.config.keys())}")
-
+        logger.info(f"Metadata updated. Config keys: {list(updated_task.description.config.keys())}")
+        
         # 3. Update Jira Description
-        # This will trigger JiraProvider to re-render the YAML with the new nested structure
         self.reporter.update_task_description(task.key, updated_task.description)
 
         # 4. Report Success Comment

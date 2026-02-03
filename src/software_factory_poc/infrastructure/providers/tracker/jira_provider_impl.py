@@ -180,57 +180,47 @@ class JiraProviderImpl(TaskTrackerGateway):
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
     def update_task_description(self, task_id: str, description: TaskDescription) -> None:
-        """Updates the task description by re-assembling Text + YAML Config."""
+        """
+        Updates the task description in Jira.
+        1. Cleans old code blocks from the raw text.
+        2. Uses Mapper to generate the structured ADF payload.
+        3. Sends the payload to Jira.
+        """
         self._logger.info(f"Updating description for task: {task_id}")
-
+        
         try:
-            # 1. Generate YAML Block from Config
-            yaml_str = yaml.dump(
-                description.config,
-                default_flow_style=False,
-                allow_unicode=True,
-                sort_keys=False
-            ).strip()
+            # 1. Defensive Cleaning: Remove any existing code blocks from the human text
+            # This prevents duplication if the mapper extraction wasn't perfect previously
+            clean_raw_content = description.raw_content
+            
+            # Regex to strip Jira {code}...{code} blocks
+            clean_raw_content = re.sub(r'\{code(?:[:|][^\}]*)?\}.*?\{code\}', '', clean_raw_content, flags=re.DOTALL | re.IGNORECASE)
+            # Regex to strip Markdown ```...``` blocks
+            clean_raw_content = re.sub(r'```.*?```', '', clean_raw_content, flags=re.DOTALL)
+            
+            clean_raw_content = clean_raw_content.strip()
 
-            # 2. Defense: Force Clean previous blocks
-            clean_raw_content = description.raw_content.strip()
-
-            # Check for ANY known code block markers (Markdown or Jira) and strip them if they leaked
-            if "{code" in clean_raw_content or "```" in clean_raw_content:
-                self._logger.warning(f"⚠️ Raw content for {task_id} still contains code blocks! Force-cleaning.")
-
-                # Strip Jira {code}...{code}
-                clean_raw_content = re.sub(r'\{code.*?\{code\}', '', clean_raw_content, flags=re.DOTALL | re.IGNORECASE)
-                # Strip Markdown ```...```
-                clean_raw_content = re.sub(r'```.*?```', '', clean_raw_content, flags=re.DOTALL)
-
-                clean_raw_content = clean_raw_content.strip()
-
-            # 3. Assemble Final String using MARKDOWN format (```yaml)
-            # This renders much better in modern Jira Cloud
-            yaml_block = f"```yaml\n{yaml_str}\n```"
-
-            final_description_text = f"{clean_raw_content}\n\n{yaml_block}"
-
-            # 4. Create Temporary Object for Mapping
-            transient_desc = TaskDescription(
-                raw_content=final_description_text,
+            # 2. Create a clean DTO
+            clean_description = TaskDescription(
+                raw_content=clean_raw_content,
                 config=description.config
             )
 
-            # 5. Map to ADF
-            adf_content = self.mapper.to_adf(transient_desc)
+            # 3. Map to ADF (Atlassian Document Format)
+            # The mapper handles creating the "codeBlock" node.
+            adf_payload = self.mapper.to_adf(clean_description)
+            
+            self._logger.info("✅ Generated ADF payload with native codeBlock.")
 
-            self._logger.info("✅ Assembled final description with ONE clean Markdown YAML block.")
-
+            # 4. Send Request
             payload = {
                 "fields": {
-                    "description": adf_content
+                    "description": adf_payload
                 }
             }
-            # PUT replaces the entire description
             response = self.client.put(f"rest/api/3/issue/{task_id}", payload)
             response.raise_for_status()
+            
         except Exception as e:
             self._handle_error(e, f"update_task_description({task_id})")
             raise

@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional
 
 from software_factory_poc.application.core.domain.entities.task import TaskDescription
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
+from software_factory_poc.infrastructure.providers.tracker.mappers.jira_adf_primitives import JiraAdfPrimitives
 
 logger = LoggerFactoryService.build_logger(__name__)
 
@@ -83,31 +84,48 @@ class JiraDescriptionMapper:
 
     def to_adf(self, description: TaskDescription) -> Dict[str, Any]:
         """
-        Converts a domain TaskDescription into a Jira ADF JSON object.
-        Simple implementation: Puts raw content into a paragraph. 
-        Detailed reconstruction from 'config' is skipped as we assume raw_content holds the source of truth.
+        Converts a domain TaskDescription into a native Jira ADF JSON object.
+        - Maps 'raw_content' to a standard Paragraph node.
+        - Maps 'config' dictionary to a specific 'codeBlock' node (language=yaml).
         """
-        adf = {
-            "version": 1,
-            "type": "doc",
-            "content": []
-        }
+        content_nodes = []
 
+        # 1. Human Text (Paragraph Node)
         if description.raw_content:
-            # Split by newlines to avoid massive single line
-            lines = description.raw_content.split('\n')
-            # For better formatting, we could try to detect code blocks, but for now, 
-            # safety first: simplistic text rendering.
-             
-            paragraph_node = {
-                "type": "paragraph",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": description.raw_content
-                    }
-                ]
-            }
-            adf["content"].append(paragraph_node)
+            clean_text = description.raw_content.strip()
+            if clean_text:
+                # Add text paragraph
+                paragraph_node = JiraAdfPrimitives.create_paragraph([
+                    JiraAdfPrimitives.create_text(clean_text)
+                ])
+                content_nodes.append(paragraph_node)
 
-        return adf
+        # 2. YAML Configuration (Native Code Block Node)
+        if description.config:
+            try:
+                # Dump YAML preserving order
+                yaml_str = yaml.dump(
+                    description.config, 
+                    sort_keys=False, 
+                    default_flow_style=False, 
+                    allow_unicode=True
+                ).strip()
+
+                # Add spacing paragraph if text exists
+                if content_nodes:
+                    content_nodes.append(JiraAdfPrimitives.create_paragraph([]))
+
+                # Create the dedicated Code Block node using primitives
+                # This ensures Jira renders it as a highlighted box, not plain text.
+                code_block_node = JiraAdfPrimitives.create_code_block(yaml_str, language="yaml")
+                content_nodes.append(code_block_node)
+                
+            except Exception as e:
+                logger.error(f"Failed to dump config to YAML in to_adf: {e}")
+                # Fallback error text
+                content_nodes.append(JiraAdfPrimitives.create_paragraph([
+                     JiraAdfPrimitives.create_text("Error rendering configuration block.")
+                ]))
+
+        # Return the full ADF Document
+        return JiraAdfPrimitives.create_doc(content_nodes)

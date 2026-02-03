@@ -1,16 +1,17 @@
 import sys
 import os
 import yaml
+import json
 
 # Add src to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 
 from software_factory_poc.infrastructure.entrypoints.api.mappers.jira_payload_mapper import JiraPayloadMapper
+from software_factory_poc.infrastructure.providers.tracker.mappers.jira_description_mapper import JiraDescriptionMapper
 from software_factory_poc.application.core.domain.entities.task import TaskDescription, Task
 
 def verify_format():
     # 1. Setup Sample Data
-    # Simulating a Jira description with attributes in the code block (the case that was failing)
     original_description = """Start of Description.
 Human readable requirement 1.
 Human readable requirement 2.
@@ -37,7 +38,6 @@ End of Description."""
 
     # 2. Parse (Simulate Inbound Webhook)
     print("🚀 Parsing with JiraPayloadMapper...")
-    # Accessing the classmethod directly for focused testing
     parsed_desc: TaskDescription = JiraPayloadMapper._parse_description_config(original_description)
     
     print(f"✅ Parsed Config keys: {list(parsed_desc.config.keys())}")
@@ -64,42 +64,49 @@ End of Description."""
         print(f"❌ FAIL: code_review_params nested merge failed! Got: {params}")
         sys.exit(1)
 
-    # 4. Simulate JiraProvider Assembly
-    print("\n🏗️  Simulating JiraProvider Assembly (Markdown)...")
+    # 4. Simulate JiraProvider Assembly (Native ADF)
+    print("\n🏗️  Simulating JiraProvider Assembly (Native ADF)...")
     
-    yaml_str = yaml.dump(
-        updated_task.description.config, 
-        default_flow_style=False, 
-        allow_unicode=True, 
-        sort_keys=False
-    ).strip()
+    mapper = JiraDescriptionMapper()
+    adf_payload = mapper.to_adf(updated_task.description)
     
-    # Using Markdown syntax now
-    yaml_block = f"```yaml\n{yaml_str}\n```"
-    final_description = f"{updated_task.description.raw_content.strip()}\n\n{yaml_block}"
-
-    print("--- FINAL OUTPUT ---")
-    print(final_description)
-    print("--------------------")
+    print("--- FINAL ADF OUTPUT ---")
+    print(json.dumps(adf_payload, indent=2))
+    print("------------------------")
 
     # 5. Verification
-    # Check for Markdown block
-    markdown_start_count = final_description.count("```yaml")
-    total_backticks = final_description.count("```")
+    # Check structure
+    if adf_payload.get("type") != "doc":
+        print(f"❌ FAIL: Expected type 'doc', found {adf_payload.get('type')}")
+        sys.exit(1)
+        
+    content_nodes = adf_payload.get("content", [])
     
-    if markdown_start_count != 1:
-        print(f"❌ FAIL: Expected 1 ```yaml block, found {markdown_start_count}")
+    # Identify nodes
+    has_text = any(n["type"] == "paragraph" for n in content_nodes if any("Start of Description" in t.get("text", "") for t in n.get("content", [])))
+    
+    code_blocks = [n for n in content_nodes if n["type"] == "codeBlock"]
+    
+    if not has_text:
+        print("❌ FAIL: Original text paragraph not found in ADF!")
+        sys.exit(1)
+
+    if len(code_blocks) != 1:
+        print(f"❌ FAIL: Expected exactly 1 codeBlock, found {len(code_blocks)}")
         sys.exit(1)
         
-    if total_backticks != 2:
-        print(f"❌ FAIL: Expected 2 ``` delimiters, found {total_backticks}")
+    yaml_node = code_blocks[0]
+    if yaml_node.get("attrs", {}).get("language") != "yaml":
+        print(f"❌ FAIL: CodeBlock language is not YAML!")
         sys.exit(1)
         
-    print("\n✅ SUCCESS: Description format verified.")
-    print(f"   - Original text preserved: {'Start of Description' in final_description}")
-    print(f"   - Markdown Block verified: True")
-    print(f"   - Nested Config verified: {'code_review_params' in final_description} & indentation checked")
-    print(f"   - Old config preserved: {'framework: fastAPI' in final_description}")
+    yaml_text = yaml_node["content"][0]["text"]
+    
+    print("\n✅ SUCCESS: Description format verified (Native ADF).")
+    print(f"   - Original text preserved in Paragraph: {has_text}")
+    print(f"   - Native CodeBlock verified: True")
+    print(f"   - Nested Config verified: {'code_review_params' in yaml_text}")
+    print(f"   - Old config preserved: {'framework: fastAPI' in yaml_text}")
 
 if __name__ == "__main__":
     verify_format()

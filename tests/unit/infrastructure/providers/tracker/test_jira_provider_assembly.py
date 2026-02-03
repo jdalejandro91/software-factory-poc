@@ -12,10 +12,9 @@ class TestJiraProviderAssembly(unittest.TestCase):
         self.mock_settings = MagicMock(spec=JiraSettings)
         self.provider = JiraProviderImpl(self.mock_client, self.mock_settings)
         
-    def test_update_task_description_format(self):
+    def test_update_task_description_generates_native_adf(self):
         # 1. SETUP
         clean_raw_content = "Requerimiento de arquitectura..."
-        # Nested config simulation
         config = {
             "version": "1.0", 
             "code_review_params": {
@@ -40,34 +39,42 @@ class TestJiraProviderAssembly(unittest.TestCase):
         args, kwargs = self.mock_client.put.call_args
         payload = args[1]
         
-        adf_content = payload["fields"]["description"]["content"]
-        paragraph = adf_content[0]
-        text_node = paragraph["content"][0]
-        sent_text = text_node["text"]
+        # Structure check: {"fields": {"description": {"content": [...], "type": "doc", "version": 1}}}
+        adf = payload["fields"]["description"]
+        self.assertEqual(adf["type"], "doc")
+        self.assertEqual(adf["version"], 1)
         
-        print(f"\n[DEBUG] Final Assembled Text:\n{repr(sent_text)}")
+        content_nodes = adf["content"]
+        # Expecting: 
+        # 1. Paragraph (Text)
+        # 2. Paragraph (Spacer - optional depending on impl, but mapper calls create_paragraph([]))
+        # 3. CodeBlock (YAML)
         
-        # Assertions for "Markdown Output"
-        # 1. Start Tag: Expect markdown ```yaml
-        self.assertEqual(sent_text.count("```yaml"), 1, "Should have exactly one opening ```yaml block")
+        # Let's inspect the nodes types
+        node_types = [n["type"] for n in content_nodes]
+        print(f"[DEBUG] Generated Node Types: {node_types}")
         
-        # 2. Total Backtick Triplets: Expect 2 (Start + End)
-        self.assertEqual(sent_text.count("```"), 2, "Should have exactly two ``` delimiters")
+        # We expect at least one paragraph and one codeBlock
+        self.assertIn("paragraph", node_types)
+        self.assertIn("codeBlock", node_types)
         
-        # 3. Content Checks
-        self.assertIn("Requerimiento de arquitectura...", sent_text)
-        self.assertIn("version: '1.0'", sent_text)
-        self.assertIn("code_review_params:", sent_text)
+        # Verify Text Content
+        text_node = content_nodes[0]
+        self.assertEqual(text_node["type"], "paragraph")
+        self.assertEqual(text_node["content"][0]["text"], clean_raw_content)
         
-        # 4. Indentation Check (YAML nesting)
-        # We expect "  gitlab_project_id: 999" (2 spaces indent)
-        self.assertIn("  gitlab_project_id: 999", sent_text)
+        # Verify Code Block
+        # The code block should be the last one usually
+        code_block = content_nodes[-1]
+        self.assertEqual(code_block["type"], "codeBlock")
+        self.assertEqual(code_block["attrs"]["language"], "yaml")
         
-        # 5. Order Check
-        parts = sent_text.split("\n\n```yaml")
-        self.assertEqual(len(parts), 2, "Should be split exactly once by double newline + markdown start")
-        self.assertEqual(parts[0].strip(), clean_raw_content)
-        self.assertTrue(parts[1].strip().endswith("```"), "Block should end with closing backticks")
+        yaml_content = code_block["content"][0]["text"]
+        print(f"[DEBUG] YAML Content:\n{yaml_content}")
+        
+        self.assertIn("version: '1.0'", yaml_content)
+        self.assertIn("code_review_params:", yaml_content)
+        self.assertIn("gitlab_project_id: 999", yaml_content)
 
 if __name__ == "__main__":
     unittest.main()
