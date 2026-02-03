@@ -1,18 +1,16 @@
 from functools import lru_cache
+from typing import Union
 
 from fastapi import APIRouter, BackgroundTasks, Depends, status, Request
 from fastapi.responses import JSONResponse
 
-from software_factory_poc.application.core.agents.scaffolding.value_objects.scaffolding_order import (
-    ScaffoldingOrder,
-)
+from software_factory_poc.application.core.domain.entities.task import Task
 from software_factory_poc.application.usecases.scaffolding.create_scaffolding_usecase import (
     CreateScaffoldingUseCase,
 )
 from software_factory_poc.infrastructure.configuration.app_config import AppConfig
 from software_factory_poc.infrastructure.configuration.main_settings import Settings
 from software_factory_poc.infrastructure.entrypoints.api.dtos.jira_webhook_dto import JiraWebhookDTO
-# from software_factory_poc.infrastructure.entrypoints.api.mappers.jira_mapper import JiraMapper # Legacy mapper removed/deprecated
 from software_factory_poc.infrastructure.entrypoints.api.mappers.jira_payload_mapper import JiraPayloadMapper
 from software_factory_poc.infrastructure.entrypoints.api.security import validate_api_key
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
@@ -29,16 +27,9 @@ def get_usecase(settings: Settings = Depends(get_settings)) -> CreateScaffolding
     from software_factory_poc.infrastructure.configuration.scaffolding_config_loader import ScaffoldingConfigLoader
     scaffolding_config = ScaffoldingConfigLoader.load_config()
     
-    # 2. Infra Resolver (The "Switch")
-    # Instantiate AppConfig (Centralized Configuration)
-    # Ideally should be done once via Depends(get_app_config) but for now local instantiation works 
-    # as it reads env vars efficiently (Pydantic caches/lazy loads if configured, or just fast enough).
     app_config = AppConfig()
-    
-    # Use the injected settings which contains environment variables loaded once
     resolver = ProviderResolver(scaffolding_config, app_config=app_config)
     
-    # 3. Use Case
     return CreateScaffoldingUseCase(
         config=scaffolding_config,
         resolver=resolver
@@ -50,21 +41,26 @@ async def trigger_scaffold(
     background_tasks: BackgroundTasks,
     usecase: CreateScaffoldingUseCase = Depends(get_usecase)
 ):
-    jira_request = await _process_incoming_webhook(request)
-    
-    if isinstance(jira_request, JSONResponse):
-        return jira_request
+    try:
+        task_entity = await _process_incoming_webhook(request)
         
-    # Fire and Forget
-    background_tasks.add_task(usecase.execute, jira_request)
-    
-    return {
-        "status": "accepted",
-        "message": "Scaffolding request queued.",
-        "issue_key": jira_request.issue_key
-    }
+        if isinstance(task_entity, JSONResponse):
+            return task_entity
+            
+        # Fire and Forget
+        background_tasks.add_task(usecase.execute, task_entity)
+        
+        return {
+            "status": "accepted",
+            "message": "Scaffolding request queued.",
+            "issue_key": task_entity.key
+        }
+    except Exception as e:
+         # Generic catch-all to prevent 500s from leaking if _process fails unexpectedly
+         logger.error(f"Router Error: {e}")
+         return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"status": "error", "message": "Internal processing error."})
 
-async def _process_incoming_webhook(request: Request) -> ScaffoldingOrder | JSONResponse:
+async def _process_incoming_webhook(request: Request) -> Union[Task, JSONResponse]:
     """Helper to parse, validate and map webhook."""
     body_bytes = await request.body()
     try:
@@ -74,7 +70,7 @@ async def _process_incoming_webhook(request: Request) -> ScaffoldingOrder | JSON
         issue_key = payload.issue.key
         logger.info(f"Processing webhook for {issue_key}")
         
-        return JiraPayloadMapper.map_to_request(payload)
+        return JiraPayloadMapper.to_domain(payload)
         
     except ValueError as e:
         logger.warning(f"Skipping webhook: {e}")

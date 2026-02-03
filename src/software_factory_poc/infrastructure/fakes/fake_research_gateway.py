@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import List
 
 from software_factory_poc.application.core.agents.research.dtos.document_content_dto import DocumentContentDTO
 from software_factory_poc.application.core.agents.research.dtos.project_context_dto import ProjectContextDTO

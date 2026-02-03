@@ -6,13 +6,11 @@ from software_factory_poc.application.core.agents.code_reviewer.code_reviewer_ag
 from software_factory_poc.application.core.agents.code_reviewer.config.code_reviewer_agent_config import (
     CodeReviewerAgentConfig,
 )
-from software_factory_poc.application.core.agents.code_reviewer.value_objects.code_review_order import (
-    CodeReviewOrder,
-)
 from software_factory_poc.application.core.agents.reasoner.reasoner_agent import ReasonerAgent
 from software_factory_poc.application.core.agents.reporter.reporter_agent import ReporterAgent
 from software_factory_poc.application.core.agents.research.research_agent import ResearchAgent
 from software_factory_poc.application.core.agents.vcs.vcs_agent import VcsAgent
+from software_factory_poc.application.core.domain.entities.task import Task
 from software_factory_poc.infrastructure.observability.logger_factory_service import (
     LoggerFactoryService,
 )
@@ -35,12 +33,12 @@ class PerformCodeReviewUseCase:
         self.config = config
         self.resolver = resolver
 
-    def execute(self, order: CodeReviewOrder) -> None:
+    def execute(self, task: Task) -> None:
         """
         Executes the code review process.
         Flow: Prepare -> Build -> Delegate.
         """
-        self._log_execution_start(order)
+        self._log_execution_start(task)
         reporter = None
 
         try:
@@ -51,15 +49,20 @@ class PerformCodeReviewUseCase:
             orchestrator = self._build_orchestrator(reporter, vcs, researcher, reasoner)
 
             # 3. Delegate execution
-            self._delegate_execution(orchestrator, order)
+            self._delegate_execution(orchestrator, task)
 
         except Exception as e:
             # 4. Safety Net
-            self._handle_critical_error(order, e, reporter)
+            self._handle_critical_error(task, e, reporter)
 
-    def _log_execution_start(self, order: CodeReviewOrder) -> None:
-        logger.info(f"🚀 CODE REVIEW USECASE STARTED | Project ID: {order.project_id}")
-        logger.info(f"Orchestrating code review for MR {order.mr_id} (Issue: {order.issue_key})")
+    def _log_execution_start(self, task: Task) -> None:
+        # Extract ID for logging if available
+        params = task.description.config.get("code_review_params", {}) or task.description.config
+        project_id = params.get("gitlab_project_id") or params.get("project_id") or "Unknown"
+        mr_id = params.get("mr_id") or "Unknown"
+        
+        logger.info(f"🚀 CODE REVIEW USECASE STARTED | Project ID: {project_id}")
+        logger.info(f"Orchestrating code review for MR {mr_id} (Issue: {task.key})")
 
     def _prepare_collaborators(self) -> Tuple[ReporterAgent, VcsAgent, ResearchAgent, ReasonerAgent]:
         """
@@ -90,19 +93,19 @@ class PerformCodeReviewUseCase:
             reasoner=reasoner
         )
 
-    def _delegate_execution(self, orchestrator: CodeReviewerAgent, order: CodeReviewOrder) -> None:
+    def _delegate_execution(self, orchestrator: CodeReviewerAgent, task: Task) -> None:
         logger.info("Delegating control to CodeReviewerAgent...")
-        orchestrator.execute_flow(order)
+        orchestrator.execute_flow(task)
 
-    def _handle_critical_error(self, order: CodeReviewOrder, e: Exception, reporter: Optional[ReporterAgent]) -> None:
+    def _handle_critical_error(self, task: Task, e: Exception, reporter: Optional[ReporterAgent]) -> None:
         """
         Handles failures before Agent control or catastrophic crashes.
         """
-        logger.critical(f"Critical wiring/system error for Code Review {order.issue_key}: {e}", exc_info=True)
+        logger.critical(f"Critical wiring/system error for Code Review {task.key}: {e}", exc_info=True)
 
         if reporter:
             try:
-                reporter.report_failure(order.issue_key, f"System Error (Initialization): {str(e)}")
+                reporter.report_failure(task.key, f"System Error (Initialization): {str(e)}")
             except Exception as report_error:
                 logger.error(f"Failed to report failure to tracker: {report_error}")
         

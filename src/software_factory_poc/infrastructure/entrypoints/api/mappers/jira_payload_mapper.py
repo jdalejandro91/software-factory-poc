@@ -1,105 +1,140 @@
-from typing import Union
+import re
+from typing import Dict, Union, Any
 
-from software_factory_poc.application.core.agents.scaffolding.value_objects.scaffolding_order import (
-    ScaffoldingOrder,
-)
+import yaml
+
+from software_factory_poc.application.core.domain.entities.task import Task, TaskDescription, TaskUser
 from software_factory_poc.infrastructure.entrypoints.api.dtos.jira_webhook_dto import JiraWebhookDTO
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 
 logger = LoggerFactoryService.build_logger(__name__)
 
+
 class JiraPayloadMapper:
     """
-    Maps incoming Jira Webhook payloads to internal Domain Commands (ScaffoldingOrder).
+    Transforms Raw Jira Webhook Payloads into Domain Entities (Task).
+    Handles Parsing of embedded configurations (YAML/Markdown/JiraMarkup).
     """
 
+    # Combined Regex for Markdown (```) and Jira ({code})
+    # Supports:
+    # - ```yaml, ```scaffolding, ```
+    # - {code:yaml}, {code:scaffolding}, {code}
+    # - {code:yaml|borderStyle=solid} (Attributes)
+    CODE_BLOCK_PATTERN = re.compile(
+        r"(?:```(?:scaffolding|yaml|yml)?|\{code(?::(?:scaffolding|yaml|yml))?(?:\|[\w=]+)*\})\s*([\s\S]*?)\s*(?:```|\{code\})",
+        re.IGNORECASE | re.DOTALL
+    )
+
     @classmethod
-    def map_to_request(cls, payload: Union[dict, JiraWebhookDTO]) -> ScaffoldingOrder:
+    def to_domain(cls, payload: Union[Dict, JiraWebhookDTO]) -> Task:
+        """
+        Maps a Jira Payload to a Task Domain Entity.
+        Performs one-pass parsing of the description.
+        """
+        # 1. Normalize Input to Dict for safe access if needed, or use DTO fields
         if isinstance(payload, JiraWebhookDTO):
-            return cls._extract_from_dto(payload)
-        return cls._extract_from_dict(payload)
-
-    @classmethod
-    def _extract_from_dto(cls, payload: JiraWebhookDTO) -> ScaffoldingOrder:
-        issue_key = payload.issue.key
-        raw_desc = payload.issue.fields.description or ""
-        
-        logger.info(f"Processing Task {issue_key}. Raw Description Length: {len(raw_desc)}")
-        
-        # 1. Parse Description for Scaffolding Block
-        from software_factory_poc.infrastructure.entrypoints.api.parsers.jira_description_parser import JiraDescriptionParser
-        task_desc = JiraDescriptionParser.parse(raw_desc)
-        
-        # 2. Extract Params
-        params = task_desc.scaffolding_params or {}
-        
-        tech_stack = params.get("technology_stack", "nestJS")
-        target_config = params.get("target", {})
-        extra_params = params.get("parameters", {})
-        
-        # Deep Lookup for service_name extraction (common issue with nested YAMLs)
-        service_name = extra_params.get("service_name")
-        if not service_name:
-            service_name = params.get("service_name")
-            if service_name:
-                 # Normalize into extra_params if found at root
-                 extra_params["service_name"] = service_name
-
-        logger.info(f"🧩 MAPPER PARSED -> Service: '{service_name}' | Stack: '{tech_stack}'")
-        
-        # 3. Resolve Project Info Safely
-        project_data = None
-        # Priority 1: Project inside fields (Standard)
-        if payload.issue.fields and payload.issue.fields.project:
-            project_data = payload.issue.fields.project
-        # Priority 2: Project at root (Automation/System)
-        elif payload.issue.project:
-            project_data = payload.issue.project
+            # Extract fields from DTO
+            issue = payload.issue
+            fields = issue.fields or object() # Safe access fallback
             
-        p_key = project_data.key if project_data else "UNKNOWN"
-        # Ensure ID is string (some payloads send it as int)
-        p_id = str(project_data.id) if (project_data and hasattr(project_data, 'id') and project_data.id) else "0"
+            key = issue.key
+            summary = getattr(fields, "summary", "No Summary")
+            description_text = getattr(fields, "description", "") or ""
+            
+            # Resolve Project
+            project = getattr(fields, "project", None) or getattr(issue, "project", None)
+            project_key = project.key if project else "UNKNOWN"
 
-        # 4. Build Order
-        return ScaffoldingOrder(
-            issue_key=issue_key,
-            raw_instruction=task_desc.human_text, # Use clean text
-            technology_stack=tech_stack,
-            target_config=target_config,
-            extra_params=extra_params,
-            summary=payload.issue.fields.summary,
-            reporter=payload.user.display_name,
-            project_key=p_key,
-            project_id=p_id,
-            service_name=service_name
+            # Resolve User
+            user_dto = payload.user
+            reporter = TaskUser(
+                name=user_dto.name or "unknown",
+                display_name=user_dto.display_name or "Unknown User",
+                active=user_dto.active if user_dto.active is not None else True,
+                # email is not always present in webhook, depends on privacy settings
+            )
+            
+            event_type = payload.webhook_event or "unknown"
+            timestamp = payload.timestamp or 0
+            obj_id = issue.id or "0"
+            status = "unknown" # Status might be nested, keeping simple for now
+            issue_type = "Task" # Default
+
+        else:
+            # Fallback for Dict input
+            issue = payload.get("issue", {})
+            fields = issue.get("fields", {})
+            
+            key = issue.get("key", "UNKNOWN")
+            summary = fields.get("summary", "No Summary")
+            description_text = fields.get("description", "") or ""
+            
+            project = fields.get("project") or issue.get("project") or {}
+            project_key = project.get("key", "UNKNOWN")
+            
+            user_data = payload.get("user", {})
+            reporter = TaskUser(
+                name=user_data.get("name", "unknown"),
+                display_name=user_data.get("displayName", "Unknown User"),
+                active=user_data.get("active", True)
+            )
+            
+            event_type = payload.get("webhookEvent", "unknown")
+            timestamp = payload.get("timestamp", 0)
+            obj_id = issue.get("id", "0")
+            status = fields.get("status", {}).get("name", "unknown")
+            issue_type = fields.get("issuetype", {}).get("name", "Task")
+
+        logger.info(f"Processing Issue {key}: Parsing Description ({len(description_text)} chars)")
+
+        # 2. Parse Description (Regex + YAML)
+        parsing_result = cls._parse_description_config(description_text)
+
+        # 3. Construct Domain Entity
+        task = Task(
+            id=obj_id,
+            key=key,
+            event_type=event_type,
+            status=status,
+            summary=summary,
+            project_key=project_key,
+            issue_type=issue_type,
+            created_at=timestamp,
+            reporter=reporter,
+            description=parsing_result
         )
 
-    @classmethod
-    def _extract_from_dict(cls, payload: dict) -> ScaffoldingOrder:
-        issue = payload.get("issue", {})
-        fields = issue.get("fields", {})
-        issue_key = issue.get("key", "UNKNOWN")
-        raw_desc = fields.get("description", "")
-        
-        logger.info(f"Processing Task {issue_key}. Raw Description Length: {len(raw_desc)}")
+        logger.info(f"✅ Domain Task Created: {task.key} | Config Found: {len(task.description.config) > 0}")
+        return task
 
-        # 1. Parse Description
-        from software_factory_poc.infrastructure.entrypoints.api.parsers.jira_description_parser import JiraDescriptionParser
-        task_desc = JiraDescriptionParser.parse(raw_desc)
-        
-        # 2. Extract Params
-        params = task_desc.scaffolding_params or {}
-        
-        # 3. Build Order
-        return ScaffoldingOrder(
-            issue_key=issue_key,
-            raw_instruction=task_desc.human_text,
-            technology_stack=params.get("technology_stack", "nestJS"),
-            target_config=params.get("target", {}),
-            extra_params=params.get("parameters", {}),
-            summary=fields.get("summary", "No Summary"),
-            reporter=payload.get("user", {}).get("displayName", "Unknown"),
-            project_key=fields.get("project", {}).get("key", ""),
-            project_id=fields.get("project", {}).get("id", ""),
-            service_name=extra_params.get("service_name")
+    @classmethod
+    def _parse_description_config(cls, text: str) -> TaskDescription:
+        """
+        Extracts YAML config from text using robust Regex.
+        """
+        match = cls.CODE_BLOCK_PATTERN.search(text)
+        config: Dict[str, Any] = {}
+
+        if match:
+            # Extract content
+            raw_yaml = match.group(1)
+            
+            # Sanitize Invisible Characters (Jira Artifacts)
+            clean_yaml = raw_yaml.replace(u'\xa0', ' ').strip()
+            
+            try:
+                parsed = yaml.safe_load(clean_yaml)
+                if isinstance(parsed, dict):
+                    config = parsed
+                else:
+                    logger.warning("Parsed YAML is not a dictionary. Ignoring.")
+            except yaml.YAMLError as e:
+                logger.warning(f"Failed to parse YAML block in description: {e}")
+        else:
+            logger.debug("No configuration block found in description.")
+
+        return TaskDescription(
+            raw_content=text,
+            config=config
         )

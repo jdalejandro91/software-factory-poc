@@ -1,4 +1,4 @@
-from typing import Any, Optional, Tuple, TYPE_CHECKING
+from typing import Optional, Tuple, TYPE_CHECKING
 
 from software_factory_poc.application.core.agents.reasoner.reasoner_agent import ReasonerAgent
 from software_factory_poc.application.core.agents.reporter.reporter_agent import ReporterAgent
@@ -7,10 +7,8 @@ from software_factory_poc.application.core.agents.scaffolding.config.scaffolding
     ScaffoldingAgentConfig,
 )
 from software_factory_poc.application.core.agents.scaffolding.scaffolding_agent import ScaffoldingAgent
-from software_factory_poc.application.core.agents.scaffolding.value_objects.scaffolding_order import (
-    ScaffoldingOrder,
-)
 from software_factory_poc.application.core.agents.vcs.vcs_agent import VcsAgent
+from software_factory_poc.application.core.domain.entities.task import Task
 from software_factory_poc.infrastructure.observability.logger_factory_service import (
     LoggerFactoryService,
 )
@@ -33,12 +31,12 @@ class CreateScaffoldingUseCase:
         self.config = config
         self.resolver = resolver
 
-    def execute(self, request: ScaffoldingOrder) -> None:
+    def execute(self, task: Task) -> None:
         """
-        Executes the scaffolding process for a given issue key.
+        Executes the scaffolding process for a given domain Task.
         The flow is linear: Log -> Prepare -> Build -> Execute.
         """
-        self._log_execution_start(request)
+        self._log_execution_start(task)
         reporter = None
 
         try:
@@ -49,16 +47,17 @@ class CreateScaffoldingUseCase:
             orchestrator = self._build_orchestrator(reporter, vcs, researcher, reasoner)
 
             # 3. Delegate to Orchestrator
-            self._delegate_execution(orchestrator, request)
+            self._delegate_execution(orchestrator, task)
 
         except Exception as e:
             # 4. Safety Net (Circuit Breaker)
-            self._handle_critical_error(request, e, reporter)
+            self._handle_critical_error(task, e, reporter)
 
-    def _log_execution_start(self, request: ScaffoldingOrder) -> None:
-        service_name = request.extra_params.get("service_name", "Unknown") if request.extra_params else "Unknown"
+    def _log_execution_start(self, task: Task) -> None:
+        # Task Config is valid at this point (mapper ensures it)
+        service_name = task.description.config.get("parameters", {}).get("service_name", "Unknown")
         logger.info(f"🚀 USECASE STARTED | Project Target: '{service_name}'")
-        logger.info(f"Starting scaffolding execution for issue: {request.issue_key}")
+        logger.info(f"Starting scaffolding execution for issue: {task.key}")
 
     def _prepare_collaborators(self) -> Tuple[ReporterAgent, VcsAgent, ResearchAgent, ReasonerAgent]:
         """
@@ -89,22 +88,22 @@ class CreateScaffoldingUseCase:
             reasoner=reasoner
         )
 
-    def _delegate_execution(self, orchestrator: ScaffoldingAgent, request: ScaffoldingOrder) -> None:
+    def _delegate_execution(self, orchestrator: ScaffoldingAgent, task: Task) -> None:
         """
         Hands over control to the domain agent.
         """
         logger.info("Delegating control to ScaffoldingAgent Orchestrator...")
-        orchestrator.execute_flow(request)
+        orchestrator.execute_flow(task)
 
-    def _handle_critical_error(self, request: ScaffoldingOrder, e: Exception, reporter: Optional[ReporterAgent]) -> None:
+    def _handle_critical_error(self, task: Task, e: Exception, reporter: Optional[ReporterAgent]) -> None:
         """
         Handles failures that occur BEFORE the agent takes control or catastrophic crashes.
         """
-        logger.critical(f"Critical wiring/system error for {request.issue_key}: {e}", exc_info=True)
+        logger.critical(f"Critical wiring/system error for {task.key}: {e}", exc_info=True)
 
         if reporter:
             try:
-                reporter.report_failure(request.issue_key, f"System Error (Initialization): {str(e)}")
+                reporter.report_failure(task.key, f"System Error (Initialization): {str(e)}")
             except Exception as report_error:
                 logger.error(f"Failed to report system failure to tracker: {report_error}")
         

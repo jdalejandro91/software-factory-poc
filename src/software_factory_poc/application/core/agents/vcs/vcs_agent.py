@@ -7,8 +7,8 @@ from software_factory_poc.application.core.agents.common.dtos.file_changes_dto i
 from software_factory_poc.application.core.agents.common.dtos.file_content_dto import FileContentDTO
 from software_factory_poc.application.core.agents.vcs.dtos.vcs_dtos import MergeRequestDTO, CommitResultDTO, BranchDTO
 from software_factory_poc.application.core.agents.vcs.ports.vcs_gateway import VcsGateway
-
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
+
 
 @dataclass
 class VcsAgent(BaseAgent):
