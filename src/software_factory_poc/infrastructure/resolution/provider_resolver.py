@@ -192,17 +192,10 @@ class ProviderResolver:
         })
         return ScaffoldingAgent(config=orchestrator_config)
 
-    def create_code_reviewer_agent(self) -> CodeReviewerAgent:
-        # Resolve dependencies
-        reporter = self.create_reporter_agent()
-        vcs = self.create_vcs_agent()
-        researcher = self.create_research_agent()
-        reasoner = self.create_reasoner_agent()
-
-        # Build Config
-        # In a real scenario, this would come from AppConfig or Environment.
-        # We default to GPT-4 Turbo for code review tasks.
-        
+    def _resolve_code_reviewer_config(self) -> CodeReviewerAgentConfig:
+        """
+        Builds the configuration for Code Reviewer Agent.
+        """
         # Parse Priority List
         import json
         priority_json = self.app_config.tools.code_review_llm_model_priority
@@ -217,11 +210,21 @@ class ProviderResolver:
              logger.warning(f"Failed to parse CODE_REVIEW_LLM_MODEL_PRIORITY: {priority_json}. Error: {e}. Defaulting to GPT-4 Turbo.")
              priority_list = ["openai:gpt-4-turbo"]
 
-        config = CodeReviewerAgentConfig(
+        return CodeReviewerAgentConfig(
             api_key="",  # API Keys are handled by LlmGateway internally via Env/Settings
             model=self.app_config.tools.code_review_model, # Legacy support
             llm_model_priority=priority_list
         )
+
+    def create_code_reviewer_agent(self) -> CodeReviewerAgent:
+        # Resolve dependencies
+        reporter = self.create_reporter_agent()
+        vcs = self.create_vcs_agent()
+        researcher = self.create_research_agent()
+        reasoner = self.create_reasoner_agent()
+
+        # Build Config
+        config = self._resolve_code_reviewer_config()
 
         return CodeReviewerAgent(
             config=config,
@@ -232,5 +235,5 @@ class ProviderResolver:
         )
 
     def create_perform_code_review_usecase(self) -> PerformCodeReviewUseCase:
-        agent = self.create_code_reviewer_agent()
-        return PerformCodeReviewUseCase(agent)
+        config = self._resolve_code_reviewer_config()
+        return PerformCodeReviewUseCase(config, self)
