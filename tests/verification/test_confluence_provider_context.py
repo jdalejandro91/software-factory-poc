@@ -73,11 +73,12 @@ class TestConfluenceProviderContext(unittest.TestCase):
         self.assertIn("Project folder 'unknown' NOT FOUND", str(cm.exception))
 
     def test_get_project_context_project_not_found(self):
-        # 1. Setup Root Found but Project Not Found, AND Direct Search Not Found
+        # 1. Setup Root Found but Project Not Found, AND Direct Search Not Found, AND Bag of Words Not Found
         self.provider.http_client.search.side_effect = [
             [{"id": "root-123", "title": "Projects"}], # Root -> Found
             [], # Project under Root -> Not Found
-            []  # Direct Search (Fallback) -> Not Found
+            [], # Direct Search (Fallback) -> Not Found
+            []  # Bag of Words (Fallback 2) -> Not Found
         ]
 
         # 2. Execute & Assert
@@ -159,11 +160,40 @@ class TestConfluenceProviderContext(unittest.TestCase):
         call_args = self.provider.http_client.search.call_args_list[1]
         self.assertIn('title ~ "shopping-cart"', call_args[0][0])
 
+    def test_bag_of_words_search_resolves_folder(self):
+        # 1. Setup Failures for Root & Direct Fuzzy
+        # 2. Setup Success for Bag of Words
+        self.provider.http_client.search.side_effect = [
+            [], # Root -> Empty
+            [], # Direct Fuzzy -> Empty
+            [   # Bag of Words -> "Shopping Cart" matches "shopping-cart" via normalization
+                {"id": "777", "title": "Shopping Cart"} 
+            ]
+        ]
+        
+        self.provider.http_client.get_child_pages.return_value = [
+             {"id": "d1", "title": "Doc1", "body": "...", "_links": {}, "space": {}}
+        ]
+        
+        # 3. Execute
+        ctx = self.provider.get_project_context("shopping-cart")
+        
+        # 4. Verify
+        self.assertEqual(ctx.root_page_id, "777")
+        self.assertEqual(len(ctx.documents), 1)
+        
+        # Check Bag of Words Query
+        call_args = self.provider.http_client.search.call_args_list[2]
+        # Should contain AND clauses for split parts
+        self.assertIn('title ~ "shopping"', call_args[0][0])
+        self.assertIn('title ~ "cart"', call_args[0][0])
+
     def test_project_not_found_even_with_fallback(self):
-        # 1. Setup Failure for ALL Searches
+        # 1. Setup Failure for ALL Searches (Root, Direct Fuzzy, Bag of Words)
         self.provider.http_client.search.side_effect = [
             [], # Root Query -> Empty
-            []  # Direct Query -> Empty
+            [], # Direct Fuzzy -> Empty
+            []  # Bag of Words -> Empty
         ]
 
         # 2. Execute & Assert

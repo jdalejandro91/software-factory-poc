@@ -44,9 +44,14 @@ class Task:
 
         # 1. Merge Config (Immutable)
         current_config = copy.deepcopy(self.description.config)
-        # Deep merge could be better, but for now simple update at root or specific key
-        # If new_context has keys that overwrite, they overwrite.
-        current_config.update(new_context)
+        
+        # Smart Merge: Specifically handle 'code_review_params' to preserve existing sub-keys
+        for key, value in new_context.items():
+            if key == "code_review_params" and isinstance(value, dict) and \
+               key in current_config and isinstance(current_config[key], dict):
+                current_config[key].update(value)
+            else:
+                current_config[key] = value
 
         # 2. Serialize to clean YAML
         new_yaml_str = yaml.dump(current_config, default_flow_style=False, allow_unicode=True).strip()
@@ -57,14 +62,19 @@ class Task:
         
         # Regex to find existing YAML block: 
         # Supports ```yaml ... ``` or {code:yaml} ... {code} (Jira style)
-        # We'll target the standard markdown/jira style we typically assume.
-        # Pattern: Start of block, content, End of block
+        # Matches any typical automation config block.
+        # Captures: 1. Delimiter start (non-capture), 2. Content, 3. Delimiter end (non-capture)
+        # We replace the ENTIRE match with the standardized Markdown block.
         
-        # Pattern 1: Markdown ```yaml
-        md_pattern = r"(```yaml\s*)([\s\S]*?)(\s*```)"
+        # Pattern: 
+        # (?: ... ) Grouping without capturing
+        # ```(?:yaml|yml|scaffolding)? Matches ``` optional lang
+        # | \{code...\} Matches Jira macro
+        # [\s\S]*? Matches content lazy
+        complex_pattern = r"(?:```(?:yaml|yml|scaffolding)?|\{code(?::(?:yaml|yml|scaffolding))?(?:\|[\w=]+)*\})\s*([\s\S]*?)\s*(?:```|\{code\})"
         
-        if re.search(md_pattern, current_raw, re.IGNORECASE):
-            new_raw = re.sub(md_pattern, formatted_yaml_block, current_raw, count=1, flags=re.IGNORECASE)
+        if re.search(complex_pattern, current_raw, re.IGNORECASE):
+            new_raw = re.sub(complex_pattern, formatted_yaml_block, current_raw, count=1, flags=re.IGNORECASE)
         else:
             # Append if not found
             new_raw = f"{current_raw.rstrip()}\n\n{formatted_yaml_block}"

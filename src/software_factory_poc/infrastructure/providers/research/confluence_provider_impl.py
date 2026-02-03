@@ -194,6 +194,36 @@ class ConfluenceProviderImpl(ResearchGateway):
                     if not project_folder_id:
                         logger.warning(f"Fuzzy search returned {len(direct_results)} results but no exact title match for '{project_name}'.")
 
+            # Attempt 3: Bag of Words Search (Hyphen-Agnostic)
+            if not project_folder_id:
+                parts = re.split(r'[-_ ]+', project_name)
+                parts = [p for p in parts if p.strip()]  # Remove empty strings
+                
+                if len(parts) > 1:
+                    logger.info(f"⚠️ Direct Fuzzy search failed. Attempting Bag of Words strategy for parts: {parts}...")
+                    
+                    # Construct AND query for all parts
+                    # title ~ "part1" AND title ~ "part2"
+                    and_clauses = [f'title ~ "{part}"' for part in parts]
+                    bag_cql = f'space = "{self.space_key}" AND type = "page" AND {" AND ".join(and_clauses)}'
+                    
+                    bag_results = self.http_client.search(bag_cql)
+                    
+                    if bag_results:
+                        # Filter: "shoppingcart" in "Start Shopping Cart Now".normalized()
+                        target_norm = project_name.lower().replace(" ", "").replace("-", "").replace("_", "")
+                        
+                        for res in bag_results:
+                            found_title_norm = res.get("title", "").lower().replace(" ", "").replace("-", "").replace("_", "")
+                            
+                            if target_norm in found_title_norm:
+                                project_folder_id = res["id"]
+                                logger.info(f"🎯 Found project folder via Bag of Words: {res.get('title')} (ID: {project_folder_id}). Fetching children...")
+                                break
+                        
+                        if not project_folder_id:
+                             logger.warning(f"Bag of Words returned {len(bag_results)} candidates but none matched normalized target '{target_norm}'.")
+
             # Validate Result
             if not project_folder_id:
                 raise ProviderError(
