@@ -1,41 +1,33 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Dict, Any, Optional, List
 
-@dataclass(frozen=True)
+@dataclass
 class TaskDescription:
     """
-    Value Object representing the processed description of a Task.
-    Contains both the raw content for audit and the parsed configuration.
+    Entidad que encapsula la descripción técnica procesada de la tarea.
+    - raw_content: El texto original de la descripción (Markdown/Jira markup) para auditoría.
+    - config: El diccionario resultante del parseo del bloque YAML (scaffolding/code_review).
     """
     raw_content: str
     config: Dict[str, Any] = field(default_factory=dict)
 
-@dataclass(frozen=True)
+@dataclass
 class TaskUser:
-    """
-    Value Object representing a User in the context of a Task.
-    """
     name: str
     display_name: str
-    active: bool = True
+    active: bool
     email: Optional[str] = None
+    self_url: Optional[str] = None
 
 @dataclass
 class Task:
-    """
-    Domain Entity representing a Task (Issue) in the system.
-    """
     id: str
     key: str
-    event_type: str
-    status: str
     summary: str
+    status: str
     project_key: str
     issue_type: str
-    created_at: Any  # Can be int (timestamp) or datetime
-    reporter: TaskUser
-    description: TaskDescription
-
-    def __post_init__(self):
-        # Basic validation or defaults could go here if needed
-        pass
+    description: TaskDescription  # Composición Obligatoria
+    reporter: Optional[TaskUser] = None
+    event_type: Optional[str] = None
+    created_at: Optional[int] = None

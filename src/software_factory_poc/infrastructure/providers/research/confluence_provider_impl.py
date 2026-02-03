@@ -1,5 +1,7 @@
+import os
 import re
 from typing import Any
+from html.parser import HTMLParser
 
 from software_factory_poc.application.core.agents.common.exceptions.provider_error import ProviderError
 from software_factory_poc.application.core.agents.research.config.research_provider_type import ResearchProviderType
@@ -7,14 +9,10 @@ from software_factory_poc.application.core.agents.research.ports.research_gatewa
 from software_factory_poc.infrastructure.configuration.confluence_settings import ConfluenceSettings
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 from software_factory_poc.infrastructure.providers.research.clients.confluence_http_client import ConfluenceHttpClient
-
-logger = LoggerFactoryService.build_logger(__name__)
-
-
 from software_factory_poc.application.core.agents.research.dtos.document_content_dto import DocumentContentDTO
 from software_factory_poc.application.core.agents.research.dtos.project_context_dto import ProjectContextDTO
 
-from html.parser import HTMLParser
+logger = LoggerFactoryService.build_logger(__name__)
 
 class _ConfluenceHTMLParser(HTMLParser):
     def __init__(self):
@@ -41,6 +39,8 @@ class ConfluenceProviderImpl(ResearchGateway):
     def __init__(self, settings: ConfluenceSettings):
         self.settings = settings
         self.http_client = ConfluenceHttpClient(settings)
+        # 1. Configurable Space Key
+        self.space_key = os.getenv("CONFLUENCE_SPACE_KEY", "DDS")
 
     def retrieve_context(self, query: str) -> str:
         """
@@ -127,13 +127,10 @@ class ConfluenceProviderImpl(ResearchGateway):
         if not input_text:
             return ""
 
-        # 1. Remove HTML Tags (Regex is generally discouraged for HTML but acceptable for stripping tags in simple use cases)
+        # 1. Remove HTML Tags
         clean_text = re.sub(r"<[^>]+>", " ", input_text)
         
-        # 2. Decode entities (Simplistic)
-        # Replacing common ones. If complex, would need html module (import html)
-        # Requirement: "Implement Robust HTML cleaning... can use html.unescape"
-        # I will import html at method level to avoid top level import issues if any, or rely on standard lib.
+        # 2. Decode entities
         import html
         clean_text = html.unescape(clean_text)
 
@@ -146,81 +143,81 @@ class ConfluenceProviderImpl(ResearchGateway):
         """
         Retrieves project-specific documentation from Confluence.
         Algorithm:
-        1. Find "Projects" folder (Page).
-        2. Find project_name child page.
-        3. Fetch all children of that project page (with content expanded).
+        1. Find "projects" root page in strict Space.
+        2. Find specific project folder (child of root).
+        3. Fetch all children documents recursively or flatly.
         """
         try:
-            logger.info(f"Retrieving Project Context for: '{project_name}'")
+            logger.info(f"Retrieving Project Context for: '{project_name}' (Space: {self.space_key})")
             
-            # Step 1: Find Root "Projects" Page
-            root_results = self.http_client.search('title = "Projects" AND type = "page"')
+            # Step A: Localizar la Página Raíz ("projects")
+            root_cql = f'space = "{self.space_key}" AND type = "page" AND title in ("projects", "Projects")'
+            root_results = self.http_client.search(root_cql)
+            
             if not root_results:
                 raise ProviderError(
                     provider=ResearchProviderType.CONFLUENCE,
-                    message="Critical: 'Projects' root page not found in Confluence.",
+                    message=f"Root folder 'projects' not found in space {self.space_key}",
                     retryable=False
                 )
+            
             root_id = root_results[0]["id"]
+            logger.info(f"📂 Found Root 'projects' (ID: {root_id})")
             
-            # Step 2: Find Project Page
-            # Strategy: Double Try (Exact Match -> Fuzzy Match)
-            
-            # Attempt 1: Exact Match
-            project_cql = f'parent = {root_id} AND title = "{project_name}"'
-            logger.info(f"DEBUG CQL (Attempt 1): {project_cql}")
+            # Step B: Localizar la Carpeta del Proyecto
+            # Strict exact match as requested
+            project_cql = f'parent = {root_id} AND type = "page" AND title = "{project_name}"'
             project_results = self.http_client.search(project_cql)
             
-            # Attempt 2: Normalized Match (if needed)
             if not project_results:
-                normalized_name = project_name.replace("-", " ").replace("_", " ")
-                if normalized_name != project_name:
-                    project_cql = f'parent = {root_id} AND title = "{normalized_name}"'
-                    logger.info(f"DEBUG CQL (Attempt 2 - Fuzzy): {project_cql}")
-                    project_results = self.http_client.search(project_cql)
-
-            if not project_results:
-                logger.warning(f"⚠️ Project folder '{project_name}' (or normalized) NOT FOUND in Confluence under parent {root_id}.")
+                logger.warning(f"⚠️ Project folder '{project_name}' NOT FOUND in Confluence under parent {root_id}.")
                 return ProjectContextDTO(
                     project_name=project_name,
                     root_page_id="N/A",
                     documents=[],
-                    total_documents=0
                 )
             
-            project_page_id = project_results[0]["id"]
+            project_folder_id = project_results[0]["id"]
+            logger.info(f"📂 Found Project Folder '{project_name}' (ID: {project_folder_id})")
             
-            # Step 3: Fetch Children with Content (Batch Optimization)
+            # Step C: Recuperación Masiva de Hijos (Documentos)
             all_pages = []
             start = 0
             limit = 50
             
             while True:
+                # Assuming check for implicit next link or loop
                 results = self.http_client.get_child_pages(
-                    page_id=project_page_id, 
+                    page_id=project_folder_id, 
                     limit=limit, 
-                    expand='body.storage'
+                    expand='body.storage',
+                    start=start
                 )
                 
                 if not results:
                     break
                     
                 all_pages.extend(results)
-                start += limit
+                start += len(results)
                 
-                # Check pagination via implicit rule: if less than limit returned, no more pages
-                # However, the user asked for explicit increment and break on empty results, which is safer
+                # Check for pagination break
                 if len(results) < limit:
                      break
             
+            # Step D: Procesamiento
             docs = []
             for child in all_pages:
-                raw_html = self._extract_text(child) # Reuse extraction logic which uses _ConfluenceHTMLParser
+                # Reuse extraction logic properly
+                raw_html_val = ""
+                # Safely extract body.storage.value manually or reuse _extract_text
+                # _extract_text Logic already finds body.storage and cleans it.
+                # Let's use it to be consistent and clean.
+                cleaned_content = self._extract_text(child)
                 
                 doc = DocumentContentDTO(
                     title=child.get("title", "Untitled"),
                     url=child.get("_links", {}).get("webui", ""),
-                    content=raw_html,
+                    content=cleaned_content,
                     metadata={
                         "id": child.get("id"),
                         "space": child.get("space", {}).get("key", "")
@@ -228,9 +225,11 @@ class ConfluenceProviderImpl(ResearchGateway):
                 )
                 docs.append(doc)
                 
+            logger.info(f"✅ Retrieved {len(docs)} documents for project '{project_name}'")
+            
             return ProjectContextDTO(
                 project_name=project_name,
-                root_page_id=project_page_id,
+                root_page_id=project_folder_id,
                 documents=docs
             )
 
