@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from software_factory_poc.application.core.agents.common.config.task_status import TaskStatus
-from software_factory_poc.application.core.domain.entities.task import Task
+from software_factory_poc.application.core.domain.entities.task import Task, TaskDescription
 
 
 class TaskTrackerGateway(ABC):
@@ -17,7 +17,7 @@ class TaskTrackerGateway(ABC):
         pass
 
     @abstractmethod
-    def update_task_description(self, task_id: str, description: Any) -> None:
+    def update_task_description(self, task_id: str, description: TaskDescription) -> None:
         """
         Updates the text description of the task using Domain Object.
         Argument is Any to avoid circular imports in Port if strictly separate,

@@ -17,8 +17,9 @@ class JiraDescriptionMapper:
 
     # Robust Regex for Code Blocks (Markdown ``` or Jira {code})
     # Captures content inside the block.
+    # Robust Pattern: Handles attributes by matching any char until closing brace logic
     CODE_BLOCK_PATTERN = re.compile(
-        r"(?:```(?:scaffolding|yaml|yml)?|\{code(?::(?:scaffolding|yaml|yml))?(?:\|[\w=]+)*\})\s*([\s\S]*?)\s*(?:```|\{code\})",
+        r"(?:```(?:scaffolding|yaml|yml)?|\{code(?:[:|][^\}]*)?\})\s*([\s\S]*?)\s*(?:```|\{code\})",
         re.IGNORECASE | re.DOTALL
     )
 
@@ -44,12 +45,16 @@ class JiraDescriptionMapper:
                 if node_text:
                     raw_text_parts.append(node_text)
         
+        
         # Join with double newlines to separate blocks clearly
         original_cleaned_text = "\n\n".join(raw_text_parts)
+        
+        logger.info(f"🔎 Scanning Description ({len(original_cleaned_text)} chars) for Config Block...")
 
         # 2. Extract Config using Robust Regex
         extracted_config = {}
         match = self.CODE_BLOCK_PATTERN.search(original_cleaned_text)
+        logger.info(f"🧩 Match Found: {bool(match)}")
 
         if match:
             raw_yaml = match.group(1)
@@ -64,6 +69,10 @@ class JiraDescriptionMapper:
                     logger.warning("Parsed YAML matches pattern but is not a dictionary.")
             except yaml.YAMLError as e:
                 logger.warning(f"Failed to parse YAML block in description: {e}")
+            
+            # Remove the configuration block from the raw text
+            original_cleaned_text = original_cleaned_text.replace(match.group(0), "").strip()
+            logger.info("✂️  Config Block STRIPPED successfully.")
 
         # 3. Return Domain Entity
         # Critical: Must match TaskDescription(raw_content=..., config=...)

@@ -188,6 +188,7 @@ class JiraProviderImpl(TaskTrackerGateway):
         """Updates the task description by re-assembling Text + YAML Config."""
         self._logger.info(f"Updating description for task: {task_id}")
         import yaml
+        import re
         
         try:
             # 1. Generate YAML Block from Config
@@ -197,12 +198,31 @@ class JiraProviderImpl(TaskTrackerGateway):
                 allow_unicode=True, 
                 sort_keys=False
             ).strip()
+
+            self._logger.warning(f"⚠️ Yaml {yaml_str} to update.")
             
+            # Defense: Ensure raw_content is clean of any stray code blocks
+            clean_raw_content = description.raw_content.strip()
+
+            self._logger.warning(f"⚠️ raw description {clean_raw_content} to update.")
+            
+            # Simple check for markers
+            if "{code" in clean_raw_content or "```" in clean_raw_content:
+                self._logger.warning(f"⚠️ Raw content for {task_id} still contains code blocks! Force-cleaning.")
+                
+                # Strip Jira {code}...{code}
+                clean_raw_content = re.sub(r'\{code.*?\{code\}', '', clean_raw_content, flags=re.DOTALL | re.IGNORECASE)
+                # Strip Markdown ```...```
+                clean_raw_content = re.sub(r'```.*?```', '', clean_raw_content, flags=re.DOTALL)
+                
+                # Cleanup extra whitespace left behind
+                clean_raw_content = clean_raw_content.strip()
+
             # 2. Assemble Final String (Raw Plain Text + Jira Macro YAML)
             # Use {code:yaml} for Jira compatibility (Infrastructure concern)
             yaml_block = f"{{code:yaml}}\n{yaml_str}\n{{code}}"
             
-            final_description_text = f"{description.raw_content.strip()}\n\n{yaml_block}"
+            final_description_text = f"{clean_raw_content}\n\n{yaml_block}"
             
             # 3. Create Temporary Object for Mapping (or pass string if Mapper supports it, 
             # but Mapper expects TaskDescription).
@@ -214,6 +234,8 @@ class JiraProviderImpl(TaskTrackerGateway):
 
             # 4. Map to ADF
             adf_content = self.mapper.to_adf(transient_desc)
+            
+            self._logger.info("✅ Assembled final description with ONE config block.")
             
             payload = {
                 "fields": {

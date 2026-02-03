@@ -21,8 +21,9 @@ class JiraPayloadMapper:
     # - ```yaml, ```scaffolding, ```
     # - {code:yaml}, {code:scaffolding}, {code}
     # - {code:yaml|borderStyle=solid} (Attributes)
+    # Robust Pattern: Handles attributes by matching any char until closing brace logic
     CODE_BLOCK_PATTERN = re.compile(
-        r"(?:```(?:scaffolding|yaml|yml)?|\{code(?::(?:scaffolding|yaml|yml))?(?:\|[\w=]+)*\})\s*([\s\S]*?)\s*(?:```|\{code\})",
+        r"(?:```(?:scaffolding|yaml|yml)?|\{code(?:[:|][^\}]*)?\})\s*([\s\S]*?)\s*(?:```|\{code\})",
         re.IGNORECASE | re.DOTALL
     )
 
@@ -107,6 +108,48 @@ class JiraPayloadMapper:
 
         logger.info(f"✅ Domain Task Created: {task.key} | Config Found: {len(task.description.config) > 0}")
         return task
+
+    @classmethod
+    def _parse_description_config(cls, text: str) -> TaskDescription:
+        """
+        Extracts YAML config from text using robust Regex.
+        Separates the configuration block from the human-readable text.
+        """
+        logger.info(f"� Scanning Description ({len(text)} chars) for Config Block...")
+        match = cls.CODE_BLOCK_PATTERN.search(text)
+        logger.info(f"🧩 Match Found: {bool(match)}")
+        
+        config: Dict[str, Any] = {}
+        clean_text = text
+
+        if match:
+            # Extract content
+            raw_yaml = match.group(1)
+            
+            # Sanitize Invisible Characters (Jira Artifacts)
+            clean_yaml = raw_yaml.replace(u'\xa0', ' ').strip()
+            
+            try:
+                parsed = yaml.safe_load(clean_yaml)
+                if isinstance(parsed, dict):
+                    config = parsed
+                else:
+                    logger.warning("Parsed YAML is not a dictionary. Ignoring.")
+            except yaml.YAMLError as e:
+                logger.warning(f"Failed to parse YAML block in description: {e}")
+            
+            # Remove the configuration block from the raw text
+            # We replace the *entire match* (delimiters + content) with empty string
+            clean_text = text.replace(match.group(0), "").strip()
+            logger.info("✂️  Config Block STRIPPED successfully.")
+        else:
+            logger.debug("No configuration block found in description.")
+
+        return TaskDescription(
+            raw_content=clean_text,
+            config=config
+        )
+
 
     @classmethod
     def _parse_description_config(cls, text: str) -> TaskDescription:

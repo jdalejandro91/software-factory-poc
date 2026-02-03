@@ -300,7 +300,9 @@ class ScaffoldingAgent(BaseAgent):
             branch=branch_name,
             mr_url=mr_link
         )
-        self.reporter.save_automation_context(task.key, context)
+        updated_task = task.update_metadata(context.model_dump())
+        logger.info(f"New description: {updated_task.description.config}")
+        self.reporter.update_task_description(task.key, updated_task.description)
 
         # 2. Report Success Comment
         message_payload = {
