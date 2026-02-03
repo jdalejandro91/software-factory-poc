@@ -1,11 +1,13 @@
 name: Deploy to EC2
 
 on:
+  workflow_dispatch:
+  
   push:
     branches:
       - main
       - master
-      - 'feature/*'
+      - 'feature/**'
 
 jobs:
   deploy:
