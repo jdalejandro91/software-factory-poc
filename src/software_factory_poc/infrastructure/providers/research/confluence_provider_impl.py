@@ -11,6 +11,9 @@ from software_factory_poc.infrastructure.providers.research.clients.confluence_h
 logger = LoggerFactoryService.build_logger(__name__)
 
 
+from software_factory_poc.application.core.agents.research.dtos.document_content_dto import DocumentContentDTO
+from software_factory_poc.application.core.agents.research.dtos.project_context_dto import ProjectContextDTO
+
 class ConfluenceProviderImpl(ResearchGateway):
     """
     Adapter to retrieve knowledge from Confluence.
@@ -117,3 +120,86 @@ class ConfluenceProviderImpl(ResearchGateway):
         clean_text = " ".join(clean_text.split())
 
         return clean_text
+
+    def get_project_context(self, project_name: str) -> ProjectContextDTO:
+        """
+        Retrieves project-specific documentation from Confluence.
+        Algorithm:
+        1. Find "Projects" folder (Page).
+        2. Find project_name child page.
+        3. Fetch all children of that project page (with content expanded).
+        """
+        try:
+            logger.info(f"Retrieving Project Context for: '{project_name}'")
+            
+            # Step 1: Find Root "Projects" Page
+            root_results = self.http_client.search('title = "Projects" AND type = "page"')
+            if not root_results:
+                raise ProviderError(
+                    provider=ResearchProviderType.CONFLUENCE,
+                    message="Critical: 'Projects' root page not found in Confluence.",
+                    retryable=False
+                )
+            root_id = root_results[0]["id"]
+            
+            # Step 2: Find Project Page
+            # We look for a page with the specific project name whose parent is 'Projects'
+            project_cql = f'parent = {root_id} AND title = "{project_name}"'
+            project_results = self.http_client.search(project_cql)
+            
+            if not project_results:
+                logger.warning(f"Project page '{project_name}' not found under 'Projects'. Returning empty context.")
+                return ProjectContextDTO(
+                    project_name=project_name,
+                    root_page_id="N/A",
+                    documents=[],
+                    total_documents=0
+                )
+            
+            project_page_id = project_results[0]["id"]
+            
+            # Step 3: Fetch Children with Content (Batch Optimization)
+            # 'expand=body.storage' puts the content in the response
+            # Note: We rely on the low-level client's get_page_children logic.
+            # If the client doesn't support expand, we might need N+1 calls, but let's assume valid client usage.
+            # Standard Atlassian API allows expand on children endpoint.
+            # self.http_client.confluence.get_page_child_by_type(page_id, type='page', expand='body.storage')
+            
+            # Since we only have access to `self.http_client` wrapper, let's look at it.
+            # Wait, `ConfluenceHttpClient` is custom wrapper. We might need to access the underlying API or methods.
+            # Assuming `self.http_client.confluence` is the `atlassian.Confluence` object.
+            
+            children = self.http_client.get_child_pages(
+                page_id=project_page_id, 
+                limit=50, 
+                expand='body.storage'
+            )
+            
+            docs = []
+            for child in children:
+                raw_html = self._extract_text(child) # Reuse extraction/sanitization logic which handles dict navigation
+                
+                doc = DocumentContentDTO(
+                    title=child.get("title", "Untitled"),
+                    url=child.get("_links", {}).get("webui", ""),
+                    content=raw_html,
+                    metadata={
+                        "id": child.get("id"),
+                        "space": child.get("space", {}).get("key", "")
+                    }
+                )
+                docs.append(doc)
+                
+            return ProjectContextDTO(
+                project_name=project_name,
+                root_page_id=project_page_id,
+                documents=docs
+            )
+
+        except Exception as e:
+            logger.error(f"Error resolving project context for {project_name}: {e}")
+            raise ProviderError(
+                provider=ResearchProviderType.CONFLUENCE,
+                message=f"Failed to resolve project context: {e}",
+                retryable=True
+            )
