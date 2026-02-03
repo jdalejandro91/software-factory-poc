@@ -66,6 +66,22 @@ class CodeReviewerAgent(BaseAgent):
                 logger.info("No 'code_review_params' found. Falling back to root config.")
                 cr_params = task.description.config
             
+            # --- Robustness: Extract MR ID from URL if missing ---
+            mr_id_raw = cr_params.get("mr_id") or cr_params.get("merge_request_id")
+            review_url = cr_params.get("review_request_url")
+            
+            if not mr_id_raw and review_url:
+                import re
+                # Pattern for .../merge_requests/123 or .../merge_requests/123/...
+                match = re.search(r"merge_requests/(\d+)", review_url)
+                if match:
+                    mr_iid = match.group(1)
+                    logger.info(f"🔍 Extracted MR IID: {mr_iid} from URL: {review_url}")
+                    cr_params["mr_id"] = mr_iid
+                else:
+                    logger.warning(f"Could not extract MR ID from URL: {review_url}")
+            # -----------------------------------------------------
+            
             # Phase 1: Validation
             if not self._validate_preconditions(task, cr_params):
                 return

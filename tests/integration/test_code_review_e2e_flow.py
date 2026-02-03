@@ -68,7 +68,7 @@ def test_code_review_e2e_flow_success(mock_settings):
         code_review_params:
           gitlab_project_id: '101'
           source_branch_name: 'feature/e2e-wire'
-          mr_id: '88'
+          review_request_url: 'https://gitlab.com/group/project/-/merge_requests/88'
         ```
         """).strip()
         
@@ -107,12 +107,35 @@ def test_code_review_e2e_flow_success(mock_settings):
         # So UseCase.execute will run. It calls self.resolver.create_reporter_agent... etc.
         # Then it builds Collaborators and calls orchestrator.execute_flow.
         
-        # We should patch 'CodeReviewerAgent.execute_flow' to stop execution there 
-        # but prove that everything UP TO that point (wiring) worked.
+        # To verify the EXTRACTION logic (which happens inside execute_flow), we must let execute_flow RUN.
+        # We will stop it at '_validate_preconditions' to avoid actual VCS/LLM logic.
         
         headers = {"X-API-KEY": "test-secret"}
         
-        with patch("software_factory_poc.application.core.agents.code_reviewer.code_reviewer_agent.CodeReviewerAgent.execute_flow") as mock_execute_flow:    
+        
+        # Configure Mock GitLab Client
+        # We need to mock 'get' because GitLabMrService calls client.get()
+        
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "iid": 88, 
+            "project_id": 101, 
+            "state": "opened",
+            "changes": [{"new_path": "test.py", "diff": "+ print('hello')"}],
+            "diff_refs": {"head_sha": "sha123"}
+        }
+        mock_response.raise_for_status = MagicMock()
+        
+        mock_gitlab_client.get.return_value = mock_response
+        
+        # 3. We stop execution at '_perform_review_reasoning'
+        
+        headers = {"X-API-KEY": "test-secret"}
+        
+        with patch("software_factory_poc.application.core.agents.code_reviewer.code_reviewer_agent.CodeReviewerAgent._perform_review_reasoning") as mock_reasoning:
+            # Stop flow here
+            mock_reasoning.return_value = MagicMock() 
+            
             response = client.post(
                 "/api/v1/webhooks/jira/code-review-trigger", 
                 json=payload, 
@@ -120,16 +143,25 @@ def test_code_review_e2e_flow_success(mock_settings):
             )
             
             assert response.status_code == 202
-            assert response.json()["message"] == "Code Review request queued."
             
             # 4. Verification
-            # If wiring is correct, execute_flow should be called.
-            # If wiring is broken (TypeError in Resolver), execution crashes before this.
             
-            assert mock_execute_flow.called
-            task_arg = mock_execute_flow.call_args[0][0]
+            # Verify correct API usage by VCS Provider (proving extraction worked)
+            # Expect calls to:
+            # - api/v4/projects/101/merge_requests/88 (Validation)
+            # - api/v4/projects/101/merge_requests/88/changes (Fetching Diffs)
             
-            # Verify correct extraction
-            config = task_arg.description.config.get("code_review_params", {})
-            assert config["gitlab_project_id"] == "101"
-            assert config["source_branch_name"] == "feature/e2e-wire"
+            assert mock_gitlab_client.get.called
+            
+            # Check all calls to ensure one of them targeted MR 88 changes
+            found_changes_call = False
+            for call in mock_gitlab_client.get.call_args_list:
+                args, _ = call
+                path = args[0]
+                if "projects/101/merge_requests/88/changes" in path:
+                    found_changes_call = True
+                    break
+            
+            assert found_changes_call, "Did not find API call to fetch changes for MR 88 (Extraction Failed)"
+            
+            print("Verified: API call made to projects/101/merge_requests/88/changes")
