@@ -1,5 +1,6 @@
 import logging
 from dataclasses import dataclass
+from typing import Optional
 
 from software_factory_poc.application.core.agents.base_agent import BaseAgent
 from software_factory_poc.application.core.agents.research.ports.research_gateway import ResearchGateway
@@ -17,7 +18,18 @@ class ResearchAgent(BaseAgent):
     gateway: ResearchGateway
     config: ScaffoldingAgentConfig
 
-    def investigate(self, query: str) -> str:
+    def investigate(self, query: str, specific_page_id: Optional[str] = None) -> str:
+        # Priority 1: Specific Page ID
+        if specific_page_id:
+            logger.info(f"🔍 Fetching specific documentation ID: {specific_page_id}")
+            try:
+                content = self.gateway.get_page_content(specific_page_id)
+                logger.info(f"SPECIFIC DOC RETRIEVED ({len(content)} chars)")
+                return content
+            except Exception as e:
+                logger.error(f"Failed to fetch specific doc {specific_page_id}: {e}")
+                # Fallback to query investigation
+
         # Check if query implies architecture and we have a configured page ID
         if self._is_architecture_query(query) and self.config.architecture_page_id:
             logger.info(

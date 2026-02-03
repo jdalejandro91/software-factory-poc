@@ -1,5 +1,9 @@
 from typing import cast, Optional
 
+from software_factory_poc.application.core.agents.code_reviewer.code_reviewer_agent import CodeReviewerAgent
+from software_factory_poc.application.core.agents.code_reviewer.config.code_reviewer_agent_config import (
+    CodeReviewerAgentConfig,
+)
 from software_factory_poc.application.core.agents.reasoner.ports.llm_gateway import LlmGateway
 from software_factory_poc.application.core.agents.reasoner.reasoner_agent import ReasonerAgent
 from software_factory_poc.application.core.agents.reporter.config.task_tracker_type import (
@@ -18,6 +22,9 @@ from software_factory_poc.application.core.agents.vcs.config.vcs_provider_type i
 )
 from software_factory_poc.application.core.agents.vcs.ports.vcs_gateway import VcsGateway
 from software_factory_poc.application.core.agents.vcs.vcs_agent import VcsAgent
+from software_factory_poc.application.usecases.code_review.perform_code_review_usecase import (
+    PerformCodeReviewUseCase,
+)
 from software_factory_poc.infrastructure.common.retry.retry_policy import RetryPolicy
 from software_factory_poc.infrastructure.configuration.app_config import AppConfig
 from software_factory_poc.infrastructure.configuration.main_settings import Settings  # Legacy or remove
@@ -184,3 +191,49 @@ class ProviderResolver:
             "extra_params": {"max_tokens": max_tokens}
         })
         return ScaffoldingAgent(config=orchestrator_config)
+
+    def create_code_reviewer_agent(self) -> CodeReviewerAgent:
+        # Resolve dependencies
+        reporter = self.create_reporter_agent()
+        vcs = self.create_vcs_agent()
+        researcher = self.create_research_agent()
+        reasoner = self.create_reasoner_agent()
+
+        # Build Config
+        # In a real scenario, this would come from AppConfig or Environment.
+        # We default to GPT-4 Turbo for code review tasks.
+        
+        # Parse Priority List
+        import json
+        priority_json = self.app_config.tools.code_review_llm_model_priority
+        try:
+             priority_list = json.loads(priority_json)
+             if not isinstance(priority_list, list):
+                 raise ValueError("Parsed JSON is not a list")
+        except Exception as e:
+             # Robust fallback
+             from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
+             logger = LoggerFactoryService.build_logger(__name__)
+             logger.warning(f"Failed to parse CODE_REVIEW_LLM_MODEL_PRIORITY: {priority_json}. Error: {e}. Defaulting to GPT-4 Turbo.")
+             priority_list = ["openai:gpt-4-turbo"]
+
+        config = CodeReviewerAgentConfig(
+            api_key="",  # API Keys are handled by LlmGateway internally via Env/Settings
+            model=self.app_config.tools.code_review_model, # Legacy support
+            llm_model_priority=priority_list
+        )
+
+        return CodeReviewerAgent(
+            name="CodeReviewer",
+            role="Senior Software Architect & Security Expert",
+            goal="Review code to ensure security, performance, and maintainability standards",
+            config=config,
+            reporter=reporter,
+            vcs=vcs,
+            researcher=researcher,
+            reasoner=reasoner
+        )
+
+    def create_perform_code_review_usecase(self) -> PerformCodeReviewUseCase:
+        agent = self.create_code_reviewer_agent()
+        return PerformCodeReviewUseCase(agent)

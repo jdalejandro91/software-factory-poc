@@ -30,15 +30,42 @@ STATUS_MAPPING = {
 
 from software_factory_poc.infrastructure.configuration.jira_settings import JiraSettings
 
+from software_factory_poc.application.core.domain.entities.task import Task, TaskDescription
+from software_factory_poc.infrastructure.providers.tracker.mappers.jira_description_mapper import JiraDescriptionMapper
+
 class JiraProviderImpl(TaskTrackerGateway):
     def __init__(self, http_client: JiraHttpClient, settings: JiraSettings):
         self.client = http_client
         self.settings = settings
         self._logger = logger
+        self.mapper = JiraDescriptionMapper()
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
+    def get_task(self, issue_key: str) -> Task:
+        """Retrieves a Domain Task entity."""
+        self._logger.info(f"Fetching Task Entity: {issue_key}")
+        try:
+             json_data = self.get_issue(issue_key)
+             fields = json_data.get("fields", {})
+             
+             # Map Description using ADF Mapper
+             adf_desc = fields.get("description")
+             domain_desc = self.mapper.to_domain(adf_desc)
+             
+             return Task(
+                 id=json_data.get("key"),
+                 project_id=fields.get("project", {}).get("key", "UNKNOWN"),
+                 summary=fields.get("summary", ""),
+                 status=fields.get("status", {}).get("name", "Unknown"),
+                 description=domain_desc
+             )
+        except Exception as e:
+             self._handle_error(e, f"get_task({issue_key})")
+             raise
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
     def get_issue(self, issue_key: str) -> dict[str, Any]:
-        self._logger.info(f"Fetching Jira issue: {issue_key}")
+        self._logger.info(f"Fetching Jira issue JSON: {issue_key}")
         try:
              response = self.client.get(f"rest/api/3/issue/{issue_key}")
              response.raise_for_status()
@@ -153,3 +180,64 @@ class JiraProviderImpl(TaskTrackerGateway):
             message=f"Jira operation failed: {error}",
             retryable=retryable
         ) from error
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
+    def update_task_description(self, task_id: str, description: TaskDescription) -> None:
+        """Updates the task description using ADF mapping."""
+        self._logger.info(f"Updating description for task: {task_id}")
+        try:
+            # Convert Domain Object -> ADF JSON
+            adf_content = self.mapper.to_adf(description)
+            
+            payload = {
+                "fields": {
+                    "description": adf_content
+                }
+            }
+            # PUT replaces the entire description, but since we fetched->merged, it's safe.
+            response = self.client.put(f"rest/api/3/issue/{task_id}", payload)
+            response.raise_for_status()
+        except Exception as e:
+            self._handle_error(e, f"update_task_description({task_id})")
+            raise
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
+    def append_issue_description(self, task_id: str, content: str) -> None:
+        self._logger.info(f"Appending content to task: {task_id}")
+        try:
+            # 1. Fetch existing description (ADF)
+            issue = self.get_issue(task_id)
+            current_desc = issue.get("fields", {}).get("description")
+
+            new_paragraph = {
+                "type": "paragraph",
+                "content": [{"type": "text", "text": "\n" + content}]
+            }
+
+            # 2. Merge logic
+            if not current_desc:
+                updated_desc = {
+                    "type": "doc", 
+                    "version": 1, 
+                    "content": [new_paragraph]
+                }
+            elif current_desc.get("type") == "doc" and isinstance(current_desc.get("content"), list):
+                # Mutable modification of the dict retrieved from get_issue
+                current_desc["content"].append(new_paragraph)
+                updated_desc = current_desc
+            else:
+                self._logger.warning(f"Unknown description format for {task_id}. Resetting to valid ADF.")
+                updated_desc = {
+                    "type": "doc", 
+                    "version": 1, 
+                    "content": [new_paragraph]
+                }
+
+            # 3. Update result
+            payload = {"fields": {"description": updated_desc}}
+            response = self.client.put(f"rest/api/3/issue/{task_id}", payload)
+            response.raise_for_status()
+            
+        except Exception as e:
+            self._handle_error(e, f"append_issue_description({task_id})")
+            raise

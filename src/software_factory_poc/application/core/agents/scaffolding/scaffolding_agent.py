@@ -5,6 +5,7 @@ from typing import List
 
 from software_factory_poc.application.core.agents.base_agent import BaseAgent
 from software_factory_poc.application.core.agents.common.config.task_status import TaskStatus
+from software_factory_poc.application.core.agents.common.dtos.automation_context_dto import AutomationContextDTO
 from software_factory_poc.application.core.agents.common.dtos.file_content_dto import FileContentDTO
 from software_factory_poc.application.core.agents.reasoner.reasoner_agent import ReasonerAgent
 from software_factory_poc.application.core.agents.reporter.reporter_agent import ReporterAgent
@@ -42,7 +43,7 @@ class ScaffoldingAgent(BaseAgent):
             reasoner: ReasonerAgent,
     ) -> None:
         try:
-            reporter.report_start(request.issue_key)
+            reporter.report_start(request.issue_key, message="🚀 Iniciando generación de scaffolding...")
 
             # STEP 1: PARSE CONTRACT
             try:
@@ -59,6 +60,7 @@ class ScaffoldingAgent(BaseAgent):
                 return
 
             target_repo = self._resolve_target_repo(request, contract)
+            project_id = vcs.resolve_project_id(target_repo)
 
             # STEP 2: SECURITY CHECK
             self._check_permissions(target_repo)
@@ -71,12 +73,12 @@ class ScaffoldingAgent(BaseAgent):
             artifacts = self._generate_scaffolding_artifacts(request, researcher, reasoner)
 
             # STEP 5: VCS OPERATIONS
-            mr_link = self._apply_changes_to_vcs(request, vcs, artifacts, target_repo)
+            mr_link, branch_link, branch_name = self._apply_changes_to_vcs(request, vcs, artifacts, project_id)
 
             if not mr_link or not mr_link.startswith("http"):
                 raise ValueError(f"Invalid MR Link generated: '{mr_link}'. Cannot complete task.")
 
-            self._finalize_task_success(request, reporter, mr_link)
+            self._finalize_task_success(request, reporter, mr_link, project_id, branch_name)
 
         except Exception as e:
             self._handle_error(request, e, reporter)
@@ -155,14 +157,13 @@ class ScaffoldingAgent(BaseAgent):
         return self.artifact_parser_tool.parse_response(raw_response)
 
     def _apply_changes_to_vcs(self, request: ScaffoldingOrder, vcs: VcsAgent, artifacts: List[FileContentDTO],
-                              target_repo: str) -> str:
+                              project_id: int) -> tuple[str, str, str]:
         if not artifacts:
             raise ValueError("No artifacts generated to publish.")
 
-        project_id = vcs.resolve_project_id(target_repo)
         branch_name = self._get_branch_name(request)
 
-        vcs.create_branch(project_id, branch_name, ref=self.config.default_target_branch)
+        branch_dto = vcs.create_branch(project_id, branch_name, ref=self.config.default_target_branch)
 
         files_map = self._prepare_commit_payload(artifacts)
         vcs.commit_files(project_id, branch_name, files_map, f"Scaffolding for {request.issue_key}", force_create=False)
@@ -175,7 +176,7 @@ class ScaffoldingAgent(BaseAgent):
             target_branch=self.config.default_target_branch
         )
         logger.info(f"MR Created successfully. Link: {mr.web_url}")
-        return mr.web_url
+        return mr.web_url, branch_dto.web_url, branch_name
 
     def _get_branch_name(self, request: ScaffoldingOrder) -> str:
         safe_key = re.sub(r'[^a-z0-9\-]', '', request.issue_key.lower())
@@ -190,15 +191,29 @@ class ScaffoldingAgent(BaseAgent):
             files_map[clean_path] = artifact.content
         return files_map
 
-    def _finalize_task_success(self, request: ScaffoldingOrder, reporter: ReporterAgent, mr_link: str) -> None:
+    def _finalize_task_success(self, request: ScaffoldingOrder, reporter: ReporterAgent, mr_link: str,
+                               project_id: int, branch_name: str) -> None:
+        
+        # 1. Create Automation Context (DTO)
+        context = AutomationContextDTO.from_values(
+            project_id=str(project_id),
+            branch=branch_name,
+            mr_url=mr_link
+        )
+        
+        # 2. Inject Context into Jira (Append Mode)
+        reporter.save_automation_context(request.issue_key, context)
+        
+        # 3. Report Success Comment
         message_payload = {
             "type": "scaffolding_success",
             "title": "Scaffolding Completado Exitosamente",
             "summary": f"Se ha generado el código base para la tarea {request.issue_key}.\n{request.summary}",
             "links": {"🔗 Ver Merge Request": mr_link}
         }
-
         reporter.report_success(request.issue_key, message_payload)
+
+        # 4. Transition to In Review
         reporter.transition_task(request.issue_key, TaskStatus.IN_REVIEW)
         logger.info(f"Task {request.issue_key} completed. MR: {mr_link}")
 

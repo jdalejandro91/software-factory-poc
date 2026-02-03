@@ -39,6 +39,11 @@ class ToolSettings(BaseSettings):
     confluence_user_email: str = Field(default="jacadenac@unal.edu.co")
     confluence_api_token: SecretStr = Field(..., description="Confluence API Token")
     architecture_doc_page_id: str = Field(default="3571713")
+    code_review_model: str = Field(default="openai:gpt-4-turbo", description="Model ID for Code Review Agent")
+    code_review_llm_model_priority: str = Field(
+        default='["openai:gpt-4-turbo"]', 
+        description="JSON list of model IDs for Code Review"
+    )
 
     def validate_jira_credentials(self) -> None:
         """

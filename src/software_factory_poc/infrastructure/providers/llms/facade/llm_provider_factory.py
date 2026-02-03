@@ -123,9 +123,9 @@ class LlmProviderFactory:
                 api_key = settings.gemini_api_key.get_secret_value()
                 config = GeminiConfig(api_key=api_key)  # Usa default 600.0s
 
-            client = GeminiClientFactory(config).create()
+            client_factory = GeminiClientFactory(config)
             providers[LlmProviderType.GEMINI] = GeminiProviderImpl(
-                client=client,
+                client_factory=client_factory,
                 retry=retry,
                 request_mapper=GeminiRequestMapper(),
                 response_mapper=GeminiResponseMapper(),

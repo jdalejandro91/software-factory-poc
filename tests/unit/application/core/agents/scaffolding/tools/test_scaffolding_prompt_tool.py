@@ -1,12 +1,7 @@
-from software_factory_poc.application.core.agents.scaffolding.scaffolding_order import ScaffoldingOrder
 from unittest.mock import patch
 
 from software_factory_poc.application.core.agents.scaffolding.scaffolding_order import ScaffoldingOrder
-
-from software_factory_poc.application.core.agents.scaffolding.tools.scaffolding_prompt_builder import \
-    ScaffoldingPromptBuilder
-from unittest.mock import patch
-
+from software_factory_poc.application.core.agents.scaffolding.scaffolding_order import ScaffoldingOrder
 from software_factory_poc.application.core.agents.scaffolding.scaffolding_order import ScaffoldingOrder
 from software_factory_poc.application.core.agents.scaffolding.scaffolding_order import ScaffoldingOrder
 

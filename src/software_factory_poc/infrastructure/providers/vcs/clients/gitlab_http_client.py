@@ -38,7 +38,7 @@ class GitLabHttpClient:
         with httpx.Client() as client:
             return client.post(url, headers=self._get_headers(), json=json_data, timeout=20.0)
             
-    def head(self, path: str) -> httpx.Response:
+    def head(self, path: str, params: Optional[dict[str, Any]] = None) -> httpx.Response:
         url = f"{self.base_url}/{path.lstrip('/')}"
         with httpx.Client() as client:
-            return client.head(url, headers=self._get_headers(), timeout=5.0)
+            return client.head(url, headers=self._get_headers(), params=params, timeout=5.0)

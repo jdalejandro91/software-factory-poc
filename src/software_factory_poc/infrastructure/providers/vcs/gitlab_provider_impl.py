@@ -1,8 +1,12 @@
 import urllib.parse
-from typing import Any, Optional
+from typing import Any, Optional, List
 
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+from software_factory_poc.application.core.agents.code_reviewer.dtos.code_review_result_dto import ReviewCommentDTO
+from software_factory_poc.application.core.agents.common.dtos.change_type import ChangeType
+from software_factory_poc.application.core.agents.common.dtos.file_changes_dto import FileChangesDTO
+from software_factory_poc.application.core.agents.common.dtos.file_content_dto import FileContentDTO
 from software_factory_poc.application.core.agents.common.exceptions.provider_error import ProviderError
 from software_factory_poc.application.core.agents.vcs.config.vcs_provider_type import VcsProviderType
 from software_factory_poc.application.core.agents.vcs.dtos.vcs_dtos import BranchDTO, CommitResultDTO, MergeRequestDTO
@@ -163,6 +167,296 @@ class GitLabProviderImpl(VcsGateway):
         except Exception as e:
             self._handle_error(e, "create_merge_request")
             raise
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
+    def get_repository_files(self, project_id: int, branch_name: str, max_files: int = 50, max_file_size_kb: int = 100) -> List[FileContentDTO]:
+        self._logger.info(f"Fetching file list for project {project_id} on branch {branch_name} (Limits: max_files={max_files}, max_kb={max_file_size_kb})...")
+        
+        all_files = []
+        page = 1
+        per_page = 100
+        
+        try:
+            # 1. Fetch File List (Recursive Tree)
+            while True:
+                # Safety break for Tree Recursion to avoid infinite loops or memory pressure on metadata
+                if len(all_files) >= max_files * 2: # heuristic buffer since we filter later
+                    break
+
+                response = self.client.get(
+                    f"api/v4/projects/{project_id}/repository/tree",
+                    params={
+                        "ref": branch_name,
+                        "recursive": True,
+                        "per_page": per_page,
+                        "page": page
+                    }
+                )
+                
+                if response.status_code == 404:
+                     raise ProviderError(
+                        provider=VcsProviderType.GITLAB,
+                        message=f"Branch '{branch_name}' not found for project {project_id}",
+                        retryable=False
+                    )
+                
+                response.raise_for_status()
+                items = response.json()
+                
+                if not items:
+                    break
+                
+                all_files.extend(items)
+                page += 1
+                
+            # 2. Filter & Download
+            result_dtos = []
+            
+            # Additional binary extension safety net
+            binary_extensions = {
+                '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.pdf', 
+                '.zip', '.tar', '.gz', '.pyc', '.exe', '.dll', '.so', '.bin', '.lock',
+                '.parquet', '.avro', '.db', '.sqlite', '.sqlite3', '.class', '.jar'
+            }
+            
+            filtered_files = []
+            for item in all_files:
+                if item['type'] != 'blob':
+                    continue
+                
+                path = item['path']
+                ext = ""
+                if "." in path:
+                    ext = "." + path.split(".")[-1].lower()
+                
+                if ext in binary_extensions or "node_modules/" in path or ".git/" in path:
+                    continue
+                    
+                filtered_files.append(path)
+
+            self._logger.info(f"Filtered {len(all_files)} tree items down to {len(filtered_files)} potential files.")
+
+            # 3. Download Loop with Hard Limits
+            for file_path in filtered_files:
+                # A. MAX FILES CHECK
+                if len(result_dtos) >= max_files:
+                    self._logger.warning(f"Repo context truncated: max_files limit ({max_files}) reached.")
+                    break
+
+                try:
+                    encoded_path = urllib.parse.quote(file_path, safe="")
+                    
+                    # B. SIZE CHECK (HEAD Request)
+                    head_resp = self.client.head(
+                        f"api/v4/projects/{project_id}/repository/files/{encoded_path}",
+                        params={"ref": branch_name}
+                    )
+                    
+                    size_header = next((v for k, v in head_resp.headers.items() if k.lower() == 'x-gitlab-size'), "0")
+                    file_size_kb = int(size_header) / 1024
+                    
+                    if file_size_kb > max_file_size_kb:
+                        self._logger.info(f"Skipping {file_path}: Size {file_size_kb:.2f}KB > {max_file_size_kb}KB limit.")
+                        # Optionally include a placeholder if we want to acknowledge existence
+                        result_dtos.append(FileContentDTO(path=file_path, content=f"<FILE_TOO_LARGE_OMITTED_SIZE_{int(file_size_kb)}KB>"))
+                        continue
+
+                    # C. GET CONTENT
+                    resp = self.client.get(
+                        f"api/v4/projects/{project_id}/repository/files/{encoded_path}/raw",
+                        params={"ref": branch_name}
+                    )
+                    resp.raise_for_status()
+                    
+                    # D. TEXT/BINARY CHEKC
+                    content = resp.text
+                    if "\0" in content:
+                        self._logger.info(f"Skipping {file_path}: Binary content detected.")
+                        continue
+                        
+                    result_dtos.append(FileContentDTO(path=file_path, content=content))
+                    
+                except Exception as e:
+                     self._logger.warning(f"Failed to download/decode {file_path}: {e}")
+            
+            self._logger.info(f"Downloaded {len(result_dtos)} text files for context.")
+            return result_dtos
+
+        except Exception as e:
+            self._handle_error(e, f"get_repository_files({branch_name})")
+            raise
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
+    def get_merge_request_diffs(self, project_id: int, mr_id: str) -> List[FileChangesDTO]:
+        self._logger.info(f"Fetching diffs for MR {mr_id} in project {project_id}")
+        try:
+            raw_changes = self.mr_service.get_mr_changes(project_id, mr_id)
+            
+            # Fetch MR details to get HEAD SHA for fetching file content
+            mr_details = self.mr_service.get_mr_details(project_id, mr_id)
+            head_sha = mr_details.get("diff_refs", {}).get("head_sha") 
+            # Fallback to current state if diff_refs is missing (which shouldn't happen on open MRs)
+            if not head_sha: 
+                head_sha = mr_details.get("sha")
+
+            result_dtos = []
+            
+            for change in raw_changes:
+                new_path = change.get("new_path")
+                old_path = change.get("old_path")
+                new_file = change.get("new_file", False)
+                deleted_file = change.get("deleted_file", False)
+                renamed_file = change.get("renamed_file", False)
+                diff_content = change.get("diff", "")
+                
+                # Derive ChangeType
+                change_type = ChangeType.MODIFIED
+                if new_file:
+                    change_type = ChangeType.ADDED
+                elif deleted_file:
+                    change_type = ChangeType.DELETED
+                elif renamed_file:
+                    change_type = ChangeType.RENAMED
+                    
+                # Calculate stats
+                additions = 0
+                deletions = 0
+                if diff_content:
+                    lines = diff_content.split('\n')
+                    for line in lines:
+                        if line.startswith('+') and not line.startswith('+++'):
+                            additions += 1
+                        elif line.startswith('-') and not line.startswith('---'):
+                            deletions += 1
+                
+                # --- FETCH FULL CONTENT ---
+                full_content = None
+                is_binary = False
+                
+                # Filters: No content for deleted files, node_modules, or locks
+                should_fetch = (
+                    not deleted_file 
+                    and "node_modules" not in new_path 
+                    and not new_path.endswith(".lock")
+                )
+                
+                if should_fetch and head_sha:
+                    try:
+                        encoded_path = urllib.parse.quote(new_path, safe="")
+                        # HEAD request to check size first
+                        head_resp = self.client.head(
+                            f"api/v4/projects/{project_id}/repository/files/{encoded_path}",
+                            params={"ref": head_sha}
+                        )
+                        # Case insensitive header lookup
+                        size_header = next((v for k, v in head_resp.headers.items() if k.lower() == 'x-gitlab-size'), "0")
+                        size_bytes = int(size_header)
+                        
+                        if size_bytes > 102400: # > 100KB
+                             self._logger.info(f"Skipping content for {new_path}: Too large ({size_bytes} bytes)")
+                             is_binary = True # Treated as binary/skipped for review purposes
+                        else:
+                             # Get Content
+                             file_resp = self.client.get(
+                                 f"api/v4/projects/{project_id}/repository/files/{encoded_path}/raw",
+                                 params={"ref": head_sha}
+                             )
+                             file_resp.raise_for_status()
+                             # Check for binary content (null bytes)
+                             if "\0" in file_resp.text:
+                                 is_binary = True
+                             else:
+                                 full_content = file_resp.text
+
+                    except Exception as e:
+                        self._logger.warning(f"Could not fetch content for {new_path}: {e}")
+                        
+                dto = FileChangesDTO(
+                    file_path=new_path, # Legacy Alias
+                    new_path=new_path,
+                    old_path=old_path,
+                    change_type=change_type,
+                    is_new_file=new_file,
+                    is_deleted_file=deleted_file,
+                    is_binary=is_binary,
+                    diff_patch=diff_content,
+                    diff_content=diff_content, # Legacy Alias
+                    new_content=full_content,
+                    additions=additions,
+                    deletions=deletions
+                )
+                result_dtos.append(dto)
+                
+            return result_dtos
+            
+        except Exception as e:
+            self._handle_error(e, f"get_merge_request_diffs({mr_id})")
+            raise
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
+    def validate_mr_exists(self, project_id: int, mr_id: str) -> bool:
+        self._logger.info(f"Validating MR {mr_id} exists in project {project_id}")
+        try:
+            self.mr_service.get_mr_details(project_id, mr_id)
+            return True
+        except Exception:
+            return False
+
+    def post_review_comments(self, project_id: int, mr_id: str, comments: List[ReviewCommentDTO]) -> None:
+        self._logger.info(f"Posting {len(comments)} review comments to MR {mr_id} in project {project_id}")
+        try:
+            # fetch mr details for SHAs
+            mr_details = self.mr_service.get_mr_details(project_id, mr_id)
+            diff_refs = mr_details.get("diff_refs", {})
+            base_sha = diff_refs.get("base_sha")
+            start_sha = diff_refs.get("start_sha")
+            head_sha = diff_refs.get("head_sha")
+
+            if not (base_sha and start_sha and head_sha):
+               self._logger.warning(f"MR {mr_id} missing SHA refs. Comments will be general (not threaded).")
+
+            for comment in comments:
+                position = None
+                if comment.line_number and comment.file_path and base_sha:
+                     position = {
+                        "position_type": "text",
+                        "base_sha": base_sha,
+                        "start_sha": start_sha,
+                        "head_sha": head_sha,
+                        "new_path": comment.file_path,
+                        "old_path": comment.file_path, # API requires old_path even for modified files
+                        "new_line": comment.line_number
+                    }
+                
+                # Format body
+                severity_emoji = {
+                    "INFO": "ℹ️",
+                    "MINOR": "⚠️",
+                    "MAJOR": "🛑",
+                    "CRITICAL": "🚨"
+                }.get(comment.severity.name, "📝")
+                
+                body = f"{severity_emoji} **{comment.severity.name}**\n\n{comment.comment_body}"
+                
+                if comment.suggestion:
+                    body += f"\n\n```suggestion\n{comment.suggestion}\n```"
+                
+                try:
+                    self.mr_service.create_discussion(project_id, mr_id, body, position)
+                except Exception as e:
+                    self._logger.warning(f"Failed to post comment at {comment.file_path}:{comment.line_number}. Retrying as general comment. Error: {e}")
+                    if position:
+                         # Fallback format as requested: ⚠️ [En {file_path}:{line_number}] {comment}
+                         # We strip the body's internal severity since it's now a fallback note.
+                         fallback_body = f"⚠️ [En {comment.file_path}:{comment.line_number}] {comment.comment_body}"
+                         try:
+                             self.mr_service.create_discussion(project_id, mr_id, fallback_body, position=None)
+                         except Exception as exc:
+                             self._logger.error(f"Failed to post general fallback comment: {exc}")
+
+        except Exception as e:
+             self._handle_error(e, f"post_review_comments({mr_id})")
+             raise
 
     def _handle_error(self, error: Exception, context: str) -> None:
         self._logger.error(f"Error in GitLabProviderImpl [{context}]: {str(error)}", exc_info=True)

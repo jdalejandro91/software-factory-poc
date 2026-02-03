@@ -26,8 +26,16 @@ class JiraPanelFactory:
                      summary=body.get("summary", ""),
                      links=body.get("links", {})
                  )}
+
+             if msg_type == "code_review_completion":
+                 return {"body": JiraAdfBuilder.build_info_panel(
+                     title=body.get("title", "Review Complete"),
+                     details=body.get("summary", ""),
+                     links=body.get("links", {})
+                 )}
                  
-             return {"body": body}
+             # Fallback: Safe conversion to standard paragraph
+             return JiraPanelFactory._create_standard_payload(str(body))
 
         text_body = str(body)
         
