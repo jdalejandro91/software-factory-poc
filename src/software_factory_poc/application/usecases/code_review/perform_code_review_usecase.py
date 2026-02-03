@@ -1,4 +1,4 @@
-from typing import Optional, Tuple
+from typing import Optional, Tuple, TYPE_CHECKING
 
 from software_factory_poc.application.core.agents.code_reviewer.code_reviewer_agent import (
     CodeReviewerAgent,
@@ -16,7 +16,10 @@ from software_factory_poc.application.core.agents.vcs.vcs_agent import VcsAgent
 from software_factory_poc.infrastructure.observability.logger_factory_service import (
     LoggerFactoryService,
 )
-from software_factory_poc.infrastructure.resolution.provider_resolver import ProviderResolver
+
+# SOLUCIÓN CIRCULAR IMPORT: Importar solo para chequeo de tipos estático
+if TYPE_CHECKING:
+    from software_factory_poc.infrastructure.resolution.provider_resolver import ProviderResolver
 
 logger = LoggerFactoryService.build_logger(__name__)
 
@@ -27,7 +30,8 @@ class PerformCodeReviewUseCase:
     Refactored to resolve dependencies and wire the agent internally.
     """
 
-    def __init__(self, config: CodeReviewerAgentConfig, resolver: ProviderResolver):
+    # SOLUCIÓN: Usar "ProviderResolver" entre comillas (Forward Reference)
+    def __init__(self, config: CodeReviewerAgentConfig, resolver: "ProviderResolver"):
         self.config = config
         self.resolver = resolver
 
