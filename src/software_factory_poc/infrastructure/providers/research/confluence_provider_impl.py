@@ -164,12 +164,23 @@ class ConfluenceProviderImpl(ResearchGateway):
             root_id = root_results[0]["id"]
             
             # Step 2: Find Project Page
-            # We look for a page with the specific project name whose parent is 'Projects'
+            # Strategy: Double Try (Exact Match -> Fuzzy Match)
+            
+            # Attempt 1: Exact Match
             project_cql = f'parent = {root_id} AND title = "{project_name}"'
+            logger.info(f"DEBUG CQL (Attempt 1): {project_cql}")
             project_results = self.http_client.search(project_cql)
             
+            # Attempt 2: Normalized Match (if needed)
             if not project_results:
-                logger.warning(f"Project page '{project_name}' not found under 'Projects'. Returning empty context.")
+                normalized_name = project_name.replace("-", " ").replace("_", " ")
+                if normalized_name != project_name:
+                    project_cql = f'parent = {root_id} AND title = "{normalized_name}"'
+                    logger.info(f"DEBUG CQL (Attempt 2 - Fuzzy): {project_cql}")
+                    project_results = self.http_client.search(project_cql)
+
+            if not project_results:
+                logger.warning(f"⚠️ Project folder '{project_name}' (or normalized) NOT FOUND in Confluence under parent {root_id}.")
                 return ProjectContextDTO(
                     project_name=project_name,
                     root_page_id="N/A",

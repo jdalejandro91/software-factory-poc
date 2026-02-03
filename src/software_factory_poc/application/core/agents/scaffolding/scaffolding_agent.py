@@ -133,23 +133,41 @@ class ScaffoldingAgent(BaseAgent):
         # Thanks to the replace(), request.technology_stack is now correctly updated (e.g. "TypeScript con NestJS")
         
         # --- RESEARCH STRATEGY ---
-        research_ctx = ""
+        # --- RESEARCH STRATEGY ---
+        context_parts = []
         service_name = request.extra_params.get("service_name") if request.extra_params else None
-        page_id = request.extra_params.get("confluence_page_id") if request.extra_params else None
         
+        # 1. Project Context (High Priority)
         if service_name:
-            logger.info(f"📚 Strategy: Project Context Research -> {service_name}")
-            research_ctx = researcher.research_project_technical_context(service_name)
-        elif page_id:
-             logger.info(f"🔍 Strategy: Specific Page Research -> {page_id}")
-             # We use the public investigate method which handles IDs via separate arg logic if needed,
-             # but here we can pass it directly or rely on the agent's logic.
-             # ResearchAgent.investigate(query, specific_page_id=None)
-             research_ctx = researcher.investigate("", specific_page_id=page_id)
-        else:
+            logger.info(f"🔎 Strategy: Project Context Search -> Looking for '/projects/{service_name}'")
+            try:
+                project_ctx = researcher.research_project_technical_context(service_name)
+                if project_ctx and "ADVERTENCIA" not in project_ctx and "ERROR" not in project_ctx:
+                     context_parts.append(f"=== REQUISITOS DEL PROYECTO ===\n{project_ctx}")
+                elif project_ctx:
+                     # Log warning but still append if it's an error message so LLM knows
+                     context_parts.append(f"=== REQUISITOS DEL PROYECTO (ADVERTENCIA) ===\n{project_ctx}")
+            except Exception as e:
+                logger.warning(f"Failed to retrieve project context for {service_name}: {e}")
+
+        # 2. Global Standards (Base) - Always append if configured
+        if self.config.architecture_page_id:
+            logger.info(f"🔎 Strategy: Appending Global Architecture Standards (Page ID: {self.config.architecture_page_id})")
+            try:
+                global_ctx = researcher.investigate("", specific_page_id=self.config.architecture_page_id)
+                if global_ctx:
+                     context_parts.append(f"=== ESTÁNDARES DE ARQUITECTURA ===\n{global_ctx}")
+            except Exception as e:
+                logger.warning(f"Failed to retrieve global architecture: {e}")
+
+        # 3. Fallback / General Query if nothing found
+        if not context_parts:
             query = f"Architecture standards for {request.technology_stack} enterprise projects"
-            logger.info(f"🔎 Strategy: General Query Research -> {query}")
-            research_ctx = researcher.investigate(query)
+            logger.info(f"🔎 Strategy: Fallback General Query Research -> {query}")
+            fallback_ctx = researcher.investigate(query)
+            context_parts.append(f"=== CONTEXTO GENERAL ===\n{fallback_ctx}")
+
+        research_ctx = "\n\n".join(context_parts)
             
         logger.info(f"Research result length: {len(research_ctx)}")
 
