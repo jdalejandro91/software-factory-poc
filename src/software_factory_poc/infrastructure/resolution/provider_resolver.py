@@ -224,9 +224,6 @@ class ProviderResolver:
         )
 
         return CodeReviewerAgent(
-            name="CodeReviewer",
-            role="Senior Software Architect & Security Expert",
-            goal="Review code to ensure security, performance, and maintainability standards",
             config=config,
             reporter=reporter,
             vcs=vcs,

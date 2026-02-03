@@ -12,6 +12,8 @@ from software_factory_poc.infrastructure.entrypoints.api.dtos.jira_webhook_dto i
 from software_factory_poc.infrastructure.observability.logger_factory_service import (
     LoggerFactoryService,
 )
+# Reuse the robust extraction logic from the main payload mapper
+from software_factory_poc.infrastructure.entrypoints.api.mappers.jira_payload_mapper import JiraPayloadMapper
 
 logger = LoggerFactoryService.build_logger(__name__)
 
@@ -28,12 +30,23 @@ class JiraCodeReviewMapper:
             raise ValueError("Description missing in webhook payload")
         
         try:
-            # 1. Extract context
-            data = JiraCodeReviewMapper._extract_automation_context(desc)
+            # 1. Parse Description using the Robust Logic from JiraPayloadMapper
+            # This ensures we respect the {code:yaml} and ```yaml blocks correctly
+            task_desc = JiraPayloadMapper._parse_description_config(desc)
+            config = task_desc.config
+            
+            # 2. Extract context
+            # Look for nested 'code_review_params', fallback to root
+            data = config.get("code_review_params")
             if not data:
-                raise ValueError("Extracted automation context (code_review_params) is empty")
+                # Compatibility Fallback: check if root has keys
+                if config.get("gitlab_project_id"):
+                    data = config
+            
+            if not data:
+                raise ValueError("Extracted automation context (code_review_params) is empty or not found")
 
-            # 2. Extract Fields safely
+            # 3. Extract Fields safely
             pid = data.get("gitlab_project_id")
             if not pid:
                 raise ValueError("Missing 'gitlab_project_id'")
@@ -56,44 +69,6 @@ class JiraCodeReviewMapper:
         except (KeyError, ValueError, TypeError) as e: 
              logger.error(f"Mapping failed for {payload.issue.key}: {e}")
              raise ValueError(f"Mapping failed: {e}")
-
-    @staticmethod
-    def _extract_automation_context(description: str) -> Dict[str, Any]:
-        """
-        Scans for YAML blocks and looks for 'code_review_params'.
-        """
-        # 1. Regex for Code Blocks (Markdown or Jira style)
-        # Matches content inside ```yaml ... ``` or {code:yaml} ... {code}
-        code_block_iter = re.finditer(r"```(?:yaml)?\s*([\s\S]*?)\s*```", description, re.DOTALL | re.IGNORECASE)
-        
-        for match in code_block_iter:
-            try:
-                parsed = yaml.safe_load(match.group(1).strip())
-                if isinstance(parsed, dict):
-                    # PRIORIDAD 1: Clave exacta
-                    if "code_review_params" in parsed:
-                        return parsed["code_review_params"]
-                    # PRIORIDAD 2: Estructura plana (si el bloque contiene solo los params)
-                    if "gitlab_project_id" in parsed:
-                        return parsed
-            except yaml.YAMLError:
-                continue
-
-        # Fallback for Jira {code} format if regex above didn't catch it
-        jira_iter = re.finditer(r"\{code(?::yaml)?\}\s*([\s\S]*?)\s*\{code\}", description, re.DOTALL | re.IGNORECASE)
-        for match in jira_iter:
-             try:
-                parsed = yaml.safe_load(match.group(1).strip())
-                if isinstance(parsed, dict):
-                    if "code_review_params" in parsed:
-                        return parsed["code_review_params"]
-                    if "gitlab_project_id" in parsed:
-                        return parsed
-             except yaml.YAMLError:
-                pass
-        
-        logger.warning("No valid YAML block found with 'code_review_params'.")
-        return {}
 
     @staticmethod
     def _extract_mr_id(mr_url: str) -> str:

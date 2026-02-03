@@ -60,13 +60,10 @@ class CodeReviewerAgent(BaseAgent):
             self.reporter.report_start(task.key, message="🧐 Iniciando revisión de código...")
 
             # Extract Params from Task Config
-            cr_params = task.description.config.get("code_review_params", {})
+            # Prioritize nested 'code_review_params', fallback to root for backward compatibility
+            cr_params = task.description.config.get("code_review_params")
             if not cr_params:
-                # Fallback or check root parameters?
-                # Assuming rigorous mapper put them in code_review_params or root config.
-                # For safety, check also root config if specific key missing?
-                # For now strict: must be in code_review_params or root keys.
-                # Let's try to be smart:
+                logger.info("No 'code_review_params' found. Falling back to root config.")
                 cr_params = task.description.config
             
             # Phase 1: Validation
@@ -263,6 +260,25 @@ class CodeReviewerAgent(BaseAgent):
         }
         
         self.reporter.report_success(task.key, report_payload)
+        
+        # 5. Update Task Metadata (Persist Review Status to YAML)
+        from datetime import datetime
+        
+        review_context = {
+            "review_status": {
+                "last_review_at": datetime.utcnow().isoformat(),
+                "status": result.verdict.name,
+                "reviewer": "CodeReviewerAgent"
+            }
+        }
+        
+        # Merge into Task Config
+        updated_task = task.update_metadata(review_context)
+        logger.info(f"Updated Task Metadata with Review Status: {result.verdict.name}")
+        
+        # Sync with Jira (This ensures the YAML block in Description is updated)
+        self.reporter.update_task_description(task.key, updated_task.description)
+        
         logger.info("Code review flow finished successfully.")
 
     def _handle_critical_failure(self, task: Task, error: Exception) -> None:
