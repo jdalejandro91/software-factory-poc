@@ -261,17 +261,21 @@ class CodeReviewerAgent(BaseAgent):
             "REQUEST_CHANGES": "🚫"
         }.get(result.verdict.name, "📋")
 
-        mr_url = params.get("mr_url")
-        mr_id = params.get("mr_id") or params.get("merge_request_id")
+        # Robust URL extraction
+        mr_url = params.get("review_request_url") or params.get("mr_url")
+        if not mr_url:
+             # Fallback: Construct URL or use generic (avoid failing reporting)
+             logger.warning("MR URL missing in params.")
+             mr_url = f"https://gitlab.com/projects/{params.get('project_id', 'unknown')}/merge_requests/{mr_id}" if mr_id else "https://gitlab.com"
         
-        mr_link = mr_url or f"MR ID: {mr_id}"
+        logger.info(f"🔗 Generando payload de éxito. URL del MR: '{mr_url}'")
         
         report_payload = {
-            "type": "code_review_completion",
+            "type": "code_review_success",
             "title": f"Code Review Finalizado: {verdict_emoji} {result.verdict.name}",
             "summary": "Se completó la revisión de código. Los comentarios se publicaron en el MR.",
             "links": {
-                "Ver Merge Request": mr_link
+                "🔗 Ver Merge Request": mr_url
             }
         }
         

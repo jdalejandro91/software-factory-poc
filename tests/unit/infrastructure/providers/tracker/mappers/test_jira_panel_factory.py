@@ -29,10 +29,14 @@ class TestJiraPanelFactory(unittest.TestCase):
         self.assertEqual(result["body"]["version"], 1)
         
         # Checking content structure: [Heading, Panel]
-        # Index 0 might be Heading (if title exists), Index 1 is Panel.
-        # Let's find the panel node.
-        panel_node = next((node for node in body_content if node["type"] == "panel"), None)
-        self.assertIsNotNone(panel_node, "Panel node not found in ADF content")
+        # Index 0 is Heading, Index 1 is Panel.
+        heading_node = body_content[0]
+        self.assertEqual(heading_node["type"], "heading")
+        self.assertIn("Branch Exists", heading_node["content"][0]["text"])
+
+        panel_node = body_content[1]
+        self.assertEqual(panel_node["type"], "panel")
+
         
         # Verify Panel Attributes (scaffolding_exists -> warning)
         self.assertEqual(panel_node["attrs"]["panelType"], "warning")
