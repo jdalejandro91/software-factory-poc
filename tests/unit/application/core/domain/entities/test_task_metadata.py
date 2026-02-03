@@ -31,7 +31,7 @@ class TestTaskMetadata(unittest.TestCase):
         # Should NOT have duplicate blocks (rough check)
         self.assertEqual(updated_task.description.raw_content.count("```yaml"), 1)
 
-    def test_jira_block_replacement(self):
+    def test_jira_block_preservation(self):
         jira_raw = "Initial text\n{code:yaml}\nold: data\n{code}\nFooter"
         task_jira = Task(
              id="3", key="T-3", summary="Jira", status="Todo", project_key="PROJ", issue_type="Task",
@@ -40,11 +40,29 @@ class TestTaskMetadata(unittest.TestCase):
         
         updated_task = task_jira.update_metadata({"new": "data"})
         
-        # Should be converted to Markdown ```yaml
-        self.assertIn("```yaml", updated_task.description.raw_content)
-        self.assertNotIn("{code:yaml}", updated_task.description.raw_content)
+        # Should PRESERVE Jira tags
+        self.assertIn("{code:yaml}", updated_task.description.raw_content)
+        self.assertIn("{code}", updated_task.description.raw_content)
+        self.assertNotIn("```", updated_task.description.raw_content)
+        
         self.assertIn("new: data", updated_task.description.raw_content)
         self.assertIn("Initial text", updated_task.description.raw_content)
+
+    def test_markdown_block_preservation(self):
+        md_raw = "Initial text\n```yaml\nold: data\n```\nFooter"
+        task_md = Task(
+             id="5", key="T-5", summary="Markdown", status="Todo", project_key="PROJ", issue_type="Task",
+             description=TaskDescription(raw_content=md_raw, config={"old": "data"})
+        )
+        
+        updated_task = task_md.update_metadata({"new": "data"})
+        
+        # Should PRESERVE Markdown tags
+        self.assertIn("```yaml", updated_task.description.raw_content)
+        self.assertIn("```", updated_task.description.raw_content)
+        self.assertNotIn("{code", updated_task.description.raw_content)
+        
+        self.assertIn("new: data", updated_task.description.raw_content)
         
     def test_smart_merge_logic(self):
         base_cfg = {
@@ -85,7 +103,9 @@ class TestTaskMetadata(unittest.TestCase):
         
         self.assertIn("Just text", updated_task.description.raw_content)
         self.assertIn("new: data", updated_task.description.raw_content)
-        self.assertIn("```yaml", updated_task.description.raw_content)
+        # Defaults to Jira style now
+        self.assertIn("{code:yaml}", updated_task.description.raw_content)
+        self.assertIn("{code}", updated_task.description.raw_content)
 
     def test_immutability(self):
         new_ctx = {"changed": True}

@@ -36,6 +36,7 @@ class Task:
         """
         Creates a new Task instance with merged configuration and updated raw content.
         Safely preserves existing human text while updating the automation YAML block.
+        Preserves the formatting style (Jira {code} vs Markdown ```).
         """
         import yaml
         import re
@@ -55,28 +56,35 @@ class Task:
 
         # 2. Serialize to clean YAML
         new_yaml_str = yaml.dump(current_config, default_flow_style=False, allow_unicode=True).strip()
-        formatted_yaml_block = f"```yaml\n{new_yaml_str}\n```"
 
-        # 3. Update Raw Content
+        # 3. Detect and Preserve Block Style
         current_raw = self.description.raw_content
         
-        # Regex to find existing YAML block: 
-        # Supports ```yaml ... ``` or {code:yaml} ... {code} (Jira style)
-        # Matches any typical automation config block.
-        # Captures: 1. Delimiter start (non-capture), 2. Content, 3. Delimiter end (non-capture)
-        # We replace the ENTIRE match with the standardized Markdown block.
+        # Robust Regex to capture delimiters
+        # Captures: start=Opening Tag, content=Content, end=Closing Tag
+        # Support: ```yaml, ```, {code:yaml}, {code}
+        complex_pattern = r"(?P<start>```(?:yaml|yml|scaffolding)?|\{code(?::(?:yaml|yml|scaffolding))?(?:\|[\w=]+)*\})\s*(?P<content>[\s\S]*?)\s*(?P<end>```|\{code\})"
         
-        # Pattern: 
-        # (?: ... ) Grouping without capturing
-        # ```(?:yaml|yml|scaffolding)? Matches ``` optional lang
-        # | \{code...\} Matches Jira macro
-        # [\s\S]*? Matches content lazy
-        complex_pattern = r"(?:```(?:yaml|yml|scaffolding)?|\{code(?::(?:yaml|yml|scaffolding))?(?:\|[\w=]+)*\})\s*([\s\S]*?)\s*(?:```|\{code\})"
+        match = re.search(complex_pattern, current_raw, re.IGNORECASE)
         
-        if re.search(complex_pattern, current_raw, re.IGNORECASE):
-            new_raw = re.sub(complex_pattern, formatted_yaml_block, current_raw, count=1, flags=re.IGNORECASE)
+        if match:
+            start_tag = match.group("start")
+            end_tag = match.group("end")
+            
+            # Normalize Jira tag if complex to ensure valid YAML structure or reuse exact?
+            # We reuse the exact captured tag to minimize diffs, assuming it was valid.
+            
+            new_block = f"{start_tag}\n{new_yaml_str}\n{end_tag}"
+            
+            # Replace the full match with the new block
+            new_raw = current_raw.replace(match.group(0), new_block)
+            
         else:
-            # Append if not found
+            # Default to Jira style if no block found (Safer for Jira rendering)
+            start_tag = "{code:yaml}"
+            end_tag = "{code}"
+            
+            formatted_yaml_block = f"{start_tag}\n{new_yaml_str}\n{end_tag}"
             new_raw = f"{current_raw.rstrip()}\n\n{formatted_yaml_block}"
 
         # 4. Return new Task
