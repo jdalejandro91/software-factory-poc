@@ -271,7 +271,7 @@ class CodeReviewerAgent(BaseAgent):
             "title": f"Code Review Finalizado: {verdict_emoji} {result.verdict.name}",
             "summary": "Se completó la revisión de código. Los comentarios se publicaron en el MR.",
             "links": {
-                "🔗 Ver Merge Request": mr_link
+                "Ver Merge Request": mr_link
             }
         }
         
