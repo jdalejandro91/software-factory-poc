@@ -50,7 +50,6 @@ async def trigger_scaffold(
     background_tasks: BackgroundTasks,
     usecase: CreateScaffoldingUseCase = Depends(get_usecase)
 ):
-    # Extract Logic (< 12 lines goal for main logic)
     jira_request = await _process_incoming_webhook(request)
     
     if isinstance(jira_request, JSONResponse):

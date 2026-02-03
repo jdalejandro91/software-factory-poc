@@ -37,6 +37,16 @@ class JiraPayloadMapper:
         target_config = params.get("target", {})
         extra_params = params.get("parameters", {})
         
+        # Deep Lookup for service_name extraction (common issue with nested YAMLs)
+        service_name = extra_params.get("service_name")
+        if not service_name:
+            service_name = params.get("service_name")
+            if service_name:
+                 # Normalize into extra_params if found at root
+                 extra_params["service_name"] = service_name
+
+        logger.info(f"🧩 MAPPER PARSED -> Service: '{service_name}' | Stack: '{tech_stack}'")
+        
         # 3. Resolve Project Info Safely
         project_data = None
         # Priority 1: Project inside fields (Standard)
@@ -60,7 +70,8 @@ class JiraPayloadMapper:
             summary=payload.issue.fields.summary,
             reporter=payload.user.display_name,
             project_key=p_key,
-            project_id=p_id
+            project_id=p_id,
+            service_name=service_name
         )
 
     @classmethod
@@ -89,5 +100,6 @@ class JiraPayloadMapper:
             summary=fields.get("summary", "No Summary"),
             reporter=payload.get("user", {}).get("displayName", "Unknown"),
             project_key=fields.get("project", {}).get("key", ""),
-            project_id=fields.get("project", {}).get("id", "")
+            project_id=fields.get("project", {}).get("id", ""),
+            service_name=extra_params.get("service_name")
         )

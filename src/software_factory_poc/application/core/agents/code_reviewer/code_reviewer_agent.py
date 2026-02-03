@@ -1,10 +1,11 @@
-from dataclasses import dataclass
-from typing import List, Tuple
+import logging
+from typing import List, Optional, Tuple
 
 from software_factory_poc.application.core.agents.base_agent import BaseAgent
 from software_factory_poc.application.core.agents.code_reviewer.config.code_reviewer_agent_config import (
     CodeReviewerAgentConfig,
 )
+from software_factory_poc.application.core.agents.code_reviewer.dtos.code_review_result_dto import CodeReviewResultDTO
 from software_factory_poc.application.core.agents.code_reviewer.tools.code_review_prompt_builder import (
     CodeReviewPromptBuilder,
 )
@@ -20,119 +21,214 @@ from software_factory_poc.application.core.agents.research.research_agent import
 from software_factory_poc.application.core.agents.vcs.vcs_agent import VcsAgent
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 
+logger = LoggerFactoryService.build_logger(__name__)
 
-@dataclass
+
 class CodeReviewerAgent(BaseAgent):
     """
     Orchestrator Agent for Code Review Tasks.
+    Refactored with Layered Research Strategy.
     """
 
-    config: CodeReviewerAgentConfig
-    reporter: ReporterAgent
-    vcs: VcsAgent
-    researcher: ResearchAgent
-    reasoner: ReasonerAgent
+    def __init__(
+        self,
+        config: CodeReviewerAgentConfig,
+        reporter: ReporterAgent,
+        vcs: VcsAgent,
+        researcher: ResearchAgent,
+        reasoner: ReasonerAgent,
+    ):
+        super().__init__(name="CodeReviewerAgent", role="Reviewer", goal="Perform automated code reviews")
+        
+        # Dependencies (Composition)
+        self.config = config
+        self.reporter = reporter
+        self.vcs = vcs
+        self.researcher = researcher
+        self.reasoner = reasoner
 
-    def __post_init__(self):
-        self.logger = LoggerFactoryService.build_logger(__name__)
+        # Internal Tools
         self.prompt_builder = CodeReviewPromptBuilder()
         self.parser = ReviewResultParser()
-        self.logger.info("CodeReviewerAgent initialized")
+        
+        logger.info("CodeReviewerAgent initialized")
 
     def execute_flow(self, order: CodeReviewOrder) -> None:
+        """
+        Main orchestration flow for Code Review.
+        """
         self.logger.info(f"Starting code review for {order}")
         
         try:
-            # 3.1 Report Start
             self.reporter.report_start(order.issue_key, message="🧐 Iniciando revisión de código...")
-            
-            # 3.2 Validate Provider
-            if order.vcs_provider.upper() != "GITLAB":
-                msg = f"Provider '{order.vcs_provider}' not supported yet. Only GITLAB is supported."
-                self.logger.warning(msg)
-                self.reporter.report_failure(order.issue_key, msg)
+
+            # Phase 1: Validation
+            if not self._validate_preconditions(order):
                 return
 
-            # 3.3 Validate MR Existence
-            exists = self.vcs.validate_mr(order.project_id, order.mr_id)
-            if not exists:
-                msg = f"Merge Request {order.mr_id} not found in project {order.project_id}"
-                self.logger.error(msg)
-                self.reporter.report_failure(order.issue_key, msg)
+            # Phase 2: Data Gathering
+            original_code, changes, continue_flow = self._fetch_and_validate_artifacts(order)
+            if not continue_flow:
                 return
 
-            self.logger.info(f"MR {order.mr_id} validated. Proceeding with review...")
-            
-            # 3.4 Fetch Artifacts and Validate Diff
-            original_code, changes = self._fetch_review_artifacts(order)
-            
-            if not changes:
-                msg = "Review skipped: No changes detected in MR."
-                self.logger.info(msg)
-                self.reporter.report_success(order.issue_key, msg)
-                return
+            # Execute Layered Research Strategy
+            technical_context = self._gather_technical_context(order)
 
-            # 3.5 Gather Technical Context
-            query = f"Standards and guidelines for {order.summary}"
-            technical_context = self.researcher.investigate(
-                query=query,
-                specific_page_id=order.technical_doc_id
-            )
-            self.logger.info(f"Research complete. Context size: {len(technical_context)} chars")
+            # Phase 3: Analysis (Reasoning)
+            review_result = self._perform_review_reasoning(order, original_code, changes, technical_context)
 
-            # 3.8 Prompt Construction
-            prompt = self.prompt_builder.build_prompt(
-                diffs=changes,
-                original_files=original_code,
-                technical_context=technical_context,
-                requirements=f"{order.summary}\n\n{order.description}"
-            )
-            self.logger.info("Prompt constructed successfully.")
-
-            # 3.9 Reasoning (LLM)
-            raw_response = self.reasoner.reason(
-                prompt=prompt,
-                model_id=self.config.llm_model_priority
-            )
-            self.logger.info(f"LLM response received. Length: {len(raw_response)} chars")
-
-            # 3.10 Parse Result
-            review_result = self.parser.parse(raw_response)
-            self.logger.info(f"Review parsed successfully. Verdict: {review_result.verdict}. Comments: {len(review_result.comments)}")
-
-            # 3.11 Submit Review
-            self.vcs.submit_review(order.project_id, order.mr_id, review_result.comments)
-            self.logger.info("Review comments submitted to VCS.")
-
-            # 3.12 Report Success (Without transitioning)
-            verdict_emoji = {
-                "APPROVE": "✅",
-                "COMMENT": "💬",
-                "REQUEST_CHANGES": "🚫"
-            }.get(review_result.verdict.name, "📋")
-
-            # Format requested: "Code Review Completed. Comments posted on MR: {link}. Verdict: {verdict}."
-            mr_link = order.mr_url or f"MR ID: {order.mr_id}"
-            
-            report_payload = {
-                "type": "code_review_completion",
-                "title": f"Code Review Finalizado: {verdict_emoji} {review_result.verdict.name}",
-                "summary": f"Se completó la revisión de código. Los comentarios se publicaron en el MR.",
-                "links": {
-                    "🔗 Ver Merge Request": mr_link
-                }
-            }
-            # Note: We do NOT transition the task status here, as per requirements.
-            # It stays in 'In Review' until a human moves it.
-            self.reporter.report_success(order.issue_key, report_payload)
-            self.logger.info("Code review flow finished successfully.")
+            # Phase 4: Submission & Reporting
+            self._submit_review_comments(order, review_result)
+            self._report_completion(order, review_result)
 
         except Exception as e:
-            self.logger.exception("Critical error in Code Review")
-            self.reporter.report_failure(order.issue_key, error_msg=str(e))
+            self._handle_critical_failure(order, e)
 
-    def _fetch_review_artifacts(self, order: CodeReviewOrder) -> Tuple[List[FileContentDTO], List[FileChangesDTO]]:
-        """Fetches code context and diffs from VCS."""
+    # --- Phase 1: Validation Methods ---
+
+    def _validate_preconditions(self, order: CodeReviewOrder) -> bool:
+        # 1. Provider Check
+        if order.vcs_provider.upper() != "GITLAB":
+            msg = f"Provider '{order.vcs_provider}' not supported yet. Only GITLAB is supported."
+            logger.warning(msg)
+            self.reporter.report_failure(order.issue_key, msg)
+            return False
+
+        # 2. MR Existence Check
+        exists = self.vcs.validate_mr(order.project_id, order.mr_id)
+        if not exists:
+            msg = f"Merge Request {order.mr_id} not found in project {order.project_id}"
+            logger.error(msg)
+            self.reporter.report_failure(order.issue_key, msg)
+            return False
+
+        logger.info(f"MR {order.mr_id} validated. Proceeding...")
+        return True
+
+    # --- Phase 2: Data Gathering Methods ---
+
+    def _fetch_and_validate_artifacts(
+        self, order: CodeReviewOrder
+    ) -> Tuple[List[FileContentDTO], List[FileChangesDTO], bool]:
+        """
+        Fetches artifacts. Returns (OriginalCode, Changes, ShouldContinue).
+        """
         original_code = self.vcs.get_code_context(order.project_id, order.source_branch)
         changes = self.vcs.get_mr_changes(order.project_id, order.mr_id)
-        return original_code, changes
+
+        if not changes:
+            msg = "Review skipped: No changes detected in MR."
+            logger.info(msg)
+            self.reporter.report_success(order.issue_key, msg)
+            return [], [], False
+
+        return original_code, changes, True
+
+    def _gather_technical_context(self, order: CodeReviewOrder) -> str:
+        """
+        Executes a Layered Research Strategy similar to ScaffoldingAgent.
+        1. Project Specific Context (via service_name)
+        2. Specific Documentation (via technical_doc_id)
+        3. Global Standards/Best Practices (Fallback/Supplement)
+        """
+        context_parts = []
+        
+        # 1. Project Context (High Priority)
+        # Nota: Asumimos que 'service_name' viene en el order (ej. extraído de params de Jira)
+        if order.service_name:
+            logger.info(f"🔎 Researching Project Context for: '{order.service_name}'")
+            try:
+                project_ctx = self.researcher.research_project_technical_context(order.service_name)
+                if project_ctx and "ERROR" not in project_ctx:
+                    context_parts.append(f"=== REGLAS DEL PROYECTO ({order.service_name}) ===\n{project_ctx}")
+            except Exception as e:
+                logger.warning(f"Failed to retrieve project context: {e}")
+
+        # 2. Specific Technical Doc (If linked in the Jira Task)
+        if order.technical_doc_id:
+            logger.info(f"🔎 Researching Specific Doc ID: {order.technical_doc_id}")
+            try:
+                doc_ctx = self.researcher.investigate(query="", specific_page_id=order.technical_doc_id)
+                if doc_ctx:
+                    context_parts.append(f"=== DOCUMENTACIÓN VINCULADA ===\n{doc_ctx}")
+            except Exception as e:
+                logger.warning(f"Failed to retrieve specific doc: {e}")
+
+        # 3. Global/General Standards (Always include as baseline)
+        logger.info(f"🔎 Researching General Standards for: {order.summary}")
+        query = f"Best practices, security, and clean code standards for {order.summary}"
+        global_ctx = self.researcher.investigate(query=query)
+        context_parts.append(f"=== ESTÁNDARES GENERALES Y BUENAS PRÁCTICAS ===\n{global_ctx}")
+
+        full_context = "\n\n".join(context_parts)
+        logger.info(f"Research complete. Total context size: {len(full_context)} chars")
+        
+        return full_context
+
+    # --- Phase 3: Analysis Methods ---
+
+    def _perform_review_reasoning(
+        self,
+        order: CodeReviewOrder,
+        original_code: List[FileContentDTO],
+        changes: List[FileChangesDTO],
+        context: str
+    ) -> CodeReviewResultDTO:
+        
+        prompt = self.prompt_builder.build_prompt(
+            diffs=changes,
+            original_files=original_code,
+            technical_context=context,
+            requirements=f"{order.summary}\n\n{order.description}"
+        )
+        logger.info("Prompt constructed successfully.")
+
+        # Resolve Model ID (using priority list or default)
+        model_id = self.config.llm_model_priority if self.config.llm_model_priority else "openai:gpt-4-turbo"
+
+        raw_response = self.reasoner.reason(
+            prompt=prompt,
+            model_id=model_id
+        )
+        logger.info(f"LLM response received. Length: {len(raw_response)} chars")
+
+        review_result = self.parser.parse(raw_response)
+        logger.info(f"Review parsed. Verdict: {review_result.verdict}. Comments: {len(review_result.comments)}")
+        
+        return review_result
+
+    # --- Phase 4: Submission & Reporting Methods ---
+
+    def _submit_review_comments(self, order: CodeReviewOrder, result: CodeReviewResultDTO) -> None:
+        if not result.comments:
+            logger.info("No comments generated by the reviewer.")
+            return
+
+        self.vcs.submit_review(order.project_id, order.mr_id, result.comments)
+        logger.info("Review comments submitted to VCS.")
+
+    def _report_completion(self, order: CodeReviewOrder, result: CodeReviewResultDTO) -> None:
+        verdict_emoji = {
+            "APPROVE": "✅",
+            "COMMENT": "💬",
+            "REQUEST_CHANGES": "🚫"
+        }.get(result.verdict.name, "📋")
+
+        mr_link = order.mr_url or f"MR ID: {order.mr_id}"
+        
+        report_payload = {
+            "type": "code_review_completion",
+            "title": f"Code Review Finalizado: {verdict_emoji} {result.verdict.name}",
+            "summary": "Se completó la revisión de código. Los comentarios se publicaron en el MR.",
+            "links": {
+                "🔗 Ver Merge Request": mr_link
+            }
+        }
+        
+        # Note: Status remains 'In Review' as per requirements.
+        self.reporter.report_success(order.issue_key, report_payload)
+        logger.info("Code review flow finished successfully.")
+
+    def _handle_critical_failure(self, order: CodeReviewOrder, error: Exception) -> None:
+        logger.exception("Critical error in Code Review")
+        self.reporter.report_failure(order.issue_key, error_msg=str(error))
