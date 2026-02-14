@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from software_factory_poc.infrastructure.providers.llms.anthropic.anthropic_provider_impl import AnthropicProviderImpl
+from software_factory_poc.infrastructure.adapters.drivers.llms.anthropic.anthropic_provider_impl import AnthropicProviderImpl
 
 
 @pytest.mark.asyncio

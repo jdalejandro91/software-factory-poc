@@ -1,6 +1,6 @@
 from unittest.mock import patch, MagicMock
 
-from software_factory_poc.application.core.agents.common.dtos.file_content_dto import FileContentDTO
+from software_factory_poc.application.ports.drivers.common.dtos.file_content_dto import FileContentDTO
 from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import \
     ScaffoldingAgentConfig
 from software_factory_poc.application.core.agents.scaffolding.scaffolding_agent import ScaffoldingAgent

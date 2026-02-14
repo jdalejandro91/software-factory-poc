@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from software_factory_poc.infrastructure.providers.vcs.services.gitlab_branch_service import GitLabBranchService
+from software_factory_poc.infrastructure.adapters.drivers.vcs import GitLabBranchService
 
 
 def test_gitlab_service_conflict_handling():

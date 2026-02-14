@@ -7,7 +7,7 @@ from software_factory_poc.application.core.ports.gateways.dtos import FileConten
 # Removed duplicate TaskStatus import if it was handled above or keep it
 # The original code had: from software_factory_poc.application.core.agents.common.config.task_status import TaskStatus
 # I will check if I need to update that one too. I'll leave it for now or update it if I know the path.
-from software_factory_poc.application.core.agents.common.config.task_status import TaskStatus
+from software_factory_poc.application.ports.drivers.common.config.task_status import TaskStatus
 from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import \
     ScaffoldingAgentConfig
 from software_factory_poc.application.core.agents.scaffolding.scaffolding_agent import ScaffoldingAgent
@@ -106,7 +106,7 @@ class TestScaffoldingAgent:
 # --------------------------------------------------------------------------------
 # Merged Tests from Refactoring
 # --------------------------------------------------------------------------------
-from software_factory_poc.application.core.agents.reporter.config.reporter_constants import ReporterMessages
+from software_factory_poc.application.ports.drivers.reporter import ReporterMessages
 
 def test_branch_naming_slugification():
     config = MagicMock(spec=ScaffoldingAgentConfig)

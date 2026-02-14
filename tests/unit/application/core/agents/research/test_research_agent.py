@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from software_factory_poc.application.core.agents.research.research_agent import ResearchAgent
+from software_factory_poc.application.ports.drivers.research import ResearchAgent
 from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import \
     ScaffoldingAgentConfig
 

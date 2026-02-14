@@ -1,7 +1,7 @@
 from typing import List
 
-from software_factory_poc.application.core.agents.common.dtos.file_changes_dto import FileChangesDTO
-from software_factory_poc.application.core.agents.common.dtos.file_content_dto import FileContentDTO
+from software_factory_poc.application.ports.drivers.common.dtos.file_changes_dto import FileChangesDTO
+from software_factory_poc.application.ports.drivers.common.dtos.file_content_dto import FileContentDTO
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 
 

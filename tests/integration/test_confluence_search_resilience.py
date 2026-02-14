@@ -13,7 +13,7 @@ except ImportError:
     pass
 
 from software_factory_poc.infrastructure.configuration.confluence_settings import ConfluenceSettings
-from software_factory_poc.infrastructure.providers.research.confluence_provider_impl import ConfluenceProviderImpl
+from software_factory_poc.infrastructure.adapters.drivers.research.confluence_provider_impl import ConfluenceProviderImpl
 
 # Parse logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

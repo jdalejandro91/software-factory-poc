@@ -12,7 +12,7 @@ from software_factory_poc.application.core.agents.common.configuration.vcs_provi
     VcsProviderType,
 )
 
-from software_factory_poc.application.core.agents.common.config.llm_provider_type import (
+from software_factory_poc.application.ports.drivers.common.config.llm_provider_type import (
     LlmProviderType,
 )
 from software_factory_poc.infrastructure.configuration.scaffolding_config_loader import (

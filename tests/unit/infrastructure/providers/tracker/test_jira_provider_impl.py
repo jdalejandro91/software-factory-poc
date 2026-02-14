@@ -2,8 +2,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from software_factory_poc.application.core.agents.common.exceptions.provider_error import ProviderError
-from software_factory_poc.infrastructure.providers.tracker.jira_provider_impl import JiraProviderImpl
+from software_factory_poc.application.ports.drivers.common.exceptions import ProviderError
+from software_factory_poc.infrastructure.adapters.drivers.tracker.jira_provider_impl import JiraProviderImpl
 
 
 @pytest.fixture

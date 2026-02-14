@@ -1,8 +1,8 @@
 import unittest
 from unittest.mock import MagicMock
-from software_factory_poc.infrastructure.providers.research.confluence_provider_impl import ConfluenceProviderImpl
+from software_factory_poc.infrastructure.adapters.drivers.research.confluence_provider_impl import ConfluenceProviderImpl
 from software_factory_poc.infrastructure.configuration.confluence_settings import ConfluenceSettings
-from software_factory_poc.application.core.agents.common.exceptions.provider_error import ProviderError
+from software_factory_poc.application.ports.drivers.common.exceptions import ProviderError
 
 class TestConfluenceProviderContext(unittest.TestCase):
 

@@ -1,4 +1,4 @@
-from software_factory_poc.infrastructure.providers.tracker.mappers.jira_adf_builder import (
+from software_factory_poc.infrastructure.adapters.drivers.tracker.mappers import (
     JiraAdfBuilder,
 )
 

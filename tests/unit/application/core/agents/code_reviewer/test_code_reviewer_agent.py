@@ -1,13 +1,13 @@
 
 import unittest
-from unittest.mock import MagicMock, ANY
+from unittest.mock import MagicMock
 
 from software_factory_poc.application.core.agents.code_reviewer.code_reviewer_agent import CodeReviewerAgent
 from software_factory_poc.application.core.domain.entities.task import Task, TaskDescription
-from software_factory_poc.application.core.agents.reporter.reporter_agent import ReporterAgent
-from software_factory_poc.application.core.agents.vcs.vcs_agent import VcsAgent
-from software_factory_poc.application.core.agents.research.research_agent import ResearchAgent
-from software_factory_poc.application.core.agents.reasoner.reasoner_agent import ReasonerAgent
+from software_factory_poc.application.ports.drivers.reporter.reporter_agent import ReporterAgent
+from software_factory_poc.application.ports.drivers.vcs.vcs_agent import VcsAgent
+from software_factory_poc.application.ports.drivers.research import ResearchAgent
+from software_factory_poc.application.ports.drivers.reasoner.reasoner_agent import ReasonerAgent
 from software_factory_poc.application.core.agents.code_reviewer.config.code_reviewer_agent_config import CodeReviewerAgentConfig
 
 class TestCodeReviewerAgent(unittest.TestCase):

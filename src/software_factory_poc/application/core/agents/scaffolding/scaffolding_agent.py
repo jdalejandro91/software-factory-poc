@@ -3,17 +3,17 @@ from datetime import datetime
 from typing import List, Optional, Any, Dict
 
 from software_factory_poc.application.core.agents.base_agent import BaseAgent
-from software_factory_poc.application.core.agents.common.config.task_status import TaskStatus
-from software_factory_poc.application.core.agents.common.dtos.file_content_dto import FileContentDTO
-from software_factory_poc.application.core.agents.reasoner.reasoner_agent import ReasonerAgent
-from software_factory_poc.application.core.agents.reporter.reporter_agent import ReporterAgent
-from software_factory_poc.application.core.agents.research.research_agent import ResearchAgent
+from software_factory_poc.application.ports.drivers.common.config.task_status import TaskStatus
+from software_factory_poc.application.ports.drivers.common.dtos.file_content_dto import FileContentDTO
+from software_factory_poc.application.ports.drivers.reasoner.reasoner_agent import ReasonerAgent
+from software_factory_poc.application.ports.drivers.reporter.reporter_agent import ReporterAgent
+from software_factory_poc.application.ports.drivers.research import ResearchAgent
 from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import \
     ScaffoldingAgentConfig
 from software_factory_poc.application.core.agents.scaffolding.tools.artifact_parser import ArtifactParser
 from software_factory_poc.application.core.agents.scaffolding.tools.scaffolding_prompt_builder import \
     ScaffoldingPromptBuilder
-from software_factory_poc.application.core.agents.vcs.vcs_agent import VcsAgent
+from software_factory_poc.application.ports.drivers.vcs.vcs_agent import VcsAgent
 from software_factory_poc.application.core.domain.entities.task import Task
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 

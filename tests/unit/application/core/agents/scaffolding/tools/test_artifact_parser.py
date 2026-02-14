@@ -1,7 +1,7 @@
 
 import pytest
 
-from software_factory_poc.application.core.agents.common.exceptions.contract_parse_error import ContractParseError
+from software_factory_poc.application.ports.drivers.common.exceptions import ContractParseError
 from software_factory_poc.application.core.agents.scaffolding.tools.artifact_parser import ArtifactParser
 
 

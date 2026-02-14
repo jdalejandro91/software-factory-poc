@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
-from software_factory_poc.infrastructure.providers.vcs.services.gitlab_mr_service import GitLabMrService
+from software_factory_poc.infrastructure.adapters.drivers.vcs.services.gitlab_mr_service import GitLabMrService
 
 
 def test_mr_creation_conflict_recovery():

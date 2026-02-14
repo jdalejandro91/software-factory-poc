@@ -2,8 +2,8 @@ from unittest.mock import MagicMock, AsyncMock
 
 import pytest
 
-from software_factory_poc.infrastructure.providers.llms.deepseek.clients.deepseek_config import DeepSeekConfig
-from software_factory_poc.infrastructure.providers.llms.deepseek.deepseek_provider_impl import DeepSeekProviderImpl
+from software_factory_poc.infrastructure.adapters.drivers.llms.deepseek.clients.deepseek_config import DeepSeekConfig
+from software_factory_poc.infrastructure.adapters.drivers.llms.deepseek.deepseek_provider_impl import DeepSeekProviderImpl
 
 
 @pytest.fixture

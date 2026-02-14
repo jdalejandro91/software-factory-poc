@@ -9,7 +9,7 @@ sys.path.append(os.path.join(os.getcwd(), "src"))
 from software_factory_poc.infrastructure.entrypoints.api.mappers.jira_payload_mapper import JiraPayloadMapper
 from software_factory_poc.infrastructure.entrypoints.api.dtos.jira_webhook_dto import JiraWebhookDTO
 from software_factory_poc.application.core.domain.entities.task import TaskDescription
-from software_factory_poc.infrastructure.providers.research.confluence_provider_impl import ConfluenceProviderImpl
+from software_factory_poc.infrastructure.adapters.drivers.research.confluence_provider_impl import ConfluenceProviderImpl
 from software_factory_poc.infrastructure.configuration.confluence_settings import ConfluenceSettings
 
 class TestFullFlowVerification(unittest.TestCase):

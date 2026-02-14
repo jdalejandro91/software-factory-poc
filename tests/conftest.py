@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from software_factory_poc.application.core.agents.reporter.dtos.tracker_dtos import TaskDTO
+from software_factory_poc.application.ports.drivers.reporter.dtos.tracker_dtos import TaskDTO
 from software_factory_poc.application.core.agents.scaffolding.value_objects.scaffolding_order import ScaffoldingOrder
-from software_factory_poc.application.core.agents.vcs.dtos.vcs_dtos import MergeRequestDTO
+from software_factory_poc.application.ports.drivers.vcs.dtos.vcs_dtos import MergeRequestDTO
 
 
 @pytest.fixture

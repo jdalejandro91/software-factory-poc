@@ -1,6 +1,6 @@
 
 import unittest
-from software_factory_poc.infrastructure.providers.tracker.mappers.jira_panel_factory import JiraPanelFactory
+from software_factory_poc.infrastructure.adapters.drivers.tracker.mappers import JiraPanelFactory
 
 class TestJiraPanelFactory(unittest.TestCase):
 

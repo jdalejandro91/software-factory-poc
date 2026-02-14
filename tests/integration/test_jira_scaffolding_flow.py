@@ -3,8 +3,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from software_factory_poc.application.core.agents.common.config.task_status import TaskStatus
-from software_factory_poc.application.core.agents.vcs.dtos.vcs_dtos import MergeRequestDTO, BranchDTO, CommitResultDTO
+from software_factory_poc.application.ports.drivers.common.config.task_status import TaskStatus
+from software_factory_poc.application.ports.drivers.vcs.dtos.vcs_dtos import MergeRequestDTO, BranchDTO, CommitResultDTO
 from software_factory_poc.main import app
 
 client = TestClient(app)

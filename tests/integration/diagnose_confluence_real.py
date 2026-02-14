@@ -1,7 +1,6 @@
 import os
 import sys
 import logging
-import json
 
 try:
     from dotenv import load_dotenv
@@ -13,7 +12,7 @@ except ImportError:
 sys.path.append(os.path.join(os.getcwd(), "src"))
 
 from software_factory_poc.infrastructure.configuration.confluence_settings import ConfluenceSettings
-from software_factory_poc.infrastructure.providers.research.clients.confluence_http_client import ConfluenceHttpClient
+from software_factory_poc.infrastructure.adapters.drivers.research.clients.confluence_http_client import ConfluenceHttpClient
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

@@ -58,3 +58,14 @@ def redact_dict(obj: dict[str, Any]) -> dict[str, Any]:
         else:
             new_obj[k] = redact_value(v)
     return new_obj
+
+
+
+class RedactionService:
+    def sanitize(self, payload: dict) -> dict:
+        """Firewall que evita la fuga de contraseñas y tokens hacia los logs o MCP."""
+        safe_payload = payload.copy()
+        for k, v in safe_payload.items():
+            if isinstance(v, str) and any(secret in k.lower() for secret in SENSITIVE_KEYS):
+                safe_payload[k] = "[REDACTED_BY_SECURITY]"
+        return safe_payload

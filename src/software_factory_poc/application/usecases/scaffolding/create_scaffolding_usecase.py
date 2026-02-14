@@ -1,13 +1,13 @@
 from typing import Optional, Tuple, TYPE_CHECKING
 
-from software_factory_poc.application.core.agents.reasoner.reasoner_agent import ReasonerAgent
-from software_factory_poc.application.core.agents.reporter.reporter_agent import ReporterAgent
-from software_factory_poc.application.core.agents.research.research_agent import ResearchAgent
+from software_factory_poc.application.ports.drivers.reasoner.reasoner_agent import ReasonerAgent
+from software_factory_poc.application.ports.drivers.reporter.reporter_agent import ReporterAgent
+from software_factory_poc.application.ports.drivers.research import ResearchAgent
 from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import (
     ScaffoldingAgentConfig,
 )
 from software_factory_poc.application.core.agents.scaffolding.scaffolding_agent import ScaffoldingAgent
-from software_factory_poc.application.core.agents.vcs.vcs_agent import VcsAgent
+from software_factory_poc.application.ports.drivers.vcs.vcs_agent import VcsAgent
 from software_factory_poc.application.core.domain.entities.task import Task
 from software_factory_poc.infrastructure.observability.logger_factory_service import (
     LoggerFactoryService,

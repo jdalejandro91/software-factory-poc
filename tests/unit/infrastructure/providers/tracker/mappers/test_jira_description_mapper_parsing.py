@@ -1,5 +1,5 @@
 import unittest
-from software_factory_poc.infrastructure.providers.tracker.mappers.jira_description_mapper import JiraDescriptionMapper
+from software_factory_poc.infrastructure.adapters.drivers.tracker.mappers.jira_description_mapper import JiraDescriptionMapper
 
 class TestJiraDescriptionMapperParsing(unittest.TestCase):
     
