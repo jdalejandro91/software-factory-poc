@@ -6,7 +6,7 @@ from typing import Optional
 from software_factory_poc.application.core.agents.common.exceptions.infra_error import InfraError
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class ProviderError(InfraError):
     provider: str
     message: str

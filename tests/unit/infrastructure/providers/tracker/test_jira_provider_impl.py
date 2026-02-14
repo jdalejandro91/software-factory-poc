@@ -61,3 +61,33 @@ def test_resolve_transition_not_found(mock_client, mock_settings):
         provider._resolve_transition_id("KEY-1", "Space Travel")
     
     assert "not found" in str(exc.value)
+
+def test_get_task_mapping_success(mock_client, mock_settings):
+    # Mock Issue Response
+    mock_response = {
+        "key": "KEY-1",
+        "fields": {
+             "summary": "Implement Login",
+             "status": {"name": "To Do"},
+             "project": {"key": "POC", "id": "100"},
+             "description": {
+                 "type": "doc", 
+                 "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Details"}]}]
+             }
+        }
+    }
+    
+    mock_client.get.return_value.json.return_value = mock_response
+    
+    provider = JiraProviderImpl(mock_client, mock_settings)
+    
+    # Execution
+    task = provider.get_task("KEY-1")
+    
+    # Verification
+    assert task.key == "KEY-1"
+    assert task.summary == "Implement Login"
+    assert task.status == "To Do"
+    assert task.project_key == "POC" # This line verifies the mapping fix
+    assert task.description is not None
+

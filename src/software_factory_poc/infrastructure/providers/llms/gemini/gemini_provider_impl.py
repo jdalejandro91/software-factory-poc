@@ -59,11 +59,11 @@ class GeminiProviderImpl(LlmProvider):
             # 1. Prepare payload
             kwargs = self.request_mapper.to_kwargs(request)
 
-            # 2. Debug Log
+            # 3. DEBUG -> INFO for AUDIT
             prompt_content = kwargs.get("contents", "NO_CONTENT")
-            logging.getLogger(__name__).debug(
-                f"\n🚀 [INFRA:LLM-SEND] Sending to {self.name.value.upper()}:\n"
-                f"--- BEGIN PROMPT ---\n{prompt_content}\n--- END PROMPT ---\n"
+            logging.getLogger(__name__).info(
+                f"\n📝 [AUDIT:LLM-PROMPT] Sending to {self.name.value.upper()}:\n"
+                f"{prompt_content}\n"
             )
 
             # 3. Execute ASYNC using .aio property

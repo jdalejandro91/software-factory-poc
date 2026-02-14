@@ -54,12 +54,12 @@ class OpenAiProvider(LlmProvider):
             debug_payload = json.dumps(msgs, indent=2, ensure_ascii=False)
             debug_payload = json.dumps(msgs, indent=2, ensure_ascii=False)
             
-            # print(f"\n🚀 [INFRA:LLM-SEND] Sending to {self.name.value.upper()}:\n"
-            #       f"{debug_payload}\n"
-            #       f"Config: {kwargs.get('max_tokens')}, {kwargs.get('temperature')}\n", flush=True)
+            logging.getLogger(__name__).info(
+                f"\n📝 [AUDIT:LLM-PROMPT] Sending to {self.name.value.upper()}:\n"
+                f"{debug_payload}\n"
+            )
 
             # 4. Llamada Oficial SDK v1
-            # logging.debug(f"OpenAI Payload: {kwargs}") # Descomentar para debug local
             resp = await self.client.chat.completions.create(**kwargs)
             
         except Exception as exc:

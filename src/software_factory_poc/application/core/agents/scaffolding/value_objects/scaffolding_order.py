@@ -10,6 +10,7 @@ class ScaffoldingOrder:
     project_id: str = ""
     target_config: dict = None
     extra_params: dict = None
+    service_name: str = None # Optional explicit field
     # Legacy fields
     summary: str = ""
     reporter: str = ""

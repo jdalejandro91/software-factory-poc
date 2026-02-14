@@ -1,51 +1,60 @@
-from typing import Any, Dict, Optional
+from dataclasses import dataclass, field
+from typing import Dict, Any, Optional, List
 
-from pydantic import BaseModel, ConfigDict, Field
-
-
-class TaskDescription(BaseModel):
+@dataclass
+class TaskDescription:
     """
-    Value Object representing the description of a Task.
-    Separates human-written content from machine-generated automation metadata.
+    Entidad que encapsula la descripción técnica procesada de la tarea.
+    - raw_content: El texto original de la descripción (Markdown/Jira markup) para auditoría.
+    - config: El diccionario resultante del parseo del bloque YAML (scaffolding/code_review).
     """
-    model_config = ConfigDict(frozen=True)
+    raw_content: str
+    config: Dict[str, Any] = field(default_factory=dict)
 
-    human_text: str = Field(..., description="The description text written by a human user.")
-    raw_content: str = Field(default="", description="The original raw content string.")
-    code_review_params: Optional[Dict[str, Any]] = Field(default=None, description="Structured metadata for automation output.")
-    scaffolding_params: Optional[Dict[str, Any]] = Field(default=None, description="Parsed parameters for scaffolding input.")
+@dataclass
+class TaskUser:
+    name: str
+    display_name: str
+    active: bool
+    email: Optional[str] = None
+    self_url: Optional[str] = None
 
-    def has_metadata(self) -> bool:
-        """Checks if the description contains automation metadata."""
-        return self.code_review_params is not None and len(self.code_review_params) > 0
+@dataclass
+class Task:
+    id: str
+    key: str
+    summary: str
+    status: str
+    project_key: str
+    issue_type: str
+    description: TaskDescription  # Composición Obligatoria
+    reporter: Optional[TaskUser] = None
+    event_type: Optional[str] = None
+    created_at: Optional[int] = None
 
-    def has_scaffolding_params(self) -> bool:
-        """Checks if the description contains scaffolding parameters."""
-        return self.scaffolding_params is not None and len(self.scaffolding_params) > 0
-
-
-class Task(BaseModel):
-    """
-    Domain Entity representing a Task in the issue tracker.
-    """
-    id: str = Field(..., description="Unique identifier of the task (e.g., KAN-6)")
-    project_id: str = Field(..., description="Project Key or ID (e.g. KAN)")
-    summary: str = Field(..., description="Summary or title of the task")
-    status: str = Field(..., description="Current status of the task")
-    description: TaskDescription = Field(..., description="Rich description object")
-    reporter_email: Optional[str] = Field(default=None, description="Email of the reporter/creator")
-
-    def update_metadata(self, context: Dict[str, Any]) -> "Task":
+    def _merge_dictionaries(self, target: Dict[str, Any], source: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Creates a new Task instance with updated automation metadata,
-        preserving the original human text and other attributes.
-        Implements immutability.
+        Recursively merges source dictionary into target dictionary.
         """
-        new_description = TaskDescription(
-            human_text=self.description.human_text,
-            raw_content=self.description.raw_content,
-            scaffolding_params=self.description.scaffolding_params,
-            code_review_params=context
-        )
-        
-        return self.model_copy(update={"description": new_description})
+        for key, value in source.items():
+            if key in target and isinstance(target[key], dict) and isinstance(value, dict):
+                self._merge_dictionaries(target[key], value)
+            else:
+                target[key] = value
+        return target
+
+    def update_metadata(self, new_context: Dict[str, Any]) -> "Task":
+        """
+        Creates a new Task instance with merged configuration.
+        Does NOT modify raw_content string (assumes it is pure text).
+        """
+        from dataclasses import replace
+        import copy
+
+        # 1. Merge Config (Deep Merge)
+        current_config = copy.deepcopy(self.description.config)
+        self._merge_dictionaries(current_config, new_context)
+
+        # 2. Return new Task with updated config but same raw_content
+        new_description = replace(self.description, config=current_config, raw_content=self.description.raw_content)
+        return replace(self, description=new_description)

@@ -1,4 +1,3 @@
-import json
 import re
 from typing import Any, Optional
 
@@ -79,109 +78,48 @@ class ScaffoldingContractModel(BaseModel):
     def from_raw_text(cls, text: str) -> "ScaffoldingContractModel":
         """
         Parses a raw text string (e.g. Jira description) into a ScaffoldingContractModel.
-        Handles block extraction (Markdown/Jira) and YAML/JSON parsing.
+        Strictly requires a code block (Markdown or Jira) to avoid false positives.
         """
         if not text:
             raise ContractParseError("Input text is empty.")
 
-        cleaned_text = text.replace("\r\n", "\n")
-        block_content = cls._extract_block(cleaned_text)
-        
-        # Use block content if found, else try raw text
-        content_to_parse = block_content if block_content else cleaned_text
-        
-        try:
-            data = cls._parse_yaml_json(content_to_parse)
-        except ValueError:
-            # If parsing failed and we didn't find a block explicitly, 
-            # assume user intended to provide a block but failed delimiters.
-            if not block_content:
-                msg = "Could not find contract block (or valid raw YAML). Use Markdown code blocks (```) or Jira Wiki blocks ({code})."
-                raise ContractParseError(msg)
-            
-            snippet = content_to_parse[:200] + ("..." if len(content_to_parse) > 200 else "")
-            raise ContractParseError(
-                "Could not parse valid YAML or JSON from contract block.",
-                safe_snippet=snippet
-            )
+        # 1. Robust Regex for Markdown (```) and Jira ({code})
+        # Supports: ```yaml, ```, {code:yaml}, {code}, {code:yaml|borderStyle=...}
+        # Captures content in group(1).
+        pattern = re.compile(
+            r"(?:```(?:yaml|yml|scaffolding)?|\{code(?::(?:yaml|yml|scaffolding))?(?:\|[\w=]+)*\})\s*([\s\S]*?)\s*(?:```|\{code\})", 
+            re.IGNORECASE | re.DOTALL
+        )
+        match = pattern.search(text)
+
+        # 2. Strict Logic: No match = Error (No blind fallback)
+        if not match:
+            raise ContractParseError("No YAML code block found in description. Please wrap config in ```yaml or {code:yaml}.")
+
+        # 3. Sanitization (Jira invisible chars)
+        yaml_content = match.group(1).replace(u'\xa0', ' ').strip()
 
         try:
+            # 4. Parse YAML
+            data = yaml.safe_load(yaml_content)
+            
+            if not isinstance(data, dict):
+                 # Case where YAML allows simple strings or lists, but we need a dict contract
+                 raise ContractParseError("Parsed content is not a dictionary.", safe_snippet=yaml_content[:100])
+
             return cls(**data)
-        except ValidationError as e:
-            cleaned_errors = []
-            for err in e.errors():
-                loc = ".".join(str(l) for l in err["loc"])
-                msg = err["msg"]
-                cleaned_errors.append(f"{loc}: {msg}")
-            
-            error_msg = "; ".join(cleaned_errors)
-            snippet = content_to_parse[:200] + ("..." if len(content_to_parse) > 200 else "")
-            
+
+        except yaml.YAMLError as e:
             raise ContractParseError(
-                f"Contract validation failed: {error_msg}", 
-                safe_snippet=snippet
+                f"Invalid YAML content: {e}",
+                safe_snippet=yaml_content[:200]
+            )
+        except ValidationError as e:
+            cleaned_errors = "; ".join([f"{'.'.join(str(l) for l in err['loc'])}: {err['msg']}" for err in e.errors()])
+            raise ContractParseError(
+                f"Contract validation failed: {cleaned_errors}", 
+                safe_snippet=yaml_content[:200]
             ) from e
-
-    @staticmethod
-    def _extract_block(text: str) ->Optional[ str]:
-        """
-        Extracts content from Markdown (```...```) or Jira ({code}...) blocks.
-        """
-        if not text:
-            return None
-
-        # 1. Jira Wiki Markup
-        jira_wiki_pattern = r"\{code(?:[:\w]+)?\}\s*(.*?)\s*\{code\}"
-        match = re.search(jira_wiki_pattern, text, re.DOTALL | re.IGNORECASE)
-        if match:
-             content = match.group(1).strip()
-             if ScaffoldingContractModel._is_likely_scaffolding(content):
-                 return content
-
-        # 2. Markdown (```yaml...)
-        markdown_pattern = r"```[ \t]*(?:[\w\-\+]+)?[ \t\r]*\n(.*?)\n[ \t\r]*```"
-        for match in re.finditer(markdown_pattern, text, re.DOTALL | re.IGNORECASE):
-            content = match.group(1).strip()
-            if ScaffoldingContractModel._is_likely_scaffolding(content):
-                return content
-            
-        # 3. Legacy (kept for backward compat if needed, simplified here)
-        legacy_start = "--- SCAFFOLDING_CONTRACT:v1 ---"
-        legacy_end = "--- /SCAFFOLDING_CONTRACT ---"
-        legacy_pattern = re.escape(legacy_start) + r"\s*(.*?)\s*" + re.escape(legacy_end)
-        match = re.search(legacy_pattern, text, re.DOTALL)
-        if match:
-             content = match.group(1).strip()
-             if ScaffoldingContractModel._is_likely_scaffolding(content):
-                return content
-                
-        return None
-
-    @staticmethod
-    def _is_likely_scaffolding(content: str) -> bool:
-        if "version:" in content and ("technology_stack:" in content or "service_slug:" in content):
-            return True
-        return False
-
-    @staticmethod
-    def _parse_yaml_json(content: str) -> dict[str, Any]:
-        # Try YAML
-        try:
-            parsed = yaml.safe_load(content)
-            if isinstance(parsed, dict):
-                return parsed
-        except yaml.YAMLError:
-            pass
-
-        # Try JSON
-        try:
-            parsed = json.loads(content)
-            if isinstance(parsed, dict):
-                return parsed
-        except json.JSONDecodeError:
-            pass
-
-        raise ValueError("Could not parse valid YAML or JSON.")
 
 
 

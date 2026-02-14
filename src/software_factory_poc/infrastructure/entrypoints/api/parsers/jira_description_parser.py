@@ -26,8 +26,8 @@ class JiraDescriptionParser:
         human_text = raw_text
 
         # Regex to find the scaffolding block (dotall to match newlines)
-        # Matches: ```scaffolding ...content... ```
-        pattern = re.compile(r"```scaffolding\s+(.*?)\s+```", re.DOTALL)
+        # Matches: ```scaffolding ... ``` OR {code:yaml} ... {code}
+        pattern = re.compile(r"(?:```(?:yaml|scaffolding)?|\{code:(?:yaml|scaffolding)?\})\s*(.*?)\s*(?:```|\{code\})", re.DOTALL | re.IGNORECASE)
         match = pattern.search(raw_text)
 
         if match:
