@@ -1,6 +1,6 @@
 import json
 from typing import Any, Callable, List, Dict
-from software_factory_poc.application.ports.drivers.reasoner.llm_driver_port import LlmDriverPort
+from software_factory_poc.application.ports.drivers.llm_driver_port import LlmDriverPort
 
 class LlmGatewayAdapter(LlmDriverPort):
     def __init__(self, composite_gateway):

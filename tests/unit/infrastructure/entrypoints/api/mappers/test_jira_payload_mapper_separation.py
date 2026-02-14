@@ -1,6 +1,6 @@
 import unittest
 from software_factory_poc.infrastructure.entrypoints.api.mappers.jira_payload_mapper import JiraPayloadMapper
-from software_factory_poc.application.core.domain.entities.task import TaskDescription
+
 
 class TestJiraPayloadMapperSeparation(unittest.TestCase):
     

@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from software_factory_poc.application.ports.drivers.common.config.task_status import TaskStatus
-from software_factory_poc.application.core.domain.entities.task import Task, TaskDescription
+from software_factory_poc.domain.entities.task import Task, TaskDescription
 
 
 class TaskTrackerGateway(ABC):

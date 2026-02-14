@@ -1,6 +1,6 @@
 import unittest
-from software_factory_poc.application.core.domain.entities.task import Task, TaskDescription
-import yaml
+from software_factory_poc.domain.entities.task import Task, TaskDescription
+
 
 class TestTaskMetadata(unittest.TestCase):
 

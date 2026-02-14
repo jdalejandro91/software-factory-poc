@@ -11,7 +11,7 @@ from software_factory_poc.application.ports.drivers.reporter.config.task_tracker
     TaskTrackerType,
 )
 from software_factory_poc.application.ports.drivers.reporter.ports.task_tracker_gateway import TaskTrackerGateway
-from software_factory_poc.application.core.domain.entities.task import Task, TaskDescription
+from software_factory_poc.domain.entities.task import Task, TaskDescription
 from software_factory_poc.infrastructure.configuration.jira_settings import JiraSettings
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 from software_factory_poc.infrastructure.adapters.drivers.tracker.clients.jira_http_client import (

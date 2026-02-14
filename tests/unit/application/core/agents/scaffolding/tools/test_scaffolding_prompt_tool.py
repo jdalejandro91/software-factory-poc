@@ -5,7 +5,7 @@ from software_factory_poc.application.core.agents.scaffolding.scaffolding_order 
 from software_factory_poc.application.core.agents.scaffolding.scaffolding_order import ScaffoldingOrder
 from software_factory_poc.application.core.agents.scaffolding.scaffolding_order import ScaffoldingOrder
 
-from software_factory_poc.application.core.agents.scaffolding.tools.scaffolding_prompt_builder import \
+from software_factory_poc.application.core.agents.scaffolding_prompt_builder import \
     ScaffoldingPromptBuilder
 
 

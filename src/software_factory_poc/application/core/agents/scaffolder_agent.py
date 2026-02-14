@@ -9,7 +9,7 @@ from software_factory_poc.application.contracts.llm_schemas import ScaffoldingRe
 from software_factory_poc.application.ports.drivers.vcs_driver_port import VcsDriverPort
 from software_factory_poc.application.ports.drivers.tracker_driver_port import TrackerDriverPort
 from software_factory_poc.application.ports.drivers.research_driver_port import ResearchDriverPort
-from software_factory_poc.application.ports.drivers.reasoner.llm_driver_port import LlmDriverPort
+from software_factory_poc.application.ports.drivers.llm_driver_port import LlmDriverPort
 
 logger = logging.getLogger(__name__)
 

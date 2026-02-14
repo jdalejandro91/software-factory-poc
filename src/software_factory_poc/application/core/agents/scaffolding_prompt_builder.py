@@ -1,5 +1,5 @@
 from software_factory_poc.application.core.agents.scaffolding.value_objects.scaffolding_order import ScaffoldingOrder
-from software_factory_poc.application.core.domain.entities.task import Task
+from software_factory_poc.domain.entities.task import Task
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 
 logger = LoggerFactoryService.build_logger(__name__)

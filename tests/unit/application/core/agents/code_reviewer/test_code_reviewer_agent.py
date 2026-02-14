@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import MagicMock
 
 from software_factory_poc.application.core.agents.code_reviewer.code_reviewer_agent import CodeReviewerAgent
-from software_factory_poc.application.core.domain.entities.task import Task, TaskDescription
+from software_factory_poc.domain.entities.task import Task, TaskDescription
 from software_factory_poc.application.ports.drivers.reporter.reporter_agent import ReporterAgent
 from software_factory_poc.application.ports.drivers.vcs.vcs_agent import VcsAgent
 from software_factory_poc.application.ports.drivers.research import ResearchAgent

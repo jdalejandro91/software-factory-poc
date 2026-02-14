@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 from software_factory_poc.application.core.agents.code_reviewer.code_reviewer_agent import CodeReviewerAgent
 from software_factory_poc.application.core.agents.code_reviewer.config.code_reviewer_agent_config import \
     CodeReviewerAgentConfig
-from software_factory_poc.application.core.domain.entities.task import Task, TaskDescription, TaskUser
+from software_factory_poc.domain.entities.task import Task, TaskDescription, TaskUser
 
 
 class TestCodeReviewerAgentIntegration:

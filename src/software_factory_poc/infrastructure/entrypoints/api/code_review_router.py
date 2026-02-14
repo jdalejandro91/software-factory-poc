@@ -4,7 +4,7 @@ from typing import Union
 from fastapi import APIRouter, BackgroundTasks, Depends, status, Request
 from fastapi.responses import JSONResponse
 
-from software_factory_poc.application.core.domain.entities.task import Task
+from software_factory_poc.domain.entities.task import Task
 from software_factory_poc.application.usecases.code_review.perform_code_review_usecase import (
     PerformCodeReviewUseCase,
 )

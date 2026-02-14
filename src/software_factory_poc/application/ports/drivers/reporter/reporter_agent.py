@@ -5,7 +5,7 @@ from software_factory_poc.application.core.agents.base_agent import BaseAgent
 from software_factory_poc.application.ports.drivers.reporter.ports.task_tracker_gateway import TaskTrackerGateway, \
     TaskStatus
 from .config.reporter_constants import ReporterMessages
-from software_factory_poc.application.core.domain.entities.task import TaskDescription
+from software_factory_poc.domain.entities.task import TaskDescription
 
 
 @dataclass

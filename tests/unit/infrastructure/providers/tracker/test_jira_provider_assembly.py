@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 from software_factory_poc.infrastructure.adapters.drivers.tracker.jira_provider_impl import JiraProviderImpl
 from software_factory_poc.infrastructure.adapters.drivers.tracker.clients import JiraHttpClient
 from software_factory_poc.infrastructure.configuration.jira_settings import JiraSettings
-from software_factory_poc.application.core.domain.entities.task import TaskDescription
+from software_factory_poc.domain.entities.task import TaskDescription
 
 class TestJiraProviderAssembly(unittest.TestCase):
     

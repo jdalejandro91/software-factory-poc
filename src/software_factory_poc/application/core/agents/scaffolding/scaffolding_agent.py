@@ -11,10 +11,10 @@ from software_factory_poc.application.ports.drivers.research import ResearchAgen
 from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import \
     ScaffoldingAgentConfig
 from software_factory_poc.application.core.agents.scaffolding.tools.artifact_parser import ArtifactParser
-from software_factory_poc.application.core.agents.scaffolding.tools.scaffolding_prompt_builder import \
+from software_factory_poc.application.core.agents.scaffolding_prompt_builder import \
     ScaffoldingPromptBuilder
 from software_factory_poc.application.ports.drivers.vcs.vcs_agent import VcsAgent
-from software_factory_poc.application.core.domain.entities.task import Task
+from software_factory_poc.domain.entities.task import Task
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 
 logger = LoggerFactoryService.build_logger(__name__)

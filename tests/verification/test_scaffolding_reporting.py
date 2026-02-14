@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import MagicMock
-from software_factory_poc.application.core.domain.entities.task import Task, TaskDescription, TaskUser
+from software_factory_poc.domain.entities.task import Task, TaskDescription, TaskUser
 from software_factory_poc.application.core.agents.scaffolding.scaffolding_agent import ScaffoldingAgent
 from software_factory_poc.application.ports.drivers.vcs.vcs_agent import VcsAgent
 from software_factory_poc.application.ports.drivers.reporter.reporter_agent import ReporterAgent

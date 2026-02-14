@@ -8,7 +8,7 @@ from software_factory_poc.application.core.agents.scaffolding.config.scaffolding
 )
 from software_factory_poc.application.core.agents.scaffolding.scaffolding_agent import ScaffoldingAgent
 from software_factory_poc.application.ports.drivers.vcs.vcs_agent import VcsAgent
-from software_factory_poc.application.core.domain.entities.task import Task
+from software_factory_poc.domain.entities.task import Task
 from software_factory_poc.infrastructure.observability.logger_factory_service import (
     LoggerFactoryService,
 )

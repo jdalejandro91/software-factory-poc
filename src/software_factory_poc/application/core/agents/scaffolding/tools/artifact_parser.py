@@ -3,7 +3,7 @@ import re
 from typing import List, Any
 
 from software_factory_poc.application.ports.drivers.common.dtos.file_content_dto import FileContentDTO
-from software_factory_poc.application.ports.drivers.common.exceptions import ContractParseError
+from software_factory_poc.application.core.agents.scaffolding.exceptions import ContractParseError
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 
 logger = LoggerFactoryService.build_logger(__name__)

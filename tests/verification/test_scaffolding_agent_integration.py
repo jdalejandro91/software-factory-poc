@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import \
     ScaffoldingAgentConfig
 from software_factory_poc.application.core.agents.scaffolding.scaffolding_agent import ScaffoldingAgent
-from software_factory_poc.application.core.domain.entities.task import Task, TaskDescription, TaskUser
+from software_factory_poc.domain.entities.task import Task, TaskDescription, TaskUser
 
 
 class TestScaffoldingAgentIntegration:

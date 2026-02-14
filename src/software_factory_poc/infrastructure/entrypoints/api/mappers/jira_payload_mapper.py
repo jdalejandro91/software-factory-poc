@@ -3,7 +3,7 @@ from typing import Dict, Union, Any
 
 import yaml
 
-from software_factory_poc.application.core.domain.entities.task import Task, TaskDescription, TaskUser
+from software_factory_poc.domain.entities.task import Task, TaskDescription, TaskUser
 from software_factory_poc.infrastructure.entrypoints.api.dtos.jira_webhook_dto import JiraWebhookDTO
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 
