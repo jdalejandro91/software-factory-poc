@@ -14,8 +14,7 @@ class TrackerDriverPort(ABC):
     async def post_review_summary(self, ticket_id: str, report: CodeReviewReport) -> None: pass
 
     @abstractmethod
-    async def add_comment(self, ticket_id: str, comment: str) -> None:
-        pass
+    async def add_comment(self, ticket_id: str, comment: str) -> None: pass
 
     @abstractmethod
     async def get_mcp_tools(self) -> List[Dict[str, Any]]: pass

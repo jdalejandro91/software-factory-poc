@@ -4,7 +4,7 @@ from software_factory_poc.domain.value_objects.review_severity import ReviewSeve
 
 @dataclass(frozen=True)
 class ReviewComment:
-    """Guardrail: Prevents the LLM from inventing impossible lines or empty files."""
+    """Guardrail: Evita que el LLM devuelva archivos vacíos o líneas imposibles."""
     file_path: str
     description: str
     suggestion: str
@@ -12,9 +12,6 @@ class ReviewComment:
     line_number: Optional[int] = None
 
     def __post_init__(self):
-        if not self.file_path.strip():
-            raise ValueError("El archivo del comentario no puede estar vacío.")
-        if not self.description.strip():
-            raise ValueError("La descripción no puede estar vacía.")
-        if self.line_number is not None and self.line_number < 0:
-            raise ValueError("El número de línea no puede ser negativo.")
+        if not self.file_path.strip(): raise ValueError("El archivo no puede estar vacío.")
+        if not self.description.strip(): raise ValueError("La descripción no puede estar vacía.")
+        if self.line_number is not None and self.line_number < 0: raise ValueError("Línea inválida.")
