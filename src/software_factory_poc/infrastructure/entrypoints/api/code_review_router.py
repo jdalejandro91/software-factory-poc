@@ -5,6 +5,8 @@ from fastapi.responses import JSONResponse
 
 from software_factory_poc.domain.entities.task import Task
 from software_factory_poc.application.core.agents.code_reviewer_agent import CodeReviewerAgent
+from software_factory_poc.infrastructure.configuration.app_config import AppConfig
+from software_factory_poc.infrastructure.configuration.main_settings import Settings
 from software_factory_poc.infrastructure.entrypoints.api.dtos.jira_webhook_dto import JiraWebhookDTO
 from software_factory_poc.infrastructure.entrypoints.api.mappers.jira_payload_mapper import JiraPayloadMapper
 from software_factory_poc.infrastructure.entrypoints.api.security import validate_api_key
@@ -16,6 +18,12 @@ from software_factory_poc.infrastructure.resolution.provider_resolver import Pro
 logger = LoggerFactoryService.build_logger(__name__)
 router = APIRouter()
 
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
 @lru_cache
 def get_mcp_manager() -> McpConnectionManager:
     return McpConnectionManager()
@@ -23,11 +31,8 @@ def get_mcp_manager() -> McpConnectionManager:
 
 async def get_code_reviewer_agent(mcp_manager: McpConnectionManager = Depends(get_mcp_manager)) -> CodeReviewerAgent:
     from software_factory_poc.infrastructure.configuration.scaffolding_config_loader import ScaffoldingConfigLoader
-    from software_factory_poc.infrastructure.configuration.app_config import AppConfig
-
     scaffolding_config = ScaffoldingConfigLoader.load_config()
     app_config = AppConfig()
-
     resolver = ProviderResolver(scaffolding_config, app_config=app_config)
     return await resolver.create_code_reviewer_agent(mcp_manager)
 
@@ -46,16 +51,11 @@ async def trigger_code_review(
 
         # FIRE AND FORGET
         background_tasks.add_task(agent.execute, task_entity)
+        return {"status": "accepted", "message": "Code Review queued.", "issue_key": task_entity.key}
 
-        return {
-            "status": "accepted",
-            "message": "Code Review request queued.",
-            "issue_key": task_entity.key
-        }
     except Exception as e:
         logger.error(f"Router Error: {e}", exc_info=True)
-        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            content={"status": "error", "error": "Internal processing error."})
+        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"status": "error"})
 
 
 async def _process_incoming_webhook(request: Request) -> Union[Task, JSONResponse]:

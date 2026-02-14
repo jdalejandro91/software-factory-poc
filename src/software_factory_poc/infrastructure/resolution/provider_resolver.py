@@ -1,107 +1,91 @@
 import os
 from software_factory_poc.domain.value_objects.execution_mode import ExecutionMode
 
-# Configuración
 from software_factory_poc.infrastructure.configuration.app_config import AppConfig
 from software_factory_poc.application.core.agents.scaffolding.config.scaffolding_agent_config import \
     ScaffoldingAgentConfig
 
-# Adaptadores
 from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
 from software_factory_poc.infrastructure.adapters.drivers.vcs.gitlab_mcp_adapter import GitlabMcpAdapter
 from software_factory_poc.infrastructure.adapters.drivers.tracker.jira_rest_adapter import JiraRestAdapter
 from software_factory_poc.infrastructure.adapters.drivers.research.confluence_rest_adapter import ConfluenceRestAdapter
 from software_factory_poc.infrastructure.adapters.drivers.llms.llm_gateway_adapter import LlmGatewayAdapter
 
-# Clientes HTTP Originales
 from software_factory_poc.infrastructure.adapters.drivers.tracker.clients.jira_http_client import JiraHttpClient
 from software_factory_poc.infrastructure.adapters.drivers.research.clients.confluence_http_client import \
     ConfluenceHttpClient
 from software_factory_poc.infrastructure.adapters.drivers.llms.gateway.composite_gateway import CompositeLlmGateway
+from software_factory_poc.application.ports.drivers.common.config.llm_provider_type import LlmProviderType
+from software_factory_poc.application.ports.drivers.reasoner.ports.llm_provider import LlmProvider
 
-# Agentes
 from software_factory_poc.application.core.agents.code_reviewer_agent import CodeReviewerAgent
 from software_factory_poc.application.core.agents.scaffolder_agent import ScaffolderAgent
-
 
 class McpConnectionManager:
     async def get_session(self, server_name: str): pass
 
 
 class ProviderResolver:
-    """Ensambla el sistema inyectando configuración validada."""
+    """Ensambla el sistema inyectando configuración validada Pydantic."""
 
     def __init__(self, scaffolding_config: ScaffoldingAgentConfig, app_config: AppConfig):
-        self.scaff_config = scaffolding_config
+        self.scaffolding_config = scaffolding_config
         self.app_config = app_config
         self.redactor = RedactionService()
 
-    async def _build_drivers(self, mcp_manager: McpConnectionManager):
-        # 1. Validaciones Pydantic Fall Fast
-        self.app_config.tools.validate_jira_credentials()
-        self.app_config.tools.validate_gitlab_credentials()
-        self.app_config.tools.validate_confluence_credentials()
+    def _build_llm_clients(self) -> dict[LlmProviderType, LlmProvider]:
+        """Instancia los proveedores específicos basándose en llm_config"""
+        return {}
 
-        # 2. VCS MCP
-        session_vcs = await mcp_manager.get_session("mcp_server_gitlab")
+    async def _build_drivers(self, mcp_manager: McpConnectionManager):
+        # 1. Validaciones Tempranas (Fail Fast de tus Settings)
+        self.app_config.jira.validate_credentials()
+        self.app_config.confluence.validate_credentials()
+
+        # 2. VCS MCP Driver
+        session_vcs = await mcp_manager.get_session("mcp_server_gitlab") if mcp_manager else None
         project_id = os.getenv("GITLAB_PROJECT_ID", "default_id")
         vcs_driver = GitlabMcpAdapter(session_vcs, project_id, self.redactor)
 
-        jira_client = JiraHttpClient(
-            base_url=self.app_config.tools.jira_base_url,
-            auth_mode=self.app_config.tools.jira_auth_mode.value,
-            user_email=self.app_config.tools.jira_user_email,
-            api_token=api_t.get_secret_value() if api_t else None,
-            bearer_token=bear_t.get_secret_value() if bear_t else None,
-            webhook_secret=wh_secret.get_secret_value() if wh_secret else None
+        # 3. Tracker Driver (REST Jira)
+        # 🟢 INYECCIÓN PERFECTA: Pasamos el objeto self.app_config.jira entero
+        jira_client = JiraHttpClient(settings=self.app_config.jira)
+        tracker_driver = JiraRestAdapter(
+            client=jira_client,
+            transition_in_review=self.app_config.jira.transition_in_review
         )
-        tracker_driver = JiraRestAdapter(jira_client, self.app_config.tools.jira_transition_in_review)
 
-        # 4. Confluence REST
-        conf_t = self.app_config.tools.confluence_api_token
-        confluence_client = ConfluenceHttpClient(
-            base_url=self.app_config.tools.confluence_base_url,
-            user_email=self.app_config.tools.confluence_user_email,
-            api_token=conf_t.get_secret_value() if conf_t else None
-        )
-        research_driver = ConfluenceRestAdapter(confluence_client)
+        # 4. Research Driver (REST Confluence)
+        # 🟢 INYECCIÓN PERFECTA: Pasamos el objeto self.app_config.confluence entero
+        confluence_client = ConfluenceHttpClient(settings=self.app_config.confluence)
+        research_driver = ConfluenceRestAdapter(client=confluence_client)
 
-        # 5. LLM Gateway
-        llm = self.app_config.llm
+        # 5. LLM Gateway (Tu pasarela multicapa original)
+        # 🟢 FIRMA ORIGINAL: Requiere ScaffoldingAgentConfig y dict de LlmProviders
         composite_gateway = CompositeLlmGateway(
-            allowed_models=llm.allowed_models,
-            openai_key=llm.openai_api_key.get_secret_value() if llm.openai_api_key else None,
-            gemini_key=llm.gemini_api_key.get_secret_value() if llm.gemini_api_key else None,
-            deepseek_key=llm.deepseek_api_key.get_secret_value() if llm.deepseek_api_key else None,
-            anthropic_key=llm.anthropic_api_key.get_secret_value() if llm.anthropic_api_key else None
+            config=self.scaffolding_config,
+            clients=self._build_llm_clients()
         )
-        llm_driver = LlmGatewayAdapter(composite_gateway)
-        # 3. Jira REST (🟢 INYECCIÓN REAL DESDE AppConfig)
-        # Manejo seguro de SecretStr de Pydantic
-        api_t = self.app_config.tools.jira_api_token
-        bear_t = self.app_config.tools.jira_bearer_token
-        wh_secret = self.app_config.tools.jira_webhook_secret
-
+        llm_driver = LlmGatewayAdapter(gateway=composite_gateway)
 
         return vcs_driver, tracker_driver, research_driver, llm_driver
 
     async def create_code_reviewer_agent(self, mcp_manager: McpConnectionManager) -> CodeReviewerAgent:
         vcs, tracker, research, llm = await self._build_drivers(mcp_manager)
 
-        # El Modo es Configuración de Infraestructura, no una propiedad del Dominio (Task)
-        mode = ExecutionMode(os.getenv("CODE_REVIEW_EXECUTION_MODE", "DETERMINISTIC").upper())
+        # 🟢 El Modo es Configuración de Infraestructura
+        mode_str = os.getenv("CODE_REVIEW_EXECUTION_MODE", "DETERMINISTIC").upper()
+        mode = ExecutionMode(mode_str)
+        arch_page_id = self.app_config.confluence.architecture_doc_page_id
 
         return CodeReviewerAgent(
-            vcs=vcs, tracker=tracker, research=research, llm=llm,
-            mode=mode, default_arch_page_id=self.app_config.tools.architecture_doc_page_id
+            vcs=vcs,
+            tracker=tracker,
+            research=research,
+            llm=llm,
+            mode=mode,
+            default_arch_page_id=arch_page_id
         )
-
-    async def create_scaffolder_agent(self, mcp_manager: McpConnectionManager) -> ScaffolderAgent:
-        vcs, tracker, research, llm = await self._build_drivers(mcp_manager)
-        mode = ExecutionMode(os.getenv("SCAFFOLDING_EXECUTION_MODE", "DETERMINISTIC").upper())
-        return ScaffolderAgent(vcs=vcs, tracker=tracker, research=research, llm=llm, mode=mode)
-
-
 
 # import os
 # from software_factory_poc.infrastructure.observability.redaction_service import RedactionService

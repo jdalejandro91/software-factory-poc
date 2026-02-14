@@ -58,3 +58,9 @@ class Task:
         # 2. Return new Task with updated config but same raw_content
         new_description = replace(self.description, config=current_config, raw_content=self.description.raw_content)
         return replace(self, description=new_description)
+
+    @property
+    def merge_request_iid(self) -> str | None:
+        """Helper para extraer de forma segura el IID del Merge Request de la config YAML"""
+        val = self.description.config.get("merge_request_iid")
+        return str(val) if val else None

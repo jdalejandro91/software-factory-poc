@@ -11,16 +11,9 @@ class CodeReviewPromptBuilder:
         """
 
     @staticmethod
-    def build_analysis_prompt(task_desc: str, mr_diff: str, conventions: str) -> str:
+    def build_analysis_prompt(task_summary: str, task_desc: str, mr_diff: str, conventions: str) -> str:
         return f"""
-        [REQUERIMIENTO JIRA ORIGEN]:
-        {task_desc}
-
-        [CONVENCIONES DEL PROYECTO]:
-        {conventions}
-
-        [CÓDIGO MODIFICADO (GIT DIFF)]:
-        ```diff
-        {mr_diff}
-        ```
-        """
+            [REQUERIMIENTO JIRA ORIGEN]:\n{task_summary}\n{task_desc}
+            [CONVENCIONES DEL PROYECTO]:\n{conventions}
+            [CÓDIGO MODIFICADO (GIT DIFF)]:\n```diff\n{mr_diff}\n```
+            """
