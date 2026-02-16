@@ -12,7 +12,7 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
-from software_factory_poc.application.ports.drivers.common.exceptions import ProviderError
+from software_factory_poc.application.drivers.common import ProviderError
 
 _T = TypeVar("_T")
 

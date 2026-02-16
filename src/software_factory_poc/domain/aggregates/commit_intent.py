@@ -1,7 +1,7 @@
 from typing import List
 from dataclasses import dataclass
-from software_factory_poc.domain.value_objects.branch_name import BranchName
-from software_factory_poc.domain.value_objects.file_content import FileContent
+from software_factory_poc.domain.value_objects.vcs.branch_name import BranchName
+from software_factory_poc.domain.value_objects.vcs.file_content import FileContent
 
 @dataclass
 class CommitIntent:

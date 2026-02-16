@@ -1,9 +1,6 @@
 import re
-from typing import Dict, Any
 
-import yaml
-
-from software_factory_poc.application.core.agents.code_reviewer.value_objects.code_review_order import (
+from software_factory_poc.application.agents.code_reviewer.prompt_templates import (
     CodeReviewOrder,
 )
 from software_factory_poc.infrastructure.entrypoints.api.dtos.jira_webhook_dto import (

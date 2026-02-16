@@ -1,12 +1,12 @@
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .confluence_settings import ConfluenceSettings
-from .gitlab_settings import GitLabSettings
-from .jira_settings import JiraSettings
-from .llm_settings import LlmSettings
-from .scaffolding_settings import ScaffoldingSettings
-from .tool_settings import ToolSettings
+from software_factory_poc.infrastructure.configuration.tools.confluence.confluence_settings import ConfluenceSettings
+from software_factory_poc.infrastructure.configuration.tools.gitlab import GitLabSettings
+from software_factory_poc.infrastructure.configuration.tools.jira.jira_settings import JiraSettings
+from software_factory_poc.infrastructure.configuration.tools.llm.llm_settings import LlmSettings
+from software_factory_poc.infrastructure.configuration.agents.scaffolder.scaffolding_settings import ScaffoldingSettings
+from software_factory_poc.infrastructure.configuration.tools.tool_settings import ToolSettings
 
 
 class AppConfig(BaseSettings):

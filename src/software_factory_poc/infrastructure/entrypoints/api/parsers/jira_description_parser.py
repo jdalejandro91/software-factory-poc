@@ -10,14 +10,14 @@ logger = LoggerFactoryService.build_logger(__name__)
 
 class JiraDescriptionParser:
     """
-    Utility parser to extract scaffolding configuration from raw Jira descriptions.
-    Identifies and removes '```scaffolding' blocks to separate system input from user text.
+    Utility parser to extract scaffolder configuration from raw Jira descriptions.
+    Identifies and removes '```scaffolder' blocks to separate system input from user text.
     """
 
     @staticmethod
     def parse(raw_text: Optional[str]) -> TaskDescription:
         """
-        Parses raw text to extract scaffolding parameters and clean human text.
+        Parses raw text to extract scaffolder parameters and clean human text.
         """
         if not raw_text:
             return TaskDescription(human_text="", raw_content="")
@@ -25,9 +25,9 @@ class JiraDescriptionParser:
         scaffolding_params = None
         human_text = raw_text
 
-        # Regex to find the scaffolding block (dotall to match newlines)
-        # Matches: ```scaffolding ... ``` OR {code:yaml} ... {code}
-        pattern = re.compile(r"(?:```(?:yaml|scaffolding)?|\{code:(?:yaml|scaffolding)?\})\s*(.*?)\s*(?:```|\{code\})", re.DOTALL | re.IGNORECASE)
+        # Regex to find the scaffolder block (dotall to match newlines)
+        # Matches: ```scaffolder ... ``` OR {code:yaml} ... {code}
+        pattern = re.compile(r"(?:```(?:yaml|scaffolder)?|\{code:(?:yaml|scaffolder)?\})\s*(.*?)\s*(?:```|\{code\})", re.DOTALL | re.IGNORECASE)
         match = pattern.search(raw_text)
 
         if match:
@@ -40,7 +40,7 @@ class JiraDescriptionParser:
                 else:
                     logger.warning("Scaffolding block found but did not parse into a dictionary.")
             except yaml.YAMLError as e:
-                logger.warning(f"Failed to parse scaffolding YAML block: {e}")
+                logger.warning(f"Failed to parse scaffolder YAML block: {e}")
 
             # Remove the detected block from the human descriptions
             # Using simple replacement of the matched string

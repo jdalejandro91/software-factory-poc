@@ -6,7 +6,7 @@ import json
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 
 from software_factory_poc.infrastructure.entrypoints.api.mappers.jira_payload_mapper import JiraPayloadMapper
-from software_factory_poc.infrastructure.adapters.drivers.tracker.mappers.jira_description_mapper import JiraDescriptionMapper
+from software_factory_poc.infrastructure.drivers.tracker.mappers.jira_description_mapper import JiraDescriptionMapper
 from software_factory_poc.domain.entities.task import TaskDescription, Task
 
 def verify_format():
@@ -17,7 +17,7 @@ Human readable requirement 2.
 
 {code:yaml|borderStyle=solid}
 version: 1.0
-scaffolding:
+scaffolder:
   stack: python
   framework: fastAPI
 {code}

@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from software_factory_poc.infrastructure.configuration.llm_settings import LlmSettings
-from software_factory_poc.infrastructure.configuration.tool_settings import ToolSettings
+from software_factory_poc.infrastructure.configuration.tools.llm.llm_settings import LlmSettings
+from software_factory_poc.infrastructure.configuration.tools.tool_settings import ToolSettings
 
 
 class Settings(ToolSettings, LlmSettings):

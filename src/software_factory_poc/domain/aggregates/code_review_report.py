@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List
-from software_factory_poc.domain.value_objects.review_comment import ReviewComment
-from software_factory_poc.domain.value_objects.review_severity import ReviewSeverity
+from software_factory_poc.domain.value_objects.vcs.review_comment import ReviewComment
+from software_factory_poc.domain.value_objects.vcs.review_severity import ReviewSeverity
 
 @dataclass
 class CodeReviewReport:

@@ -1,23 +1,9 @@
-from dataclasses import dataclass, field
-from typing import Dict, Any, Optional, List
+from dataclasses import dataclass
+from typing import Dict, Any, Optional
 
-@dataclass
-class TaskDescription:
-    """
-    Entidad que encapsula la descripción técnica procesada de la tarea.
-    - raw_content: El texto original de la descripción (Markdown/Jira markup) para auditoría.
-    - config: El diccionario resultante del parseo del bloque YAML (scaffolding/code_review).
-    """
-    raw_content: str
-    config: Dict[str, Any] = field(default_factory=dict)
+from software_factory_poc.domain.value_objects.task.task_description import TaskDescription
+from software_factory_poc.domain.value_objects.task.task_user import TaskUser
 
-@dataclass
-class TaskUser:
-    name: str
-    display_name: str
-    active: bool
-    email: Optional[str] = None
-    self_url: Optional[str] = None
 
 @dataclass
 class Task:

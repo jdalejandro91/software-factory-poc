@@ -1,4 +1,4 @@
-from software_factory_poc.infrastructure.adapters.drivers.tracker.mappers import JiraPanelFactory
+from software_factory_poc.infrastructure.drivers.tracker.mappers import JiraPanelFactory
 import json
 
 # 1. Scaffolding Case (Existing Branch)
