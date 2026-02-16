@@ -5,7 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, status, Request
 from fastapi.responses import JSONResponse
 
 from software_factory_poc.application.agents.scaffolder.scaffolder_agent import ScaffolderAgent
-from software_factory_poc.domain.entities.task import Task
+from software_factory_poc.domain.mission.entities import Mission
 from software_factory_poc.infrastructure.configuration.resolution.container import McpConnectionManager, \
     build_scaffolding_agent
 from software_factory_poc.infrastructure.entrypoints.api.dtos.jira_webhook_dto import JiraWebhookDTO
@@ -59,7 +59,7 @@ async def trigger_scaffold(
         )
 
 
-async def _process_incoming_webhook(request: Request) -> Union[Task, JSONResponse]:
+async def _process_incoming_webhook(request: Request) -> Union[Mission, JSONResponse]:
     """Helper to parse, validate and map webhook."""
     body_bytes = await request.body()
     try:

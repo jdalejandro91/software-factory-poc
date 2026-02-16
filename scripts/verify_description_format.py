@@ -7,7 +7,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src'
 
 from software_factory_poc.infrastructure.entrypoints.api.mappers.jira_payload_mapper import JiraPayloadMapper
 from software_factory_poc.infrastructure.drivers.tracker.mappers.jira_description_mapper import JiraDescriptionMapper
-from software_factory_poc.domain.entities.task import TaskDescription, Task
+from software_factory_poc.domain.mission.entities import TaskDescription, Mission
 
 def verify_format():
     # 1. Setup Sample Data
@@ -47,7 +47,7 @@ End of Description."""
         print("❌ FAIL: Clean Raw Content still contains '{code}' block!")
     
     # 3. Simulate Entity Update
-    task = Task(
+    task = Mission(
         id="1", key="TEST-1", event_type="update", status="Open", 
         summary="Test", project_key="PROJ", issue_type="Task", 
         created_at=0, reporter=None, 

@@ -6,7 +6,7 @@ Este archivo se mantiene temporalmente para compatibilidad y sera eliminado en u
 """
 import warnings
 
-from software_factory_poc.domain.entities.task import Task
+from software_factory_poc.domain.mission.entities.mission import Mission
 from software_factory_poc.domain.aggregates.code_review_report import CodeReviewReport
 from software_factory_poc.application.drivers.tracker.tracker_driver import TrackerDriver
 
@@ -31,7 +31,7 @@ class JiraRestAdapter(TrackerDriver):
         self.panel_factory = panel_factory
         self.transition_in_review = transition_in_review
 
-    async def get_task(self, ticket_id: str) -> Task:
+    async def get_task(self, ticket_id: str) -> Mission:
         data = await self.client.get_issue(ticket_id)
 
         summary = data.get("fields", {}).get("summary", "")
@@ -41,7 +41,7 @@ class JiraRestAdapter(TrackerDriver):
         adf_description = data.get("fields", {}).get("description", {})
         task_description = self.desc_mapper.to_domain({"content": adf_description.get("content", [])})
 
-        return Task(
+        return Mission(
             ticket_id=ticket_id,
             title=summary,
             description=task_description,

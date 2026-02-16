@@ -1,7 +1,8 @@
 import logging
 import re
 
-from software_factory_poc.application.agents.common.base_agent import BaseAgent
+from software_factory_poc.application.agents.common.agent_execution_mode import AgentExecutionMode
+from software_factory_poc.application.agents.common.base_agent import BaseAgent, AgentIdentity
 # Ports (Interfaces) — Unica dependencia permitida desde el Dominio
 from software_factory_poc.application.drivers.vcs.vcs_driver import VcsDriver
 from software_factory_poc.application.drivers.tracker.tracker_driver import TrackerDriver
@@ -9,7 +10,7 @@ from software_factory_poc.application.drivers.research.research_driver import Re
 from software_factory_poc.application.drivers.brain.brain_driver import BrainDriver
 
 # Domain Entities & Value Objects
-from software_factory_poc.domain.entities.task import Task
+from software_factory_poc.domain.mission.entities.mission import Mission
 from software_factory_poc.domain.aggregates.code_review_report import CodeReviewReport
 from software_factory_poc.domain.value_objects.vcs.review_comment import ReviewComment
 from software_factory_poc.domain.value_objects.vcs.review_severity import ReviewSeverity
@@ -42,8 +43,17 @@ class CodeReviewerAgent(BaseAgent):
         research: ResearchDriver,
         brain: BrainDriver,
         prompt_builder: CodeReviewPromptBuilder,
+        execution_mode: AgentExecutionMode = AgentExecutionMode.DETERMINISTIC,
     ):
-        super().__init__(name="CodeReviewerAgent", role="Reviewer", goal="Perform automated code reviews", brain=brain)
+        super().__init__(
+            identity=AgentIdentity(
+                name="CodeReviewerAgent",
+                role="Reviewer",
+                goal="Perform automated code reviews",
+            ),
+            brain=brain,
+            execution_mode=execution_mode,
+        )
         self.vcs = vcs
         self.tracker = tracker
         self.research = research
@@ -53,18 +63,18 @@ class CodeReviewerAgent(BaseAgent):
     #  Flujo Principal (Determinista)
     # ══════════════════════════════════════════════════════════════
 
-    async def execute_flow(self, task: Task) -> None:
+    async def execute_flow(self, mission: Mission) -> None:
         """Ejecuta el flujo completo de code review para una tarea de dominio."""
-        logger.info(f"[Reviewer] Iniciando revision para tarea {task.key}")
+        logger.info(f"[Reviewer] Iniciando revision para tarea {mission.key}")
 
         try:
             await self.tracker.add_comment(
-                task.key,
+                mission.key,
                 "Iniciando analisis de codigo (BrahMAS Code Review)...",
             )
 
             # ── PASO 1: Pre-check — Validar metadata inyectada por el Scaffolder ──
-            cr_params = task.description.config.get("code_review_params", {})
+            cr_params = mission.description.config.get("code_review_params", {})
             mr_url = cr_params.get("review_request_url", "")
             gitlab_project_id = cr_params.get("gitlab_project_id", "")
 
@@ -86,14 +96,14 @@ class CodeReviewerAgent(BaseAgent):
             mr_diff = await self.vcs.get_merge_request_diff(mr_iid)
 
             logger.info("[Reviewer] Consultando estandares de arquitectura...")
-            conventions = await self.research.get_architecture_context(task.summary)
+            conventions = await self.research.get_architecture_context(mission.summary)
 
             # ── PASO 3: Analyze — Construir prompt y razonar con LLM ──
             logger.info("[Reviewer] Analizando codigo con LLM...")
             sys_prompt = self.prompt_builder.build_system_prompt()
             user_prompt = self.prompt_builder.build_analysis_prompt(
-                task_summary=task.summary,
-                task_desc=task.description.raw_content,
+                mission_summary=mission.summary,
+                mission_desc=mission.description.raw_content,
                 mr_diff=mr_diff,
                 conventions=conventions,
             )
@@ -115,31 +125,31 @@ class CodeReviewerAgent(BaseAgent):
 
             # ── PASO 4b: Publish — Publicar resumen ejecutivo en Jira ──
             logger.info("[Reviewer] Publicando resumen en Jira...")
-            await self.tracker.post_review_summary(task.key, report)
+            await self.tracker.post_review_summary(mission.key, report)
 
             # ── PASO 4c: Publish — Transicion condicional ──
             if report.is_approved:
                 await self.tracker.add_comment(
-                    task.key,
+                    mission.key,
                     f"Code Review APROBADO. El MR cumple los estandares de calidad.\n"
                     f"MR: {mr_url}",
                 )
                 # No transicionar: la tarea se mantiene en "In Review" para merge manual
             else:
                 await self.tracker.add_comment(
-                    task.key,
+                    mission.key,
                     f"Code Review RECHAZADO. Se requieren cambios antes de aprobar.\n"
                     f"Issues encontrados: {len(report.comments)}\n"
                     f"MR: {mr_url}",
                 )
-                await self.tracker.update_status(task.key, "Changes Requested")
+                await self.tracker.update_status(mission.key, "Changes Requested")
 
             verdict = "APROBADO" if report.is_approved else "RECHAZADO"
-            logger.info(f"[Reviewer] Tarea {task.key} revisada. Veredicto: {verdict}")
+            logger.info(f"[Reviewer] Tarea {mission.key} revisada. Veredicto: {verdict}")
 
         except Exception as e:
-            logger.error(f"[Reviewer] Error critico en tarea {task.key}: {e}", exc_info=True)
-            await self._report_failure(task.key, e)
+            logger.error(f"[Reviewer] Error critico en tarea {mission.key}: {e}", exc_info=True)
+            await self._report_failure(mission.key, e)
             raise
 
     # ══════════════════════════════════════════════════════════════
@@ -189,11 +199,11 @@ class CodeReviewerAgent(BaseAgent):
             comments=domain_comments,
         )
 
-    async def _report_failure(self, task_key: str, error: Exception) -> None:
+    async def _report_failure(self, mission_key: str, error: Exception) -> None:
         """Reporta el fallo a Jira antes de relanzar la excepcion."""
         try:
             await self.tracker.add_comment(
-                task_key,
+                mission_key,
                 f"Error ejecutando revision automatica: {error}",
             )
         except Exception as report_err:

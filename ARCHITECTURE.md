@@ -13,22 +13,34 @@ El proyecto sigue estrictamente los principios de **Domain-Driven Design (DDD)**
 La regla de oro es: **Las dependencias solo apuntan hacia adentro.**
 * `Infrastructure` -> conoce a -> `Application`
 * `Application (Use Cases)` -> conoce a -> `Domain (Agents/Entities)`
-* `Domain` -> **NO CONOCE A NADIE**. Solo define Interfaces (Ports).
+* `Domain` -> **NO CONOCE A NADIE**. Solo define entidades y objetos de valor.
 
 ### 1.2 Directory Map (Screaming Structure)
 
 ```text
 src/software_factory_poc/
-├── application/               # Lógica de Negocio Pura (Independiente de Frameworks)
-│   ├── core/                  # El "Corazón" del Dominio
-│   │   ├── agents/            # Agentes de Dominio (Expertos en una tarea)
-│   │   │   ├── scaffolding/   # Agente de creación de scaffoldings
-│   │   │   ├── reporter/      # Comunicador (Jira).
-│   │   │   ├── vcs/           # Controlador de Versiones (GitLab).
-│   │   │   ├── research/      # Investigador (Confluence/RAG).
-│   │   │   └── reasoner/      # Cerebro (LLM Wrapper).
-│   │   └── tools/             # Herramientas puras (Parsers, Builders).
-│   └── usecases/              # Casos de Uso: "Cables" que conectan Infra y Dominio.
+├── domain/                         # Capa de Dominio
+│   ├── aggregates/                 # 
+│   ├── entities/                   # Abarca todos los Agentes
+│   └── value_objects/              # Drivers (Interfaces)
+├── application/                    # Lógica de Negocio Pura (Independiente de Frameworks)
+│   ├── agents/                     # Abarca todos los Agentes
+│   │   ├── common/                 # Agentes de Dominio (Expertos en una tarea)
+│   │   ├── scaffolder/             # Agente de creación de scaffoldings
+│   │   │   ├── config/             # Configuración del Agente
+│   │   │   ├── contracts/          # Contratos
+│   │   │   ├── prompt_templates/   # Plantillas de Prompt
+│   │   │   └── exceptions/         # Excepciones personalizadas del Agente
+│   │   └── code_reviewer/          # Agente de revisión de código
+│   │       ├── config/             # Configuración del Agente
+│   │       ├── contracts/          # Contratos
+│   │       ├── prompt_templates/   # Plantillas de Prompt
+│   │       └── exceptions/         # Excepciones personalizadas del Agente
+│   └── drivers/                    # Drivers (Interfaces)
+│       ├── common/                 # herramientas comunes entre los drivers
+│       ├── research                # driver de investigación
+│       ├── vcs                     # driver de control de versiones
+│       └── tracker/                # driver de seguimiento
 │
 ├── infrastructure/            # El mundo "Sucio" (I/O, DB, API)
 │   ├── configuration/         # Configuración centralizada

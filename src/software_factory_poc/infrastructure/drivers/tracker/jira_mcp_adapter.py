@@ -7,7 +7,7 @@ from mcp import ClientSession
 from software_factory_poc.application.drivers.tracker.tracker_driver import TrackerDriver
 from software_factory_poc.application.drivers.common.exceptions.provider_error import ProviderError
 from software_factory_poc.domain.aggregates.code_review_report import CodeReviewReport
-from software_factory_poc.domain.entities.task import Task, TaskDescription
+from software_factory_poc.domain.mission.entities.mission import Mission, TaskDescription
 from software_factory_poc.infrastructure.drivers.tracker.mappers.jira_adf_builder import JiraAdfBuilder
 from software_factory_poc.infrastructure.drivers.tracker.mappers.jira_description_mapper import (
     JiraDescriptionMapper,
@@ -81,7 +81,7 @@ class JiraMcpAdapter(TrackerDriver):
     #  Implementacion de TrackerDriverPort
     # ──────────────────────────────────────────────
 
-    async def get_task(self, ticket_id: str) -> Task:
+    async def get_task(self, ticket_id: str) -> Mission:
         """Obtiene una tarea de Jira via MCP y la mapea a la entidad de dominio Task."""
         logger.info(f"[JiraMCP] Obteniendo tarea {ticket_id}")
 
@@ -100,7 +100,7 @@ class JiraMcpAdapter(TrackerDriver):
             {"content": adf_description.get("content", [])} if adf_description else {"content": []}
         )
 
-        return Task(
+        return Mission(
             id=data.get("id", ticket_id),
             key=data.get("key", ticket_id),
             summary=summary,

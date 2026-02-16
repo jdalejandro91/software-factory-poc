@@ -3,7 +3,7 @@ from typing import Optional
 
 import yaml
 
-from software_factory_poc.domain.entities.task import TaskDescription
+from software_factory_poc.domain.mission.entities import TaskDescription
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 
 logger = LoggerFactoryService.build_logger(__name__)

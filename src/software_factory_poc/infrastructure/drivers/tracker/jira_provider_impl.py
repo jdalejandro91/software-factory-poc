@@ -11,7 +11,7 @@ from software_factory_poc.application.drivers import (
     TaskTrackerType,
 )
 from software_factory_poc.application.drivers.tracker.ports.task_tracker_gateway import TaskTrackerGateway
-from software_factory_poc.domain.entities.task import Task, TaskDescription
+from software_factory_poc.domain.mission.entities.mission import Mission, TaskDescription
 from software_factory_poc.infrastructure.configuration.tools.jira.jira_settings import JiraSettings
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 from software_factory_poc.infrastructure.drivers.tracker.clients.jira_http_client import (
@@ -39,7 +39,7 @@ class JiraProviderImpl(TaskTrackerGateway):
         self.mapper = JiraDescriptionMapper()
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
-    def get_task(self, issue_key: str) -> Task:
+    def get_task(self, issue_key: str) -> Mission:
         """Retrieves a Domain Task entity."""
         self._logger.info(f"Fetching Task Entity: {issue_key}")
         try:
@@ -50,7 +50,7 @@ class JiraProviderImpl(TaskTrackerGateway):
             adf_desc = fields.get("description")
             domain_desc = self.mapper.to_domain(adf_desc)
 
-            return Task(
+            return Mission(
                 id=json_data.get("id", "0"),
                 key=json_data.get("key"),
                 project_key=fields.get("project", {}).get("key", "UNKNOWN"),

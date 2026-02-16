@@ -1,11 +1,11 @@
 from software_factory_poc.domain.aggregates.code_review_report import CodeReviewReport
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List
-from software_factory_poc.domain.entities.task import Task
+from software_factory_poc.domain.mission.entities.mission import Mission
 
 class TrackerDriver(ABC):
     @abstractmethod
-    async def get_task(self, ticket_id: str) -> Task: pass
+    async def get_task(self, ticket_id: str) -> Mission: pass
 
     @abstractmethod
     async def update_status(self, ticket_id: str, status: str) -> None: pass

@@ -6,7 +6,7 @@ from software_factory_poc.domain.value_objects.task.task_user import TaskUser
 
 
 @dataclass
-class Task:
+class Mission:
     id: str
     key: str
     summary: str
@@ -29,7 +29,7 @@ class Task:
                 target[key] = value
         return target
 
-    def update_metadata(self, new_context: Dict[str, Any]) -> "Task":
+    def update_metadata(self, new_context: Dict[str, Any]) -> "Mission":
         """
         Creates a new Task instance with merged configuration.
         Does NOT modify raw_content string (assumes it is pure text).

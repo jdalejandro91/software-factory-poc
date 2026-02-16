@@ -3,7 +3,7 @@ from typing import Dict, Union, Any
 
 import yaml
 
-from software_factory_poc.domain.entities.task import Task, TaskDescription, TaskUser
+from software_factory_poc.domain.mission.entities import Mission, TaskDescription, TaskUser
 from software_factory_poc.infrastructure.entrypoints.api.dtos.jira_webhook_dto import JiraWebhookDTO
 from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
 
@@ -28,7 +28,7 @@ class JiraPayloadMapper:
     )
 
     @classmethod
-    def to_domain(cls, payload: Union[Dict, JiraWebhookDTO]) -> Task:
+    def to_domain(cls, payload: Union[Dict, JiraWebhookDTO]) -> Mission:
         """
         Maps a Jira Payload to a Task Domain Entity.
         Performs one-pass parsing of the description.
@@ -93,7 +93,7 @@ class JiraPayloadMapper:
         parsing_result = cls._parse_description_config(description_text)
 
         # 3. Construct Domain Entity
-        task = Task(
+        task = Mission(
             id=obj_id,
             key=key,
             event_type=event_type,
