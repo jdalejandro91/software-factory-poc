@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-class ResearchDriverPort(ABC):
+class ResearchDriver(ABC):
     @abstractmethod
     async def get_project_context(self, service_name: str) -> str:
         pass

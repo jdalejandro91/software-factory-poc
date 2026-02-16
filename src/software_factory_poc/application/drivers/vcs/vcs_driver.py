@@ -4,7 +4,7 @@ from software_factory_poc.domain.aggregates.commit_intent import CommitIntent
 from software_factory_poc.domain.aggregates.code_review_report import CodeReviewReport
 
 
-class VcsDriverPort(ABC):
+class VcsDriver(ABC):
 
     # ── Deterministic Operations (Scaffolding Flow) ──
 

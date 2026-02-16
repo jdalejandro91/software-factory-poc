@@ -8,7 +8,7 @@ import warnings
 
 from software_factory_poc.domain.entities.task import Task
 from software_factory_poc.domain.aggregates.code_review_report import CodeReviewReport
-from software_factory_poc.application.drivers.tracker.tracker_driver import TrackerDriverPort
+from software_factory_poc.application.drivers.tracker.tracker_driver import TrackerDriver
 
 from software_factory_poc.infrastructure.drivers.tracker.clients.jira_http_client import JiraHttpClient
 from software_factory_poc.infrastructure.drivers.tracker.mappers.jira_description_mapper import \
@@ -17,7 +17,7 @@ from software_factory_poc.infrastructure.drivers.tracker.mappers.jira_panel_fact
 from software_factory_poc.infrastructure.drivers.tracker.mappers.jira_adf_builder import JiraAdfBuilder
 
 
-class JiraRestAdapter(TrackerDriverPort):
+class JiraRestAdapter(TrackerDriver):
     """DEPRECATED: Usar JiraMcpAdapter. Este adaptador HTTP sera eliminado."""
     def __init__(self, client: JiraHttpClient, desc_mapper: JiraDescriptionMapper, panel_factory: JiraPanelFactory,
                  transition_in_review: str):

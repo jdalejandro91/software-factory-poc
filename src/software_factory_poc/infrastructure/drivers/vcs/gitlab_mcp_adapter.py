@@ -2,7 +2,7 @@ import json
 import logging
 from typing import Any, Dict, List
 from mcp import ClientSession
-from software_factory_poc.application.drivers.vcs.vcs_driver import VcsDriverPort
+from software_factory_poc.application.drivers.vcs.vcs_driver import VcsDriver
 from software_factory_poc.application.drivers.common.exceptions.provider_error import ProviderError
 from software_factory_poc.domain.aggregates.commit_intent import CommitIntent
 from software_factory_poc.domain.aggregates.code_review_report import CodeReviewReport
@@ -11,7 +11,7 @@ from software_factory_poc.infrastructure.observability.redaction_service import 
 logger = logging.getLogger(__name__)
 
 
-class GitlabMcpAdapter(VcsDriverPort):
+class GitlabMcpAdapter(VcsDriver):
     """Adaptador MCP que abstrae el protocolo y traduce la intención del Dominio."""
 
     def __init__(self, mcp_session: ClientSession, project_id: str, redactor: RedactionService):

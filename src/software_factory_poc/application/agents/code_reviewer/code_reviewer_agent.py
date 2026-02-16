@@ -3,9 +3,9 @@ import re
 
 from software_factory_poc.application.agents.common.base_agent import BaseAgent
 # Ports (Interfaces) — Unica dependencia permitida desde el Dominio
-from software_factory_poc.application.drivers.vcs.vcs_driver import VcsDriverPort
-from software_factory_poc.application.drivers.tracker.tracker_driver import TrackerDriverPort
-from software_factory_poc.application.drivers.research.research_driver import ResearchDriverPort
+from software_factory_poc.application.drivers.vcs.vcs_driver import VcsDriver
+from software_factory_poc.application.drivers.tracker.tracker_driver import TrackerDriver
+from software_factory_poc.application.drivers.research.research_driver import ResearchDriver
 from software_factory_poc.application.drivers.brain.brain_driver import BrainDriver
 
 # Domain Entities & Value Objects
@@ -37,9 +37,9 @@ class CodeReviewerAgent(BaseAgent):
 
     def __init__(
         self,
-        vcs: VcsDriverPort,
-        tracker: TrackerDriverPort,
-        research: ResearchDriverPort,
+        vcs: VcsDriver,
+        tracker: TrackerDriver,
+        research: ResearchDriver,
         brain: BrainDriver,
         prompt_builder: CodeReviewPromptBuilder,
     ):

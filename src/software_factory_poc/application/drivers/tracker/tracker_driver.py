@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List
 from software_factory_poc.domain.entities.task import Task
 
-class TrackerDriverPort(ABC):
+class TrackerDriver(ABC):
     @abstractmethod
     async def get_task(self, ticket_id: str) -> Task: pass
 
