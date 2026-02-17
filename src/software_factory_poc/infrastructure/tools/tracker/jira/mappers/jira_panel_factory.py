@@ -1,5 +1,6 @@
 from typing import Any
 
+
 class JiraPanelFactory:
     """
     Factory to create Jira Atlassian Document Format (ADF) Panels.
@@ -23,39 +24,43 @@ class JiraPanelFactory:
         color_map = {
             "scaffolding_exists": "#FFAB00",  # Yellow/Orange
             "code_review_success": "#36B37E",  # Green
-            "generic": "#0052CC"  # Blue
+            "generic": "#0052CC",  # Blue
         }
-        
+
         panel_color = color_map.get(panel_type, "#0052CC")
-        
+
         # Build the content blocks
         content_blocks = []
-        
+
         # 1. Summary Paragraph
         if summary:
-            content_blocks.append({
-                "type": "paragraph",
-                "content": [{"type": "text", "text": summary}]
-            })
-            
+            content_blocks.append(
+                {"type": "paragraph", "content": [{"type": "text", "text": summary}]}
+            )
+
         # 2. Links List
         if links:
             list_items = []
             for link_text, link_url in links.items():
-                list_items.append({
-                    "type": "listItem",
-                    "content": [{
-                        "type": "paragraph",
+                list_items.append(
+                    {
+                        "type": "listItem",
                         "content": [
-                            {"type": "text", "text": link_text, "marks": [{"type": "link", "attrs": {"href": link_url}}]}
-                        ]
-                    }]
-                })
-            
-            content_blocks.append({
-                "type": "bulletList",
-                "content": list_items
-            })
+                            {
+                                "type": "paragraph",
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": link_text,
+                                        "marks": [{"type": "link", "attrs": {"href": link_url}}],
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                )
+
+            content_blocks.append({"type": "bulletList", "content": list_items})
 
         # ADF Payload Structure
         return {
@@ -65,12 +70,12 @@ class JiraPanelFactory:
                 {
                     "type": "heading",
                     "attrs": {"level": 3},
-                    "content": [{"type": "text", "text": title}]
+                    "content": [{"type": "text", "text": title}],
                 },
                 {
                     "type": "panel",
                     "attrs": {"panelType": "info", "panelColor": panel_color},
-                    "content": content_blocks
-                }
-            ]
+                    "content": content_blocks,
+                },
+            ],
         }

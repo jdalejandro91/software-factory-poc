@@ -7,7 +7,7 @@ from software_factory_poc.core.application.agents.code_reviewer.code_reviewer_ag
     CodeReviewerAgent,
 )
 from software_factory_poc.core.domain.mission.entities import Mission
-from software_factory_poc.infrastructure.configuration.resolution.container import (
+from software_factory_poc.infrastructure.config.resolution.container import (
     McpConnectionManager,
     build_code_review_agent,
 )

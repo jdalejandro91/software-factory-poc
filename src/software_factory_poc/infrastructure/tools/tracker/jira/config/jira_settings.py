@@ -1,10 +1,5 @@
+from enum import StrEnum
 
-try:
-    from enum import StrEnum
-except ImportError:
-    from enum import Enum
-    class StrEnum(str, Enum):
-        pass
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -14,18 +9,21 @@ class JiraAuthMode(StrEnum):
     BEARER = "bearer"
     BASIC = "basic"
 
+
 class JiraSettings(BaseSettings):
     """
     Settings for Jira integration.
     """
+
     base_url: str = Field(..., description="Jira Base URL")
     auth_mode: JiraAuthMode = Field(default=JiraAuthMode.CLOUD_API_TOKEN)
-    user_email:str | None = Field(default=None)
-    api_token:SecretStr | None = Field(default=None)
-    bearer_token:SecretStr | None = Field(default=None)
+    user_email: str | None = Field(default=None)
+    api_token: SecretStr | None = Field(default=None)
+    bearer_token: SecretStr | None = Field(default=None)
     webhook_secret: SecretStr = Field(..., description="Token to validate incoming Jira webhooks")
-    transition_in_review: str = Field(default="In Review",
-                                      description="Name of the transition to move issue to In Review")
+    transition_in_review: str = Field(
+        default="In Review", description="Name of the transition to move issue to In Review"
+    )
 
     def validate_credentials(self) -> None:
         """
@@ -36,17 +34,13 @@ class JiraSettings(BaseSettings):
                 raise ValueError("JiraAuthMode.CLOUD_API_TOKEN requires 'user_email'.")
             if not self.api_token:
                 raise ValueError("JiraAuthMode.CLOUD_API_TOKEN requires 'api_token'.")
-        
+
         elif self.auth_mode == JiraAuthMode.BEARER:
             if not self.bearer_token:
                 raise ValueError("JiraAuthMode.BEARER requires 'bearer_token'.")
 
         elif self.auth_mode == JiraAuthMode.BASIC:
-             if not self.api_token:
+            if not self.api_token:
                 raise ValueError("JiraAuthMode.BASIC requires 'api_token' (as password).")
 
-    model_config = SettingsConfigDict(
-        env_prefix="JIRA_",
-        case_sensitive=False,
-        extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_prefix="JIRA_", case_sensitive=False, extra="ignore")

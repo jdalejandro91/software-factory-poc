@@ -23,12 +23,20 @@ class ScaffolderAgentConfig(BaseSettings):
     vcs_provider: VcsProviderType = Field(..., description="VCS Provider to use")
     tracker_provider: TaskTrackerType = Field(..., description="Task Tracker Provider to use")
     research_provider: ResearchProviderType = Field(..., description="Knowledge Provider to use")
-    llm_model_priority: list[ModelId] = Field(default_factory=list, description="Priority list of LLM models")
-    project_allowlist: list[str] = Field(default_factory=list, description="List of allowed projects")
+    llm_model_priority: list[ModelId] = Field(
+        default_factory=list, description="Priority list of LLM models"
+    )
+    project_allowlist: list[str] = Field(
+        default_factory=list, description="List of allowed projects"
+    )
     enable_secure_mode: bool = Field(default=True, description="Enable secure mode")
     work_dir: Path = Field(..., description="Working directory")
-    default_target_branch: str = Field(default="main", description="Target branch for Merge Requests")
-    architecture_page_id: str | None = Field(default=None, description="Confluence Page ID for Architecture")
+    default_target_branch: str = Field(
+        default="main", description="Target branch for Merge Requests"
+    )
+    architecture_page_id: str | None = Field(
+        default=None, description="Confluence Page ID for Architecture"
+    )
 
     model_name: str | None = None
     temperature: float = 0.0

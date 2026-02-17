@@ -19,14 +19,24 @@ class LoggingConfigurator:
     context: CorrelationIdContext
 
     def configure(self, base_level: str = "INFO") -> None:
-        logging.config.dictConfig(self._dict_config(base_level))
+        logging.config.dictConfig(dict(self._dict_config(base_level)))
 
     def _dict_config(self, base_level: str) -> Mapping[str, Any]:
         return {
             "version": 1,
             "disable_existing_loggers": False,
             "filters": {"cid": {"()": CorrelationIdFilter, "context": self.context}},
-            "formatters": {"std": {"format": "%(asctime)s %(levelname)s %(name)s [cid=%(correlation_id)s] %(message)s"}},
-            "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "std", "filters": ["cid"]}},
+            "formatters": {
+                "std": {
+                    "format": "%(asctime)s %(levelname)s %(name)s [cid=%(correlation_id)s] %(message)s"
+                }
+            },
+            "handlers": {
+                "console": {
+                    "class": "logging.StreamHandler",
+                    "formatter": "std",
+                    "filters": ["cid"],
+                }
+            },
             "root": {"handlers": ["console"], "level": base_level},
         }

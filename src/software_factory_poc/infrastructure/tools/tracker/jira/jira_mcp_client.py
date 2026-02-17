@@ -10,10 +10,10 @@ from software_factory_poc.core.application.ports.common.exceptions.provider_erro
 from software_factory_poc.core.application.ports.tracker_port import TrackerPort
 from software_factory_poc.core.domain.mission.entities.mission import Mission, TaskDescription
 from software_factory_poc.core.domain.quality.code_review_report import CodeReviewReport
+from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
 from software_factory_poc.infrastructure.tools.tracker.jira.mappers.jira_description_mapper import (
     JiraDescriptionMapper,
 )
-from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
 
 logger = logging.getLogger(__name__)
 
@@ -118,19 +118,25 @@ class JiraMcpClient(TrackerPort):
         """
         logger.info(f"[JiraMCP] Agregando comentario a {ticket_id}")
 
-        await self._call_mcp("jira_add_comment", arguments={
-            "issue_key": ticket_id,
-            "comment": comment,
-        })
+        await self._call_mcp(
+            "jira_add_comment",
+            arguments={
+                "issue_key": ticket_id,
+                "comment": comment,
+            },
+        )
 
     async def update_status(self, ticket_id: str, status: str) -> None:
         """Transiciona el estado de una tarea en Jira via MCP."""
         logger.info(f"[JiraMCP] Transicionando {ticket_id} -> '{status}'")
 
-        await self._call_mcp("jira_transition_issue", arguments={
-            "issue_key": ticket_id,
-            "transition_name": status,
-        })
+        await self._call_mcp(
+            "jira_transition_issue",
+            arguments={
+                "issue_key": ticket_id,
+                "transition_name": status,
+            },
+        )
 
     async def update_task_description(self, ticket_id: str, description: str) -> None:
         """Updates a task description in Jira via MCP.
@@ -140,10 +146,13 @@ class JiraMcpClient(TrackerPort):
         """
         logger.info(f"[JiraMCP] Actualizando descripcion de {ticket_id}")
 
-        await self._call_mcp("jira_update_issue", arguments={
-            "issue_key": ticket_id,
-            "fields": {"description": description},
-        })
+        await self._call_mcp(
+            "jira_update_issue",
+            arguments={
+                "issue_key": ticket_id,
+                "fields": {"description": description},
+            },
+        )
 
     async def post_review_summary(self, ticket_id: str, report: CodeReviewReport) -> None:
         """Posts the Code Review summary as a Markdown comment via MCP.
@@ -182,10 +191,13 @@ class JiraMcpClient(TrackerPort):
         await self.update_status(ticket_id, transition)
 
         # 2. Post Markdown comment
-        await self._call_mcp("jira_add_comment", arguments={
-            "issue_key": ticket_id,
-            "comment": comment_md,
-        })
+        await self._call_mcp(
+            "jira_add_comment",
+            arguments={
+                "issue_key": ticket_id,
+                "comment": comment_md,
+            },
+        )
 
     # ──────────────────────────────────────────────
     #  Soporte Agentic Mode (MCP tool discovery + execution)

@@ -49,7 +49,8 @@ class GitlabMcpClient(VcsPort):
     def _extract_text(self, response: Any) -> str:
         """Extrae el texto plano de la respuesta MCP de forma segura."""
         if response.content and len(response.content) > 0:
-            return response.content[0].text
+            first = response.content[0]
+            return getattr(first, "text", str(first))
         return ""
 
     # ── Scaffolding Flow Operations ──
@@ -58,10 +59,13 @@ class GitlabMcpClient(VcsPort):
         """Verifica si una rama existe en el proyecto GitLab via MCP."""
         logger.info(f"[GitLabMCP] Verificando existencia de rama '{branch_name}'")
         try:
-            await self._call_mcp("gitlab_get_branch", arguments={
-                "project_id": self.project_id,
-                "branch": branch_name,
-            })
+            await self._call_mcp(
+                "gitlab_get_branch",
+                arguments={
+                    "project_id": self.project_id,
+                    "branch": branch_name,
+                },
+            )
             return True
         except ProviderError:
             return False
@@ -69,11 +73,14 @@ class GitlabMcpClient(VcsPort):
     async def create_branch(self, branch_name: str, ref: str = "main") -> str:
         """Crea una rama en GitLab via MCP. Retorna la URL de la rama."""
         logger.info(f"[GitLabMCP] Creando rama '{branch_name}' desde '{ref}'")
-        response = await self._call_mcp("gitlab_create_branch", arguments={
-            "project_id": self.project_id,
-            "branch": branch_name,
-            "ref": ref,
-        })
+        response = await self._call_mcp(
+            "gitlab_create_branch",
+            arguments={
+                "project_id": self.project_id,
+                "branch": branch_name,
+                "ref": ref,
+            },
+        )
         raw_text = self._extract_text(response)
         try:
             data = json.loads(raw_text)
@@ -86,13 +93,16 @@ class GitlabMcpClient(VcsPort):
     ) -> str:
         """Crea un Merge Request en GitLab via MCP. Retorna la URL del MR."""
         logger.info(f"[GitLabMCP] Creando MR: '{source_branch}' -> '{target_branch}'")
-        response = await self._call_mcp("gitlab_create_merge_request", arguments={
-            "project_id": self.project_id,
-            "source_branch": source_branch,
-            "target_branch": target_branch,
-            "title": title,
-            "description": description,
-        })
+        response = await self._call_mcp(
+            "gitlab_create_merge_request",
+            arguments={
+                "project_id": self.project_id,
+                "source_branch": source_branch,
+                "target_branch": target_branch,
+                "title": title,
+                "description": description,
+            },
+        )
         raw_text = self._extract_text(response)
         try:
             data = json.loads(raw_text)
@@ -107,7 +117,11 @@ class GitlabMcpClient(VcsPort):
             raise ValueError("El commit no contiene archivos.")
 
         actions = [
-            {"action": "create" if f.is_new else "update", "file_path": f.path, "content": f.content}
+            {
+                "action": "create" if f.is_new else "update",
+                "file_path": f.path,
+                "content": f.content,
+            }
             for f in intent.files
         ]
 
@@ -115,56 +129,69 @@ class GitlabMcpClient(VcsPort):
             "project_id": self.project_id,
             "branch": intent.branch.value,
             "commit_message": intent.message,
-            "actions": actions
+            "actions": actions,
         }
 
         response = await self.mcp_session.call_tool("gitlab_create_commit", arguments=mcp_args)
         if hasattr(response, "isError") and response.isError:
             raise RuntimeError(f"Error MCP GitLab: {response.content}")
 
-        return json.loads(response.content[0].text).get("commit_hash")
+        return json.loads(self._extract_text(response)).get("commit_hash")
 
     async def get_merge_request_diff(self, mr_iid: str) -> str:
         """Extrae el diff proceduralmente via herramienta MCP."""
         response = await self.mcp_session.call_tool(
             "gitlab_get_merge_request_changes",
-            arguments={"project_id": self.project_id, "merge_request_iid": str(mr_iid)}
+            arguments={"project_id": self.project_id, "merge_request_iid": str(mr_iid)},
         )
         if hasattr(response, "isError") and response.isError:
             raise RuntimeError(f"Error MCP GitLab Diff: {response.content}")
-        return response.content[0].text
+        return self._extract_text(response)
 
     async def publish_review(self, mr_iid: str, report: CodeReviewReport) -> None:
         """Publica el analisis usando herramientas MCP de GitLab."""
         status_icon = "APROBADO" if report.is_approved else "REQUIERE CAMBIOS"
         main_note = f"### BrahMAS Code Review: {status_icon}\n\n{report.summary}"
 
-        await self.mcp_session.call_tool("gitlab_create_merge_request_note", arguments={
-            "project_id": self.project_id,
-            "merge_request_iid": str(mr_iid),
-            "body": main_note
-        })
+        await self.mcp_session.call_tool(
+            "gitlab_create_merge_request_note",
+            arguments={
+                "project_id": self.project_id,
+                "merge_request_iid": str(mr_iid),
+                "body": main_note,
+            },
+        )
 
         for issue in report.comments:
             body = f"**[{issue.severity.value}]** {issue.description}\n\n*Sugerencia:* `{issue.suggestion}`"
-            await self.mcp_session.call_tool("gitlab_create_merge_request_discussion", arguments={
-                "project_id": self.project_id,
-                "merge_request_iid": str(mr_iid),
-                "file_path": issue.file_path,
-                "line": issue.line_number if issue.line_number else 1,
-                "body": body
-            })
+            await self.mcp_session.call_tool(
+                "gitlab_create_merge_request_discussion",
+                arguments={
+                    "project_id": self.project_id,
+                    "merge_request_iid": str(mr_iid),
+                    "file_path": issue.file_path,
+                    "line": issue.line_number if issue.line_number else 1,
+                    "body": body,
+                },
+            )
 
         if report.is_approved:
-            await self.mcp_session.call_tool("gitlab_approve_merge_request", arguments={
-                "project_id": self.project_id,
-                "merge_request_iid": str(mr_iid)
-            })
+            await self.mcp_session.call_tool(
+                "gitlab_approve_merge_request",
+                arguments={"project_id": self.project_id, "merge_request_iid": str(mr_iid)},
+            )
 
     async def get_mcp_tools(self) -> list[dict[str, Any]]:
         response = await self.mcp_session.list_tools()
-        return [{"name": t.name.replace("gitlab_", "vcs_"), "description": t.description, "inputSchema": t.inputSchema}
-                for t in response.tools if t.name.startswith("gitlab_")]
+        return [
+            {
+                "name": t.name.replace("gitlab_", "vcs_"),
+                "description": t.description,
+                "inputSchema": t.inputSchema,
+            }
+            for t in response.tools
+            if t.name.startswith("gitlab_")
+        ]
 
     async def execute_tool(self, tool_name: str, arguments: dict) -> Any:
         real_tool_name = tool_name.replace("vcs_", "gitlab_")
@@ -176,4 +203,4 @@ class GitlabMcpClient(VcsPort):
 
         if hasattr(response, "isError") and response.isError:
             raise RuntimeError(response.content)
-        return response.content[0].text
+        return self._extract_text(response)

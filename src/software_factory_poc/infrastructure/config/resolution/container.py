@@ -17,14 +17,16 @@ from software_factory_poc.core.application.agents.scaffolder.prompt_templates.sc
     ScaffoldingPromptBuilder,
 )
 from software_factory_poc.core.application.agents.scaffolder.scaffolder_agent import ScaffolderAgent
+from software_factory_poc.infrastructure.config.app_config import AppConfig
+from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
+from software_factory_poc.infrastructure.tools.docs.confluence.confluence_mcp_client import (
+    ConfluenceMcpClient,
+)
+from software_factory_poc.infrastructure.tools.llm.litellm_brain_adapter import LiteLlmBrainAdapter
+from software_factory_poc.infrastructure.tools.tracker.jira.jira_mcp_client import JiraMcpClient
 from software_factory_poc.infrastructure.tools.tracker.jira.mappers.jira_description_mapper import (
     JiraDescriptionMapper,
 )
-from software_factory_poc.infrastructure.configuration.app_config import AppConfig
-from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
-from software_factory_poc.infrastructure.tools.docs.confluence.confluence_mcp_client import ConfluenceMcpClient
-from software_factory_poc.infrastructure.tools.llm.litellm_brain_adapter import LiteLlmBrainAdapter
-from software_factory_poc.infrastructure.tools.tracker.jira.jira_mcp_client import JiraMcpClient
 from software_factory_poc.infrastructure.tools.vcs.gitlab.gitlab_mcp_client import GitlabMcpClient
 
 logger = logging.getLogger(__name__)
@@ -63,12 +65,13 @@ async def _build_drivers(mcp_manager: McpConnectionManager, config: AppConfig):
     )
 
     # 4. Brain (LiteLLM)
-    brain = LiteLlmBrainAdapter()
+    brain = LiteLlmBrainAdapter(config.llm)
 
     return vcs, tracker, docs, brain
 
 
 # === PUBLIC BUILDERS ===
+
 
 async def build_scaffolding_agent(mcp_manager: McpConnectionManager) -> ScaffolderAgent:
     """Ensambla el ScaffolderAgent con drivers 100% MCP + LiteLLM."""

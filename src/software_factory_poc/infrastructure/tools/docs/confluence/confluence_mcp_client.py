@@ -63,18 +63,26 @@ class ConfluenceMcpClient(DocsPort):
         """Obtiene el contexto de un proyecto desde Confluence via MCP."""
         logger.info(f"[ConfluenceMCP] Obteniendo contexto de proyecto para {service_name}")
 
-        response = await self._call_mcp("confluence_search", arguments={
-            "query": service_name,
-        })
+        response = await self._call_mcp(
+            "confluence_search",
+            arguments={
+                "query": service_name,
+            },
+        )
         return self._extract_text(response)
 
     async def get_architecture_context(self, project_context_id: str) -> str:
         """Obtiene el contexto arquitectonico desde una pagina de Confluence via MCP."""
-        logger.info(f"[ConfluenceMCP] Obteniendo contexto de arquitectura desde pagina {project_context_id}")
+        logger.info(
+            f"[ConfluenceMCP] Obteniendo contexto de arquitectura desde pagina {project_context_id}"
+        )
 
-        response = await self._call_mcp("confluence_get_page", arguments={
-            "page_id": project_context_id,
-        })
+        response = await self._call_mcp(
+            "confluence_get_page",
+            arguments={
+                "page_id": project_context_id,
+            },
+        )
 
         raw_text = self._extract_text(response)
 

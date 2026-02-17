@@ -1,9 +1,4 @@
-try:
-    from enum import StrEnum, auto
-except ImportError:
-    from enum import Enum, auto
-    class StrEnum(str, Enum):
-        pass
+from enum import StrEnum, auto
 
 
 class LlmProviderType(StrEnum):
@@ -16,6 +11,7 @@ class LlmProviderType(StrEnum):
     @property
     def supported_models(self) -> list[str]:
         return SUPPORTED_MODELS_BY_PROVIDER.get(self, [])
+
 
 SUPPORTED_MODELS_BY_PROVIDER: dict[LlmProviderType, list[str]] = {
     LlmProviderType.OPENAI: ["gpt-4-turbo", "gpt-4o", "gpt-o4-mini"],

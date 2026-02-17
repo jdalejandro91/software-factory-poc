@@ -57,20 +57,49 @@ class BaseAgent(ABC):
         pass
 
     async def _run_react_loop(self, mission: Mission, skills: SkillRegistry) -> str:
-        """
-        Default ReAct loop wiring: delegate to BrainDriver and map tool calls to skills.
-        """
+        """Default ReAct loop: delegate tool-call dispatch to the agent while the
+        LLM interaction goes through ``BrainPort.generate_with_tools``."""
 
         skills_by_name = skills.by_name()
+        messages: list[dict[str, Any]] = [
+            {"role": "user", "content": f"Mission: {mission.summary}"},
+        ]
+        tools_payload = skills.tools_payload()
 
-        async def tool_executor(tool_name: str, tool_payload: dict[str, Any]) -> Any:
-            skill = skills_by_name.get(tool_name)
-            if skill is None:
-                raise ValueError(f"{self._identity.name}: unknown tool '{tool_name}'")
-            return await skill.execute(tool_payload)
+        while True:
+            response = await self._brain.generate_with_tools(
+                messages=messages,
+                tools=tools_payload,
+                priority_models=[],
+            )
 
-        return await self._brain.run_agentic_loop(
-            prompt=f"Mission: {mission.summary}",
-            tools=skills.tools_payload(),
-            tool_executor=tool_executor,
-        )
+            tool_calls: list[dict[str, Any]] = response.get("tool_calls", [])
+
+            if not tool_calls:
+                return str(response.get("content", ""))
+
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": response.get("content", ""),
+                    "tool_calls": tool_calls,
+                },
+            )
+
+            for tool_call in tool_calls:
+                fn = tool_call.get("function", {})
+                tool_name: str = fn.get("name", "")
+                tool_args: dict[str, Any] = fn.get("arguments", {})
+
+                skill = skills_by_name.get(tool_name)
+                if skill is None:
+                    raise ValueError(f"{self._identity.name}: unknown tool '{tool_name}'")
+
+                result = await skill.execute(tool_args)
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call.get("id", ""),
+                        "content": str(result),
+                    },
+                )

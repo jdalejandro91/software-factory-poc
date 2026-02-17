@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from software_factory_poc.core.application.agents.scaffolder.config.scaffolding_agent_config import (
-    ScaffoldingAgentConfig,
+    ScaffolderAgentConfig,
 )
 from software_factory_poc.core.domain.shared.llm_provider_type import LlmProviderType
 from software_factory_poc.core.domain.shared.model_id import ModelId
@@ -27,7 +27,7 @@ class ScaffoldingConfigLoader:
     """
 
     @staticmethod
-    def load_config() -> ScaffoldingAgentConfig:
+    def load_config() -> ScaffolderAgentConfig:
         try:
             vcs_provider = ScaffoldingConfigLoader._load_vcs_provider()
             tracker_provider = ScaffoldingConfigLoader._load_tracker_provider()
@@ -42,7 +42,7 @@ class ScaffoldingConfigLoader:
                 "SCAFFOLDING_ALLOWLISTED_GROUPS", "ALLOWLISTED_GROUPS", ""
             )
 
-            return ScaffoldingAgentConfig(
+            return ScaffolderAgentConfig(
                 vcs_provider=vcs_provider,
                 tracker_provider=tracker_provider,
                 research_provider=research_provider,
@@ -147,7 +147,9 @@ class ScaffoldingConfigLoader:
                     try:
                         provider = LlmProviderType(provider_str.lower())
                     except ValueError:
-                        logger.warning(f"Unknown provider '{provider_str}' in LLM config. Skipping.")
+                        logger.warning(
+                            f"Unknown provider '{provider_str}' in LLM config. Skipping."
+                        )
                         continue
 
                     model_ids.append(ModelId(provider=provider, name=model_name))
@@ -157,9 +159,7 @@ class ScaffoldingConfigLoader:
 
             if not model_ids:
                 logger.warning("LLM Priority list empty after parsing. Using fallback.")
-                return [
-                    ModelId(provider=LlmProviderType.OPENAI, name="gpt-4-turbo")
-                ]
+                return [ModelId(provider=LlmProviderType.OPENAI, name="gpt-4-turbo")]
 
             return model_ids
 

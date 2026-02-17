@@ -6,6 +6,7 @@ from software_factory_poc.core.domain.quality.value_objects.review_severity impo
 @dataclass(frozen=True)
 class ReviewComment:
     """Guardrail: Evita que el LLM devuelva archivos vacíos o líneas imposibles."""
+
     file_path: str
     description: str
     suggestion: str

@@ -94,9 +94,7 @@ class CodeReviewerAgent(BaseAgent):
                     "El Scaffolder debe inyectar estos datos antes del Code Review."
                 )
             if not gitlab_project_id:
-                raise ValueError(
-                    "No se encontro 'gitlab_project_id' en la metadata de la tarea."
-                )
+                raise ValueError("No se encontro 'gitlab_project_id' en la metadata de la tarea.")
 
             mr_iid = self._extract_mr_iid(mr_url)
             logger.info(f"[Reviewer] MR IID extraido: {mr_iid} | Project: {gitlab_project_id}")
@@ -123,7 +121,8 @@ class CodeReviewerAgent(BaseAgent):
 
             review_schema: CodeReviewResponseSchema = await self._brain.generate_structured(
                 prompt=full_prompt,
-                schema_cls=CodeReviewResponseSchema,
+                schema=CodeReviewResponseSchema,
+                priority_models=[],
             )
 
             # Convertir respuesta del LLM al agregado de dominio con invariantes
@@ -141,8 +140,7 @@ class CodeReviewerAgent(BaseAgent):
             if report.is_approved:
                 await self._tracker.add_comment(
                     mission.key,
-                    f"Code Review APROBADO. El MR cumple los estandares de calidad.\n"
-                    f"MR: {mr_url}",
+                    f"Code Review APROBADO. El MR cumple los estandares de calidad.\nMR: {mr_url}",
                 )
             else:
                 await self._tracker.add_comment(

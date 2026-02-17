@@ -42,7 +42,9 @@ class Mission:
         self._merge_dictionaries(current_config, new_context)
 
         # 2. Return new Task with updated config but same raw_content
-        new_description = replace(self.description, config=current_config, raw_content=self.description.raw_content)
+        new_description = replace(
+            self.description, config=current_config, raw_content=self.description.raw_content
+        )
         return replace(self, description=new_description)
 
     @property

@@ -15,6 +15,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "PyYAML>=6.0.1",
     "mcp>=1.2.0",
+    "litellm>=1.30.0",
 ]
 
 [project.optional-dependencies]
@@ -56,7 +57,4 @@ show_error_codes = true
 disallow_untyped_defs = false
 check_untyped_defs = false
 
-[tool.ruff]
-line-length = 100
-target-version = "py312"
-ignore = ["B008"]
+# Ruff config lives in ruff.toml (canonical source)

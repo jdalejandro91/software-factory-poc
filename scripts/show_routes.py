@@ -11,10 +11,10 @@ from software_factory_poc.configuration.main_settings import Settings
 def show_routes():
     settings = Settings()
     app = create_app(settings)
-    
+
     print(f"{'METHOD':<10} {'PATH':<50} {'NAME':<30}")
     print("-" * 90)
-    
+
     for route in app.routes:
         if hasattr(route, "methods"):
             # API Route
@@ -23,6 +23,7 @@ def show_routes():
         else:
             # Mounts or others
             print(f"{'MOUNT':<10} {route.path:<50} {route.name:<30}")
+
 
 if __name__ == "__main__":
     show_routes()

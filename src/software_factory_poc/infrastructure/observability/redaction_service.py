@@ -19,20 +19,22 @@ SENSITIVE_KEYS = {
     "client_secret",
 }
 
+
 def redact_text(text: str) -> str:
     """
     Redacts secrets from a string using regex patterns.
     """
     if not text:
         return text
-        
+
     redacted_text = text
     for pattern in SECRET_PATTERNS:
         # Replace the captured group 2 (the secret) with [REDACTED]
         # Regex structure assumes (prefix)(secret)
         redacted_text = re.sub(pattern, r"\1[REDACTED]", redacted_text, flags=re.IGNORECASE)
-    
+
     return redacted_text
+
 
 def redact_value(value: Any) -> Any:
     """
@@ -46,6 +48,7 @@ def redact_value(value: Any) -> Any:
         return [redact_value(item) for item in value]
     return value
 
+
 def redact_dict(obj: dict[str, Any]) -> dict[str, Any]:
     """
     Redacts sensitive keys and values in a dictionary (recursive).
@@ -58,7 +61,6 @@ def redact_dict(obj: dict[str, Any]) -> dict[str, Any]:
         else:
             new_obj[k] = redact_value(v)
     return new_obj
-
 
 
 class RedactionService:

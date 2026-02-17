@@ -18,10 +18,10 @@ def build_metadata_comment_skill() -> SkillAdapter:
             "BrahMAS Automation Metadata:\n"
             "```yaml\n"
             "code_review_params:\n"
-            f"  gitlab_project_id: \"{gitlab_project_id}\"\n"
-            f"  source_branch_name: \"{branch_name}\"\n"
-            f"  review_request_url: \"{mr_url}\"\n"
-            f"  generated_at: \"{generated_at}\"\n"
+            f'  gitlab_project_id: "{gitlab_project_id}"\n'
+            f'  source_branch_name: "{branch_name}"\n'
+            f'  review_request_url: "{mr_url}"\n'
+            f'  generated_at: "{generated_at}"\n'
             "```"
         )
 

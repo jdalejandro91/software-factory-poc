@@ -21,7 +21,7 @@ class JiraDescriptionMapper:
     # Robust Regex for Code Blocks (Markdown ``` or Jira {code})
     CODE_BLOCK_PATTERN = re.compile(
         r"(?:```(?:scaffolder|yaml|yml)?|\{code(?:[:|][^\}]*)?\})\s*([\s\S]*?)\s*(?:```|\{code\})",
-        re.IGNORECASE | re.DOTALL
+        re.IGNORECASE | re.DOTALL,
     )
 
     def to_domain(self, adf_json: dict[str, Any] | None) -> TaskDescription:
@@ -39,14 +39,20 @@ class JiraDescriptionMapper:
         for node in adf_json.get("content", []):
             if "content" in node:
                 node_text = "".join(
-                    [chunk.get("text", "") for chunk in node.get("content", []) if chunk.get("type") == "text"]
+                    [
+                        chunk.get("text", "")
+                        for chunk in node.get("content", [])
+                        if chunk.get("type") == "text"
+                    ]
                 )
                 if node_text:
                     raw_text_parts.append(node_text)
 
         original_cleaned_text = "\n\n".join(raw_text_parts)
 
-        logger.info(f"Scanning Description ({len(original_cleaned_text)} chars) for Config Block...")
+        logger.info(
+            f"Scanning Description ({len(original_cleaned_text)} chars) for Config Block..."
+        )
 
         # 2. Extract Config using Robust Regex
         extracted_config: dict[str, Any] = {}
@@ -70,7 +76,4 @@ class JiraDescriptionMapper:
             logger.info("Config Block STRIPPED successfully.")
 
         # 3. Return Domain Entity
-        return TaskDescription(
-            raw_content=original_cleaned_text,
-            config=extracted_config or {}
-        )
+        return TaskDescription(raw_content=original_cleaned_text, config=extracted_config or {})

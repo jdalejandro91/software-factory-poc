@@ -91,10 +91,9 @@ class ScaffolderAgent(BaseAgent):
             # ── Extraccion de configuracion del Mission ──
             config = mission.description.config
             service_name = config.get("parameters", {}).get("service_name", "")
-            gitlab_project_id = (
-                config.get("target", {}).get("gitlab_project_id", "")
-                or config.get("target", {}).get("gitlab_project_path", "")
-            )
+            gitlab_project_id = config.get("target", {}).get("gitlab_project_id", "") or config.get(
+                "target", {}
+            ).get("gitlab_project_path", "")
             target_branch = config.get("target", {}).get("default_branch", "main")
 
             branch_name = self._build_branch_name(mission.key, service_name)
@@ -124,7 +123,8 @@ class ScaffolderAgent(BaseAgent):
 
             scaffold_plan: ScaffoldingResponseSchema = await self._brain.generate_structured(
                 prompt=prompt,
-                schema_cls=ScaffoldingResponseSchema,
+                schema=ScaffoldingResponseSchema,
+                priority_models=[],
             )
 
             if not scaffold_plan.files:
@@ -203,19 +203,17 @@ class ScaffolderAgent(BaseAgent):
             files=domain_files,
         )
 
-    def _build_metadata_comment(
-        self, gitlab_project_id: str, branch_name: str, mr_url: str
-    ) -> str:
+    def _build_metadata_comment(self, gitlab_project_id: str, branch_name: str, mr_url: str) -> str:
         """Construye el bloque YAML de metadata para inyectar en la tarea de Jira."""
         generated_at = datetime.now(UTC).isoformat()
         return (
             "BrahMAS Automation Metadata:\n"
             "```yaml\n"
             "code_review_params:\n"
-            f"  gitlab_project_id: \"{gitlab_project_id}\"\n"
-            f"  source_branch_name: \"{branch_name}\"\n"
-            f"  review_request_url: \"{mr_url}\"\n"
-            f"  generated_at: \"{generated_at}\"\n"
+            f'  gitlab_project_id: "{gitlab_project_id}"\n'
+            f'  source_branch_name: "{branch_name}"\n'
+            f'  review_request_url: "{mr_url}"\n'
+            f'  generated_at: "{generated_at}"\n'
             "```"
         )
 

@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from software_factory_poc.infrastructure.configuration.main_settings import Settings
+from software_factory_poc.infrastructure.config.main_settings import Settings
 from software_factory_poc.infrastructure.entrypoints.api.code_review_router import (
     router as code_review_router,
 )
@@ -25,9 +25,12 @@ def boot_diagnostics():
     try:
         logger.info(">>> BOOT DIAGNOSTICS START <<<")
         critical_vars = [
-            "OPENAI_API_KEY", "DEEPSEEK_API_KEY",
-            "GEMINI_API_KEY", "ANTHROPIC_API_KEY",
-            "ARCHITECTURE_DOC_PAGE_ID", "CONFLUENCE_BASE_URL"
+            "OPENAI_API_KEY",
+            "DEEPSEEK_API_KEY",
+            "GEMINI_API_KEY",
+            "ANTHROPIC_API_KEY",
+            "ARCHITECTURE_DOC_PAGE_ID",
+            "CONFLUENCE_BASE_URL",
         ]
         for k in critical_vars:
             val = os.getenv(k)

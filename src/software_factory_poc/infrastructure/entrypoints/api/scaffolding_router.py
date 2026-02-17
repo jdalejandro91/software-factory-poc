@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 
 from software_factory_poc.core.application.agents.scaffolder.scaffolder_agent import ScaffolderAgent
 from software_factory_poc.core.domain.mission.entities import Mission
-from software_factory_poc.infrastructure.configuration.resolution.container import (
+from software_factory_poc.infrastructure.config.resolution.container import (
     McpConnectionManager,
     build_scaffolding_agent,
 )

@@ -55,10 +55,8 @@ class ScaffoldingPromptBuilder:
             f"   - Example: If NestJS, use 'nest-cli.json', '.ts' files, 'app.module.ts'.\n"
             f"   - Example: If Python/FastAPI, use 'pyproject.toml', 'main.py'.\n\n"
             f"   - Example: If Java/Spring, use 'pom.xml' or 'build.gradle'.\n\n"
-
             f"2. **BUSINESS GOAL**: {summary}\n"
             f"   - Extract business modules (e.g., 'cart', 'payment') from the goal or the Confluence doc.\n\n"
-
             f"3. **OUTPUT RULES (STRICT)**:\n"
             f"   - **Structure**: If the Confluence doc explicitly lists folders like 'src/modules/catalog', YOU MUST CREATE THEM.\n"
             f"   - **Files**: Generate VALID, production-ready content for root config (Dockerfile, package.json/.gitlab-ci.yml).\n"
@@ -71,10 +69,10 @@ class ScaffoldingPromptBuilder:
         return (
             "--- JSON OUTPUT EXAMPLE (Adapt structure to Confluence doc) ---\n"
             "[\n"
-            "  {\"path\": \".gitignore\", \"content\": \"node_modules/\\ndist/\"},\n"
-            "  {\"path\": \"nest-cli.json\", \"content\": \"{...}\"},\n"
-            "  {\"path\": \"src/main.ts\", \"content\": \"import { NestFactory } ...\"},\n"
-            "  {\"path\": \"src/modules/cart/cart.module.ts\", \"content\": \"@Module({...}) export class CartModule {}\"},\n"
-            "  {\"path\": \"src/modules/cart/domain/README.md\", \"content\": \"Domain entities for Cart go here.\"}\n"
+            '  {"path": ".gitignore", "content": "node_modules/\\ndist/"},\n'
+            '  {"path": "nest-cli.json", "content": "{...}"},\n'
+            '  {"path": "src/main.ts", "content": "import { NestFactory } ..."},\n'
+            '  {"path": "src/modules/cart/cart.module.ts", "content": "@Module({...}) export class CartModule {}"},\n'
+            '  {"path": "src/modules/cart/domain/README.md", "content": "Domain entities for Cart go here."}\n'
             "]\n"
         )

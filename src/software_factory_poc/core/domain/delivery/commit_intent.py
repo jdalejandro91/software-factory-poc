@@ -7,6 +7,7 @@ from software_factory_poc.core.domain.delivery.value_objects.file_content import
 @dataclass
 class CommitIntent:
     """Consistency Root for code operations. Ensures a valid commit."""
+
     branch: BranchName
     message: str
     files: list[FileContent]

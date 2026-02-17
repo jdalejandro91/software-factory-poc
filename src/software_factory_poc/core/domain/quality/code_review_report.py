@@ -7,6 +7,7 @@ from software_factory_poc.core.domain.quality.value_objects.review_severity impo
 @dataclass
 class CodeReviewReport:
     """Raíz de Consistencia. Protege al negocio de que la IA apruebe fallos críticos."""
+
     is_approved: bool
     summary: str
     comments: list[ReviewComment] = field(default_factory=list)

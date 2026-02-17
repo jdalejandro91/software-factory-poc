@@ -9,6 +9,7 @@ from software_factory_poc.infrastructure.observability.logger_factory_service im
 
 logger = LoggerFactoryService.build_logger(__name__)
 
+
 class JiraDescriptionParser:
     """
     Utility parser to extract scaffolder config from raw Jira descriptions.
@@ -21,14 +22,16 @@ class JiraDescriptionParser:
         Parses raw text to extract scaffolder parameters and clean human text.
         """
         if not raw_text:
-            return TaskDescription(human_text="", raw_content="")
+            return TaskDescription(raw_content="")
 
         scaffolding_params = None
-        human_text = raw_text
 
         # Regex to find the scaffolder block (dotall to match newlines)
         # Matches: ```scaffolder ... ``` OR {code:yaml} ... {code}
-        pattern = re.compile(r"(?:```(?:yaml|scaffolder)?|\{code:(?:yaml|scaffolder)?\})\s*(.*?)\s*(?:```|\{code\})", re.DOTALL | re.IGNORECASE)
+        pattern = re.compile(
+            r"(?:```(?:yaml|scaffolder)?|\{code:(?:yaml|scaffolder)?\})\s*(.*?)\s*(?:```|\{code\})",
+            re.DOTALL | re.IGNORECASE,
+        )
         match = pattern.search(raw_text)
 
         if match:
@@ -43,12 +46,7 @@ class JiraDescriptionParser:
             except yaml.YAMLError as e:
                 logger.warning(f"Failed to parse scaffolder YAML block: {e}")
 
-            # Remove the detected block from the human descriptions
-            # Using simple replacement of the matched string
-            human_text = raw_text.replace(match.group(0), "").strip()
-
         return TaskDescription(
-            human_text=human_text.strip(),
             raw_content=raw_text,
-            scaffolding_params=scaffolding_params
+            config=scaffolding_params or {},
         )

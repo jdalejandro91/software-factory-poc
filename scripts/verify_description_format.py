@@ -2,14 +2,14 @@ import os
 import sys
 
 # Add src to path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 from software_factory_poc.core.domain.mission.entities import TaskDescription
-from software_factory_poc.infrastructure.tools.tracker.jira.mappers.jira_description_mapper import (
-    JiraDescriptionMapper,
-)
 from software_factory_poc.infrastructure.entrypoints.api.mappers.jira_payload_mapper import (
     JiraPayloadMapper,
+)
+from software_factory_poc.infrastructure.tools.tracker.jira.mappers.jira_description_mapper import (
+    JiraDescriptionMapper,
 )
 
 
@@ -50,7 +50,10 @@ End of Description."""
     adf_input = {
         "content": [
             {"type": "paragraph", "content": [{"type": "text", "text": "Some human text"}]},
-            {"type": "codeBlock", "content": [{"type": "text", "text": "version: 1.0\nscaffolder:\n  stack: python"}]},
+            {
+                "type": "codeBlock",
+                "content": [{"type": "text", "text": "version: 1.0\nscaffolder:\n  stack: python"}],
+            },
         ]
     }
     result = mapper.to_domain(adf_input)
@@ -58,6 +61,7 @@ End of Description."""
     print(f"to_domain raw_content: {repr(result.raw_content)}")
 
     print("\nSUCCESS: Description format verified.")
+
 
 if __name__ == "__main__":
     verify_format()

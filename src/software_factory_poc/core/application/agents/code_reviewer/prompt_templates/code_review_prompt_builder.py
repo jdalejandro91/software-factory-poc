@@ -11,7 +11,9 @@ class CodeReviewPromptBuilder:
         """
 
     @staticmethod
-    def build_analysis_prompt(mission_summary: str, mission_desc: str, mr_diff: str, conventions: str) -> str:
+    def build_analysis_prompt(
+        mission_summary: str, mission_desc: str, mr_diff: str, conventions: str
+    ) -> str:
         return f"""
             [REQUERIMIENTO JIRA ORIGEN]:\n{mission_summary}\n{mission_desc}
             [CONVENCIONES DEL PROYECTO]:\n{conventions}

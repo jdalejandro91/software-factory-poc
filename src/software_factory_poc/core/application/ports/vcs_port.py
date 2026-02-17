@@ -6,7 +6,6 @@ from software_factory_poc.core.domain.quality.code_review_report import CodeRevi
 
 
 class VcsPort(ABC):
-
     # ── Deterministic Operations (Scaffolding Flow) ──
 
     @abstractmethod
