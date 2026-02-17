@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from software_factory_poc.core.application.agents.common.agent_execution_mode import (
-    AgentExecutionMode,
-)
-from software_factory_poc.core.application.ports import BrainPort
+from software_factory_poc.core.application.agents.common.agent_config import AgentConfig
+from software_factory_poc.core.application.skills.skill import BaseSkill
 from software_factory_poc.core.domain.mission import Mission
+from software_factory_poc.core.domain.shared.base_tool import BaseTool
+from software_factory_poc.core.domain.shared.skill_type import SkillType
+from software_factory_poc.core.domain.shared.tool_type import ToolType
 
 
 @dataclass(frozen=True)
@@ -22,22 +24,20 @@ class BaseAgent(ABC):
     def __init__(
         self,
         identity: AgentIdentity,
-        brain: BrainPort,
-        priority_models: list[str],
-        execution_mode: AgentExecutionMode = AgentExecutionMode.DETERMINISTIC,
+        config: AgentConfig,
+        tools: Mapping[ToolType, BaseTool],
+        skills: Mapping[SkillType, BaseSkill[Any, Any]],
     ):
         self._identity = identity
-        self._brain = brain
-        self._priority_models = priority_models
-        self._execution_mode = execution_mode
+        self._config = config
+        self._tools = tools
+        self._skills = skills
+        self._execution_mode = config.execution_mode
+        self._priority_models = config.priority_models
 
     @property
     def identity(self) -> AgentIdentity:
         return self._identity
-
-    @property
-    def execution_mode(self) -> AgentExecutionMode:
-        return self._execution_mode
 
     @abstractmethod
     async def _run_deterministic(self, mission: Mission) -> Any:

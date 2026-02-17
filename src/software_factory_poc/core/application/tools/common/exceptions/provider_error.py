@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from software_factory_poc.core.application.ports.common.exceptions.infra_error import InfraError
+from software_factory_poc.core.application.tools.common.exceptions.infra_error import InfraError
 
 
 @dataclass(frozen=False)

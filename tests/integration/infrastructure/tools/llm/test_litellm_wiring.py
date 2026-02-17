@@ -3,7 +3,7 @@
 import pytest
 from pydantic import SecretStr
 
-from software_factory_poc.core.application.ports import BrainPort
+from software_factory_poc.core.application.tools import BrainTool
 from software_factory_poc.infrastructure.tools.llm.config.llm_settings import LlmSettings
 from software_factory_poc.infrastructure.tools.llm.litellm_brain_adapter import (
     LiteLlmBrainAdapter,
@@ -69,8 +69,8 @@ class TestLlmSettingsFromEnv:
         assert settings.openai_api_key is None
 
 
-class TestBrainPortWiring:
-    """Verify that building LiteLlmBrainAdapter through LlmSettings yields a valid BrainPort."""
+class TestBrainToolWiring:
+    """Verify that building LiteLlmBrainAdapter through LlmSettings yields a valid BrainTool."""
 
     def test_adapter_from_settings_is_brain_port(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Arrange
@@ -85,7 +85,7 @@ class TestBrainPortWiring:
         adapter = LiteLlmBrainAdapter(settings)
 
         # Assert
-        assert isinstance(adapter, BrainPort)
+        assert isinstance(adapter, BrainTool)
         assert isinstance(adapter, LiteLlmBrainAdapter)
 
     def test_native_list_injection_without_json_string(self) -> None:
@@ -100,4 +100,4 @@ class TestBrainPortWiring:
         assert settings.allowed_models == ["openai:gpt-4o", "deepseek:deepseek-coder"]
 
         adapter = LiteLlmBrainAdapter(settings)
-        assert isinstance(adapter, BrainPort)
+        assert isinstance(adapter, BrainTool)

@@ -11,8 +11,8 @@ from mcp import McpError
 from mcp.types import ErrorData
 from pydantic import SecretStr
 
-from software_factory_poc.core.application.ports import VcsPort
-from software_factory_poc.core.application.ports.common.exceptions import ProviderError
+from software_factory_poc.core.application.tools import VcsTool
+from software_factory_poc.core.application.tools.common.exceptions import ProviderError
 from software_factory_poc.core.domain.delivery import BranchName, CommitIntent, FileContent
 from software_factory_poc.core.domain.quality import CodeReviewReport, ReviewComment, ReviewSeverity
 from software_factory_poc.infrastructure.tools.vcs.gitlab.config.gitlab_settings import (
@@ -115,7 +115,7 @@ def mock_mcp():
 class TestPortCompliance:
     def test_implements_vcs_port(self) -> None:
         client = _build_client()
-        assert isinstance(client, VcsPort)
+        assert isinstance(client, VcsTool)
 
     def test_constructor_extracts_project_id_from_settings(self) -> None:
         client = _build_client(_make_settings(GITLAB_PROJECT_ID="99"))

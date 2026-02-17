@@ -11,8 +11,8 @@ from mcp import McpError
 from mcp.types import ErrorData
 from pydantic import SecretStr
 
-from software_factory_poc.core.application.ports import TrackerPort
-from software_factory_poc.core.application.ports.common.exceptions import ProviderError
+from software_factory_poc.core.application.tools import TrackerTool
+from software_factory_poc.core.application.tools.common.exceptions import ProviderError
 from software_factory_poc.core.domain.mission import Mission, TaskDescription
 from software_factory_poc.core.domain.quality import CodeReviewReport, ReviewComment, ReviewSeverity
 from software_factory_poc.infrastructure.tools.tracker.jira.config.jira_settings import (
@@ -141,7 +141,7 @@ def mock_mcp():
 class TestPortCompliance:
     def test_implements_tracker_port(self) -> None:
         client = _build_client()
-        assert isinstance(client, TrackerPort)
+        assert isinstance(client, TrackerTool)
         assert isinstance(client, JiraMcpClient)
 
 

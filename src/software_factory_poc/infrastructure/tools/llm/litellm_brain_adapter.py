@@ -6,15 +6,15 @@ from typing import Any, NoReturn
 import litellm
 from pydantic import ValidationError
 
-from software_factory_poc.core.application.ports import BrainPort, T
-from software_factory_poc.core.application.ports.common.exceptions import ProviderError
+from software_factory_poc.core.application.tools import BrainTool, T
+from software_factory_poc.core.application.tools.common.exceptions import ProviderError
 from software_factory_poc.infrastructure.tools.llm.config.llm_settings import LlmSettings
 
 logger = logging.getLogger(__name__)
 
 
-class LiteLlmBrainAdapter(BrainPort):
-    """Implements BrainPort via ``litellm.acompletion`` with priority-based model fallback.
+class LiteLlmBrainAdapter(BrainTool):
+    """Implements BrainTool via ``litellm.acompletion`` with priority-based model fallback.
 
     API keys are extracted from the injected ``LlmSettings`` and pushed into
     ``os.environ`` so that litellm's internal provider auto-detection picks

@@ -4,36 +4,62 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from software_factory_poc.core.application.agents.common.agent_config import (
+    ScaffolderAgentConfig,
+)
 from software_factory_poc.core.application.agents.common.agent_execution_mode import (
     AgentExecutionMode,
-)
-from software_factory_poc.core.application.agents.common.agent_structures import AgentPorts
-from software_factory_poc.core.application.agents.scaffolder.config.scaffolder_agent_di_config import (
-    ScaffolderAgentConfig,
 )
 from software_factory_poc.core.application.agents.scaffolder.contracts.scaffolder_contracts import (
     FileSchemaDTO,
     ScaffoldingResponseSchema,
 )
 from software_factory_poc.core.application.agents.scaffolder.scaffolder_agent import ScaffolderAgent
-from software_factory_poc.core.application.skills.scaffold.apply_scaffold_delivery_skill import (
-    ApplyScaffoldDeliveryInput,
-)
 from software_factory_poc.core.application.skills.scaffold.generate_scaffold_plan_skill import (
     GenerateScaffoldPlanInput,
 )
-from software_factory_poc.core.application.skills.scaffold.report_success_skill import (
-    ReportSuccessInput,
-)
+from software_factory_poc.core.domain.delivery import CommitIntent
 from software_factory_poc.core.domain.mission import Mission, TaskDescription
+from software_factory_poc.core.domain.shared.skill_type import SkillType
+from software_factory_poc.core.domain.shared.tool_type import ToolType
 
-# ── Helpers ──
+# ── Fixtures ──────────────────────────────────────────────────────────
 
 
-def _make_mission(key: str = "PROJ-100", service_name: str = "my-service") -> Mission:
+@pytest.fixture()
+def agent_config() -> ScaffolderAgentConfig:
+    return ScaffolderAgentConfig(priority_models=["openai:gpt-4o"])
+
+
+@pytest.fixture()
+def mock_tools() -> dict[ToolType, AsyncMock]:
+    return {
+        ToolType.VCS: AsyncMock(),
+        ToolType.TRACKER: AsyncMock(),
+        ToolType.DOCS: AsyncMock(),
+        ToolType.BRAIN: AsyncMock(),
+    }
+
+
+@pytest.fixture()
+def mock_skills() -> dict[SkillType, AsyncMock]:
+    return {SkillType.GENERATE_SCAFFOLD_PLAN: AsyncMock()}
+
+
+@pytest.fixture()
+def agent(
+    agent_config: ScaffolderAgentConfig,
+    mock_tools: dict[ToolType, AsyncMock],
+    mock_skills: dict[SkillType, AsyncMock],
+) -> ScaffolderAgent:
+    return ScaffolderAgent(config=agent_config, tools=mock_tools, skills=mock_skills)
+
+
+@pytest.fixture()
+def mission() -> Mission:
     return Mission(
         id="10001",
-        key=key,
+        key="PROJ-100",
         summary="Create microservice scaffolding",
         status="To Do",
         project_key="PROJ",
@@ -41,7 +67,7 @@ def _make_mission(key: str = "PROJ-100", service_name: str = "my-service") -> Mi
         description=TaskDescription(
             raw_content="Create scaffolding for my-service",
             config={
-                "parameters": {"service_name": service_name},
+                "parameters": {"service_name": "my-service"},
                 "target": {
                     "gitlab_project_id": "42",
                     "default_branch": "main",
@@ -51,7 +77,8 @@ def _make_mission(key: str = "PROJ-100", service_name: str = "my-service") -> Mi
     )
 
 
-def _make_scaffold_plan() -> ScaffoldingResponseSchema:
+@pytest.fixture()
+def scaffold_plan() -> ScaffoldingResponseSchema:
     return ScaffoldingResponseSchema(
         branch_name="feature/proj-100-my-service",
         commit_message="feat: scaffold my-service",
@@ -61,148 +88,228 @@ def _make_scaffold_plan() -> ScaffoldingResponseSchema:
     )
 
 
-def _build_agent(
-    execution_mode: AgentExecutionMode = AgentExecutionMode.DETERMINISTIC,
-) -> tuple[ScaffolderAgent, dict[str, AsyncMock]]:
-    """Build a ScaffolderAgent with all dependencies mocked."""
-    mocks = {
-        "vcs": AsyncMock(),
-        "tracker": AsyncMock(),
-        "docs": AsyncMock(),
-        "brain": AsyncMock(),
-        "idempotency_check": AsyncMock(),
-        "fetch_context": AsyncMock(),
-        "generate_plan": AsyncMock(),
-        "apply_delivery": AsyncMock(),
-        "report_success": AsyncMock(),
-        "loop_runner": AsyncMock(),
-    }
-
-    agent = ScaffolderAgent(
-        config=ScaffolderAgentConfig(
-            priority_models=["openai:gpt-4o"],
-            execution_mode=execution_mode,
-        ),
-        ports=AgentPorts(
-            vcs=mocks["vcs"],
-            tracker=mocks["tracker"],
-            docs=mocks["docs"],
-            brain=mocks["brain"],
-        ),
-        idempotency_check=mocks["idempotency_check"],
-        fetch_context=mocks["fetch_context"],
-        generate_plan=mocks["generate_plan"],
-        apply_delivery=mocks["apply_delivery"],
-        report_success=mocks["report_success"],
-        loop_runner=mocks["loop_runner"],
-    )
-    return agent, mocks
-
-
 # ══════════════════════════════════════════════════════════════════════
 # Deterministic Pipeline
 # ══════════════════════════════════════════════════════════════════════
 
 
 class TestDeterministicPipeline:
-    """Verify the agent orchestrates the 5-skill pipeline in order."""
+    """Verify the agent orchestrates the full deterministic pipeline."""
 
-    async def test_full_pipeline_calls_all_skills_in_order(self) -> None:
-        agent, mocks = _build_agent()
-        mission = _make_mission()
-        plan = _make_scaffold_plan()
-
-        mocks["idempotency_check"].execute.return_value = False
-        mocks["fetch_context"].execute.return_value = "arch context"
-        mocks["generate_plan"].execute.return_value = plan
-        mocks["apply_delivery"].execute.return_value = "https://gitlab.com/mr/1"
-        mocks["report_success"].execute.return_value = None
-
-        await agent.run(mission)
-
-        mocks["idempotency_check"].execute.assert_awaited_once()
-        mocks["fetch_context"].execute.assert_awaited_once_with("my-service")
-        mocks["generate_plan"].execute.assert_awaited_once()
-        mocks["apply_delivery"].execute.assert_awaited_once()
-        mocks["report_success"].execute.assert_awaited_once()
-
-    async def test_idempotency_abort_skips_remaining_skills(self) -> None:
-        agent, mocks = _build_agent()
-        mission = _make_mission()
-
-        mocks["idempotency_check"].execute.return_value = True
+    @pytest.mark.asyncio
+    async def test_full_pipeline_calls_all_tools_in_order(
+        self,
+        agent: ScaffolderAgent,
+        mock_tools: dict[ToolType, AsyncMock],
+        mock_skills: dict[SkillType, AsyncMock],
+        mission: Mission,
+        scaffold_plan: ScaffoldingResponseSchema,
+    ) -> None:
+        mock_tools[ToolType.VCS].validate_branch_existence.return_value = False
+        mock_tools[ToolType.DOCS].get_architecture_context.return_value = "arch context"
+        mock_skills[SkillType.GENERATE_SCAFFOLD_PLAN].execute.return_value = scaffold_plan
+        mock_tools[ToolType.VCS].create_branch.return_value = "https://gitlab.com/branch"
+        mock_tools[ToolType.VCS].commit_changes.return_value = "abc123"
+        mock_tools[ToolType.VCS].create_merge_request.return_value = "https://gitlab.com/mr/1"
 
         await agent.run(mission)
 
-        mocks["idempotency_check"].execute.assert_awaited_once()
-        mocks["fetch_context"].execute.assert_not_awaited()
-        mocks["generate_plan"].execute.assert_not_awaited()
-        mocks["apply_delivery"].execute.assert_not_awaited()
-        mocks["report_success"].execute.assert_not_awaited()
+        mock_tools[ToolType.VCS].validate_branch_existence.assert_awaited_once()
+        mock_tools[ToolType.DOCS].get_architecture_context.assert_awaited_once_with("my-service")
+        mock_skills[SkillType.GENERATE_SCAFFOLD_PLAN].execute.assert_awaited_once()
+        mock_tools[ToolType.VCS].create_branch.assert_awaited_once()
+        mock_tools[ToolType.VCS].commit_changes.assert_awaited_once()
+        mock_tools[ToolType.VCS].create_merge_request.assert_awaited_once()
+        mock_tools[ToolType.TRACKER].update_task_description.assert_awaited_once()
+        assert mock_tools[ToolType.TRACKER].add_comment.call_count >= 2
+        mock_tools[ToolType.TRACKER].update_status.assert_awaited_once_with("PROJ-100", "In Review")
 
-    async def test_generate_plan_receives_correct_input(self) -> None:
-        agent, mocks = _build_agent()
-        mission = _make_mission()
-        plan = _make_scaffold_plan()
-
-        mocks["idempotency_check"].execute.return_value = False
-        mocks["fetch_context"].execute.return_value = "arch context"
-        mocks["generate_plan"].execute.return_value = plan
-        mocks["apply_delivery"].execute.return_value = "https://gitlab.com/mr/1"
+    @pytest.mark.asyncio
+    async def test_idempotency_abort_skips_remaining_steps(
+        self,
+        agent: ScaffolderAgent,
+        mock_tools: dict[ToolType, AsyncMock],
+        mock_skills: dict[SkillType, AsyncMock],
+        mission: Mission,
+    ) -> None:
+        mock_tools[ToolType.VCS].validate_branch_existence.return_value = True
 
         await agent.run(mission)
 
-        call_args = mocks["generate_plan"].execute.call_args[0][0]
+        mock_tools[ToolType.VCS].validate_branch_existence.assert_awaited_once()
+        mock_tools[ToolType.DOCS].get_architecture_context.assert_not_awaited()
+        mock_skills[SkillType.GENERATE_SCAFFOLD_PLAN].execute.assert_not_awaited()
+        mock_tools[ToolType.VCS].create_branch.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_generate_plan_receives_correct_input(
+        self,
+        agent: ScaffolderAgent,
+        mock_tools: dict[ToolType, AsyncMock],
+        mock_skills: dict[SkillType, AsyncMock],
+        mission: Mission,
+        scaffold_plan: ScaffoldingResponseSchema,
+    ) -> None:
+        mock_tools[ToolType.VCS].validate_branch_existence.return_value = False
+        mock_tools[ToolType.DOCS].get_architecture_context.return_value = "arch context"
+        mock_skills[SkillType.GENERATE_SCAFFOLD_PLAN].execute.return_value = scaffold_plan
+        mock_tools[ToolType.VCS].create_branch.return_value = "https://gitlab.com/branch"
+        mock_tools[ToolType.VCS].commit_changes.return_value = "abc123"
+        mock_tools[ToolType.VCS].create_merge_request.return_value = "https://gitlab.com/mr/1"
+
+        await agent.run(mission)
+
+        call_args = mock_skills[SkillType.GENERATE_SCAFFOLD_PLAN].execute.call_args[0][0]
         assert isinstance(call_args, GenerateScaffoldPlanInput)
         assert call_args.mission is mission
         assert call_args.arch_context == "arch context"
         assert call_args.priority_models == ["openai:gpt-4o"]
 
-    async def test_apply_delivery_receives_correct_input(self) -> None:
-        agent, mocks = _build_agent()
-        mission = _make_mission()
-        plan = _make_scaffold_plan()
-
-        mocks["idempotency_check"].execute.return_value = False
-        mocks["fetch_context"].execute.return_value = "arch"
-        mocks["generate_plan"].execute.return_value = plan
-        mocks["apply_delivery"].execute.return_value = "https://gitlab.com/mr/1"
-
-        await agent.run(mission)
-
-        call_args = mocks["apply_delivery"].execute.call_args[0][0]
-        assert isinstance(call_args, ApplyScaffoldDeliveryInput)
-        assert call_args.mission_key == "PROJ-100"
-        assert call_args.target_branch == "main"
-        assert call_args.scaffold_plan is plan
-
-    async def test_report_success_receives_correct_input(self) -> None:
-        agent, mocks = _build_agent()
-        mission = _make_mission()
-        plan = _make_scaffold_plan()
-
-        mocks["idempotency_check"].execute.return_value = False
-        mocks["fetch_context"].execute.return_value = "arch"
-        mocks["generate_plan"].execute.return_value = plan
-        mocks["apply_delivery"].execute.return_value = "https://gitlab.com/mr/1"
+    @pytest.mark.asyncio
+    async def test_vcs_operations_receive_correct_input(
+        self,
+        agent: ScaffolderAgent,
+        mock_tools: dict[ToolType, AsyncMock],
+        mock_skills: dict[SkillType, AsyncMock],
+        mission: Mission,
+        scaffold_plan: ScaffoldingResponseSchema,
+    ) -> None:
+        mock_tools[ToolType.VCS].validate_branch_existence.return_value = False
+        mock_tools[ToolType.DOCS].get_architecture_context.return_value = "arch"
+        mock_skills[SkillType.GENERATE_SCAFFOLD_PLAN].execute.return_value = scaffold_plan
+        mock_tools[ToolType.VCS].create_branch.return_value = "https://gitlab.com/branch"
+        mock_tools[ToolType.VCS].commit_changes.return_value = "abc123"
+        mock_tools[ToolType.VCS].create_merge_request.return_value = "https://gitlab.com/mr/1"
 
         await agent.run(mission)
 
-        call_args = mocks["report_success"].execute.call_args[0][0]
-        assert isinstance(call_args, ReportSuccessInput)
-        assert call_args.mr_url == "https://gitlab.com/mr/1"
-        assert call_args.gitlab_project_id == "42"
-        assert call_args.files_count == 1
+        mock_tools[ToolType.VCS].create_branch.assert_awaited_once_with(
+            "feature/proj-100-my-service", ref="main"
+        )
+        commit_arg = mock_tools[ToolType.VCS].commit_changes.call_args[0][0]
+        assert isinstance(commit_arg, CommitIntent)
+        assert len(commit_arg.files) == 1
+        mock_tools[ToolType.VCS].create_merge_request.assert_awaited_once_with(
+            source_branch="feature/proj-100-my-service",
+            target_branch="main",
+            title="feat: Scaffolding PROJ-100",
+            description="Auto-generated by BrahMAS.\n\nCreate microservice scaffolding",
+        )
 
-    async def test_skill_failure_propagates(self) -> None:
-        agent, mocks = _build_agent()
-        mission = _make_mission()
+    @pytest.mark.asyncio
+    async def test_tracker_receives_correct_report_data(
+        self,
+        agent: ScaffolderAgent,
+        mock_tools: dict[ToolType, AsyncMock],
+        mock_skills: dict[SkillType, AsyncMock],
+        mission: Mission,
+        scaffold_plan: ScaffoldingResponseSchema,
+    ) -> None:
+        mock_tools[ToolType.VCS].validate_branch_existence.return_value = False
+        mock_tools[ToolType.DOCS].get_architecture_context.return_value = "arch"
+        mock_skills[SkillType.GENERATE_SCAFFOLD_PLAN].execute.return_value = scaffold_plan
+        mock_tools[ToolType.VCS].create_branch.return_value = "https://gitlab.com/branch"
+        mock_tools[ToolType.VCS].commit_changes.return_value = "abc123"
+        mock_tools[ToolType.VCS].create_merge_request.return_value = "https://gitlab.com/mr/1"
 
-        mocks["idempotency_check"].execute.return_value = False
-        mocks["fetch_context"].execute.side_effect = RuntimeError("Confluence down")
+        await agent.run(mission)
+
+        desc_arg = mock_tools[ToolType.TRACKER].update_task_description.call_args[0][1]
+        assert "code_review_params:" in desc_arg
+        assert 'gitlab_project_id: "42"' in desc_arg
+        last_comment = mock_tools[ToolType.TRACKER].add_comment.call_args_list[-1][0][1]
+        assert "abc123" in last_comment
+        assert "https://gitlab.com/mr/1" in last_comment
+
+    @pytest.mark.asyncio
+    async def test_skill_failure_propagates(
+        self,
+        agent: ScaffolderAgent,
+        mock_tools: dict[ToolType, AsyncMock],
+        mission: Mission,
+    ) -> None:
+        mock_tools[ToolType.VCS].validate_branch_existence.return_value = False
+        mock_tools[ToolType.DOCS].get_architecture_context.side_effect = RuntimeError(
+            "Confluence down"
+        )
 
         with pytest.raises(RuntimeError, match="Confluence down"):
             await agent.run(mission)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Step Method Unit Tests
+# ══════════════════════════════════════════════════════════════════════
+
+
+class TestStepMethods:
+    """Verify individual step methods in isolation."""
+
+    @pytest.mark.asyncio
+    async def test_build_branch_name_with_service(self) -> None:
+        assert ScaffolderAgent._build_branch_name("PROJ-100", "my-service") == (
+            "feature/proj-100-my-service"
+        )
+
+    @pytest.mark.asyncio
+    async def test_build_branch_name_without_service(self) -> None:
+        assert ScaffolderAgent._build_branch_name("PROJ-100") == "feature/proj-100-scaffolder"
+
+    @pytest.mark.asyncio
+    async def test_step_1_parse_mission(self, agent: ScaffolderAgent, mission: Mission) -> None:
+        parsed = await agent._step_1_parse_mission(mission)
+
+        assert parsed["service_name"] == "my-service"
+        assert parsed["project_id"] == "42"
+        assert parsed["target_branch"] == "main"
+        assert parsed["branch_name"] == "feature/proj-100-my-service"
+
+    @pytest.mark.asyncio
+    async def test_step_3_returns_true_when_branch_exists(
+        self,
+        agent: ScaffolderAgent,
+        mock_tools: dict[ToolType, AsyncMock],
+        mission: Mission,
+    ) -> None:
+        mock_tools[ToolType.VCS].validate_branch_existence.return_value = True
+
+        result = await agent._step_3_check_idempotency(mission, "feature/proj-100-my-service")
+
+        assert result is True
+        mock_tools[ToolType.TRACKER].add_comment.assert_awaited()
+        mock_tools[ToolType.TRACKER].update_status.assert_awaited_once_with("PROJ-100", "In Review")
+
+    @pytest.mark.asyncio
+    async def test_step_3_returns_false_when_branch_missing(
+        self,
+        agent: ScaffolderAgent,
+        mock_tools: dict[ToolType, AsyncMock],
+        mission: Mission,
+    ) -> None:
+        mock_tools[ToolType.VCS].validate_branch_existence.return_value = False
+
+        result = await agent._step_3_check_idempotency(mission, "feature/proj-100-my-service")
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_step_4_delegates_to_docs(
+        self,
+        agent: ScaffolderAgent,
+        mock_tools: dict[ToolType, AsyncMock],
+    ) -> None:
+        mock_tools[ToolType.DOCS].get_architecture_context.return_value = "arch ctx"
+
+        result = await agent._step_4_fetch_context("my-service")
+
+        assert result == "arch ctx"
+        mock_tools[ToolType.DOCS].get_architecture_context.assert_awaited_once_with("my-service")
+
+    @pytest.mark.asyncio
+    async def test_step_7_raises_on_empty_plan(self, agent: ScaffolderAgent) -> None:
+        empty_plan = ScaffoldingResponseSchema(branch_name="b", commit_message="m", files=[])
+        with pytest.raises(ValueError, match="0 files"):
+            agent._step_7_validate_plan(empty_plan)
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -213,40 +320,68 @@ class TestDeterministicPipeline:
 class TestAgenticRouting:
     """Verify the agent correctly delegates to the loop runner in REACT_LOOP mode."""
 
-    async def test_react_mode_delegates_to_loop_runner(self) -> None:
-        agent, mocks = _build_agent(execution_mode=AgentExecutionMode.REACT_LOOP)
-        mission = _make_mission()
+    @pytest.mark.asyncio
+    async def test_react_mode_delegates_to_loop_runner(
+        self, mock_tools: dict[ToolType, AsyncMock], mock_skills: dict[SkillType, AsyncMock]
+    ) -> None:
+        config = ScaffolderAgentConfig(
+            priority_models=["openai:gpt-4o"],
+            execution_mode=AgentExecutionMode.REACT_LOOP,
+        )
+        agent = ScaffolderAgent(config=config, tools=mock_tools, skills=mock_skills)
+        mission = Mission(
+            id="10001",
+            key="PROJ-100",
+            summary="Create microservice scaffolding",
+            status="To Do",
+            project_key="PROJ",
+            issue_type="Task",
+            description=TaskDescription(
+                raw_content="Create scaffolding for my-service",
+                config={
+                    "parameters": {"service_name": "my-service"},
+                    "target": {"gitlab_project_id": "42", "default_branch": "main"},
+                },
+            ),
+        )
 
-        mocks["vcs"].get_mcp_tools.return_value = [
-            {"type": "function", "function": {"name": "vcs_create_branch"}}
-        ]
-        mocks["tracker"].get_mcp_tools.return_value = [
-            {"type": "function", "function": {"name": "tracker_add_comment"}}
-        ]
-        mocks["docs"].get_mcp_tools.return_value = []
-        mocks["loop_runner"].run_loop.return_value = "done"
+        mock_loop_runner = AsyncMock()
+        mock_loop_runner.run_loop.return_value = "done"
+        agent._loop_runner = mock_loop_runner
 
         await agent.run(mission)
 
-        mocks["loop_runner"].run_loop.assert_awaited_once()
-        call_kwargs = mocks["loop_runner"].run_loop.call_args[1]
+        mock_loop_runner.run_loop.assert_awaited_once()
+        call_kwargs = mock_loop_runner.run_loop.call_args[1]
         assert call_kwargs["mission"] is mission
-        assert len(call_kwargs["available_tools"]) == 2
+        assert call_kwargs["tools_registry"] is agent._tools
         assert call_kwargs["priority_models"] == ["openai:gpt-4o"]
 
-    async def test_react_mode_does_not_call_deterministic_skills(self) -> None:
-        agent, mocks = _build_agent(execution_mode=AgentExecutionMode.REACT_LOOP)
-        mission = _make_mission()
+    @pytest.mark.asyncio
+    async def test_react_mode_does_not_call_deterministic_steps(
+        self, mock_tools: dict[ToolType, AsyncMock], mock_skills: dict[SkillType, AsyncMock]
+    ) -> None:
+        config = ScaffolderAgentConfig(
+            priority_models=["openai:gpt-4o"],
+            execution_mode=AgentExecutionMode.REACT_LOOP,
+        )
+        agent = ScaffolderAgent(config=config, tools=mock_tools, skills=mock_skills)
+        mission = Mission(
+            id="10001",
+            key="PROJ-100",
+            summary="s",
+            status="s",
+            project_key="PROJ",
+            issue_type="Task",
+            description=TaskDescription(raw_content="x", config={"parameters": {}, "target": {}}),
+        )
 
-        mocks["vcs"].get_mcp_tools.return_value = []
-        mocks["tracker"].get_mcp_tools.return_value = []
-        mocks["docs"].get_mcp_tools.return_value = []
-        mocks["loop_runner"].run_loop.return_value = "done"
+        mock_loop_runner = AsyncMock()
+        mock_loop_runner.run_loop.return_value = "done"
+        agent._loop_runner = mock_loop_runner
 
         await agent.run(mission)
 
-        mocks["idempotency_check"].execute.assert_not_awaited()
-        mocks["fetch_context"].execute.assert_not_awaited()
-        mocks["generate_plan"].execute.assert_not_awaited()
-        mocks["apply_delivery"].execute.assert_not_awaited()
-        mocks["report_success"].execute.assert_not_awaited()
+        mock_skills[SkillType.GENERATE_SCAFFOLD_PLAN].execute.assert_not_awaited()
+        mock_tools[ToolType.VCS].create_branch.assert_not_awaited()
+        mock_tools[ToolType.TRACKER].update_status.assert_not_awaited()

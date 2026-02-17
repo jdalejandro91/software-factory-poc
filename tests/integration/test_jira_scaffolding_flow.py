@@ -2,11 +2,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from software_factory_poc.core.application.agents.common.agent_structures import AgentPorts
-from software_factory_poc.core.application.agents.loops.agentic_loop_runner import (
-    AgenticLoopRunner,
-)
-from software_factory_poc.core.application.agents.scaffolder.config.scaffolder_agent_di_config import (
+from software_factory_poc.core.application.agents.common.agent_config import (
     ScaffolderAgentConfig,
 )
 from software_factory_poc.core.application.agents.scaffolder.contracts.scaffolder_contracts import (
@@ -14,33 +10,22 @@ from software_factory_poc.core.application.agents.scaffolder.contracts.scaffolde
     ScaffoldingResponseSchema,
 )
 from software_factory_poc.core.application.agents.scaffolder.scaffolder_agent import ScaffolderAgent
-from software_factory_poc.core.application.policies.tool_safety_policy import ToolSafetyPolicy
-from software_factory_poc.core.application.skills.scaffold.apply_scaffold_delivery_skill import (
-    ApplyScaffoldDeliverySkill,
-)
-from software_factory_poc.core.application.skills.scaffold.fetch_scaffold_context_skill import (
-    FetchScaffoldContextSkill,
-)
 from software_factory_poc.core.application.skills.scaffold.generate_scaffold_plan_skill import (
     GenerateScaffoldPlanSkill,
 )
-from software_factory_poc.core.application.skills.scaffold.idempotency_check_skill import (
-    IdempotencyCheckSkill,
-)
-from software_factory_poc.core.application.skills.scaffold.report_success_skill import (
-    ReportSuccessSkill,
-)
 from software_factory_poc.core.domain.mission import Mission, TaskDescription
+from software_factory_poc.core.domain.shared.skill_type import SkillType
+from software_factory_poc.core.domain.shared.tool_type import ToolType
 
 
 @pytest.mark.asyncio
 async def test_scaffolder_agent_flow():
     """
     Integration test for ScaffolderAgent.run.
-    Verifies the orchestration of Skills from Idempotency -> Context -> Plan -> Delivery -> Report.
+    Verifies the orchestration from Idempotency -> Context -> Plan -> Delivery -> Report.
     """
 
-    # 1. Setup Mocks for Ports
+    # 1. Setup Mocks for Tools
     mock_vcs = AsyncMock()
     mock_vcs.validate_branch_existence.return_value = False
     mock_vcs.commit_changes.return_value = "commit-hash-123"
@@ -79,32 +64,34 @@ async def test_scaffolder_agent_flow():
         description=description,
     )
 
-    # 3. Instantiate Agent with Skills
-    agent = ScaffolderAgent(
-        config=ScaffolderAgentConfig(priority_models=["openai:gpt-4o"]),
-        ports=AgentPorts(
-            vcs=mock_vcs,
-            tracker=mock_tracker,
-            docs=mock_research,
-            brain=mock_brain,
-        ),
-        idempotency_check=IdempotencyCheckSkill(vcs=mock_vcs, tracker=mock_tracker),
-        fetch_context=FetchScaffoldContextSkill(docs=mock_research),
-        generate_plan=GenerateScaffoldPlanSkill(
+    # 3. Build tools and skills dicts
+    tools = {
+        ToolType.VCS: mock_vcs,
+        ToolType.TRACKER: mock_tracker,
+        ToolType.DOCS: mock_research,
+        ToolType.BRAIN: mock_brain,
+    }
+    skills = {
+        SkillType.GENERATE_SCAFFOLD_PLAN: GenerateScaffoldPlanSkill(
             brain=mock_brain, prompt_builder=mock_prompt_builder
         ),
-        apply_delivery=ApplyScaffoldDeliverySkill(vcs=mock_vcs),
-        report_success=ReportSuccessSkill(tracker=mock_tracker),
-        loop_runner=AgenticLoopRunner(brain=mock_brain, policy=ToolSafetyPolicy()),
+    }
+
+    # 4. Instantiate Agent
+    agent = ScaffolderAgent(
+        config=ScaffolderAgentConfig(priority_models=["openai:gpt-4o"]),
+        tools=tools,
+        skills=skills,
     )
 
-    # 4. Execute Flow
+    # 5. Execute Flow
     await agent.run(mission)
 
-    # 5. Assertions
+    # 6. Assertions
 
-    # Tracker: Initial comment + Metadata + Success Msg + Status Update
-    assert mock_tracker.add_comment.call_count >= 3
+    # Tracker: Start comment + success comment + description update + status
+    assert mock_tracker.add_comment.call_count >= 2
+    mock_tracker.update_task_description.assert_called_once()
     mock_tracker.update_status.assert_called_with("POC-50", "In Review")
 
     # VCS: Branch validation -> Creation -> Commit -> MR
@@ -113,6 +100,8 @@ async def test_scaffolder_agent_flow():
     mock_vcs.commit_changes.assert_called()
     mock_vcs.create_merge_request.assert_called()
 
-    # Brain: Research -> Prompt -> Generate
+    # Docs: Architecture context
     mock_research.get_architecture_context.assert_called()
+
+    # Brain: Generate (via skill)
     mock_brain.generate_structured.assert_called()

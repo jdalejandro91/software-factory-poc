@@ -3,7 +3,7 @@
 import pytest
 from pydantic import SecretStr
 
-from software_factory_poc.core.application.ports import TrackerPort
+from software_factory_poc.core.application.tools import TrackerTool
 from software_factory_poc.infrastructure.tools.tracker.jira.config.jira_settings import (
     JiraSettings,
 )
@@ -67,7 +67,7 @@ class TestJiraSettingsFromEnv:
 
 
 class TestJiraMcpClientWiring:
-    """Verify that building JiraMcpClient through JiraSettings yields a valid TrackerPort."""
+    """Verify that building JiraMcpClient through JiraSettings yields a valid TrackerTool."""
 
     def test_client_from_settings_is_tracker_port(self) -> None:
         settings = JiraSettings(
@@ -79,5 +79,5 @@ class TestJiraMcpClientWiring:
 
         client = JiraMcpClient(settings=settings)
 
-        assert isinstance(client, TrackerPort)
+        assert isinstance(client, TrackerTool)
         assert isinstance(client, JiraMcpClient)

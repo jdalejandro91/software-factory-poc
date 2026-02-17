@@ -11,8 +11,8 @@ from mcp import McpError
 from mcp.types import ErrorData
 from pydantic import SecretStr
 
-from software_factory_poc.core.application.ports import DocsPort
-from software_factory_poc.core.application.ports.common.exceptions import ProviderError
+from software_factory_poc.core.application.tools import DocsTool
+from software_factory_poc.core.application.tools.common.exceptions import ProviderError
 from software_factory_poc.infrastructure.tools.docs.confluence.config.confluence_settings import (
     ConfluenceSettings,
 )
@@ -113,7 +113,7 @@ def mock_mcp():
 class TestPortCompliance:
     def test_implements_docs_port(self) -> None:
         client = _build_client()
-        assert isinstance(client, DocsPort)
+        assert isinstance(client, DocsTool)
         assert isinstance(client, ConfluenceMcpClient)
 
 

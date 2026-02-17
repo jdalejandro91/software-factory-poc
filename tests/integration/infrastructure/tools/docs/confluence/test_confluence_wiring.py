@@ -3,7 +3,7 @@
 import pytest
 from pydantic import SecretStr
 
-from software_factory_poc.core.application.ports import DocsPort
+from software_factory_poc.core.application.tools import DocsTool
 from software_factory_poc.infrastructure.tools.docs.confluence.config.confluence_settings import (
     ConfluenceSettings,
 )
@@ -64,7 +64,7 @@ class TestConfluenceSettingsFromEnv:
 
 
 class TestConfluenceMcpClientWiring:
-    """Verify that building ConfluenceMcpClient from ConfluenceSettings yields a valid DocsPort."""
+    """Verify that building ConfluenceMcpClient from ConfluenceSettings yields a valid DocsTool."""
 
     def test_client_from_settings_is_docs_port(self) -> None:
         settings = ConfluenceSettings(
@@ -76,5 +76,5 @@ class TestConfluenceMcpClientWiring:
 
         client = ConfluenceMcpClient(settings=settings)
 
-        assert isinstance(client, DocsPort)
+        assert isinstance(client, DocsTool)
         assert isinstance(client, ConfluenceMcpClient)

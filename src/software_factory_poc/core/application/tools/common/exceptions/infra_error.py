@@ -1,4 +1,4 @@
-from software_factory_poc.core.application.ports.common.exceptions.domain_error import DomainError
+from software_factory_poc.core.application.tools.common.exceptions.domain_error import DomainError
 
 
 class InfraError(DomainError):

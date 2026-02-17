@@ -24,14 +24,14 @@ software_factory/                              # Raíz del proyecto. Agrupa toda
 │       │   ├── scaffold/                      # Plan/generate/apply.
 │       │   └── review/                        # Fetch diff/analyze/publish.
 │       ├── policies/                          # Políticas aplicadas: quality gates, budgets, approvals, naming.
-│       └── ports/                             # INTERFACES HACIA AFUERA: LLM, VCS, tracker, docs, CI, stores.
+│       └── tools/                             # INTERFACES HACIA AFUERA: LLM, VCS, tracker, docs
 │
 └── infrastructure/                            # 🔴 MUNDO "SUCIO": implementaciones concretas, frameworks, I/O, DB, HTTP, MCP.
     ├── entrypoints/                           # DRIVERS INBOUND: API/CLI. Reciben requests, validan, y llaman a aplicación.
     │   ├── api/                               # HTTP/webhooks/controllers: traduce request→input, invoca MissionService.
     │   └── mcp_server/                        # MCP Server: Expone endpoints para clientes MCP.
     │
-    ├── tools/                                 # DRIVERS OUTBOUND: Integraciones para side-effects (LLM/VCS/Tracker/Docs/CI).
+    ├── tools/                                 # TOOLS OUTBOUND: Integraciones para side-effects (LLM/VCS/Tracker/Docs/CI).
     │   ├── llm/                               # Providers LLM (LiteLLM) + validación schema, retries.
     │   │   └── config/                        # litellm config files.
     │   ├── vcs/                               # MCP Clients (GitLab/Bitbucket/GitHub). Enrutamiento dinámico (Coexistencia).

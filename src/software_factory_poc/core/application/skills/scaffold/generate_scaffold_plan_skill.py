@@ -7,9 +7,10 @@ from software_factory_poc.core.application.agents.scaffolder.contracts.scaffolde
 from software_factory_poc.core.application.agents.scaffolder.prompt_templates.scaffolding_prompt_builder import (
     ScaffoldingPromptBuilder,
 )
-from software_factory_poc.core.application.ports import BrainPort
 from software_factory_poc.core.application.skills.skill import BaseSkill
+from software_factory_poc.core.application.tools import BrainTool
 from software_factory_poc.core.domain.mission import Mission
+from software_factory_poc.core.domain.shared.skill_type import SkillType
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,11 @@ class GenerateScaffoldPlanSkill(
     Raises ``ValueError`` when the LLM returns zero files.
     """
 
-    def __init__(self, brain: BrainPort, prompt_builder: ScaffoldingPromptBuilder) -> None:
+    @property
+    def skill_type(self) -> SkillType:
+        return SkillType.GENERATE_SCAFFOLD_PLAN
+
+    def __init__(self, brain: BrainTool, prompt_builder: ScaffoldingPromptBuilder) -> None:
         self._brain = brain
         self._prompt_builder = prompt_builder
 

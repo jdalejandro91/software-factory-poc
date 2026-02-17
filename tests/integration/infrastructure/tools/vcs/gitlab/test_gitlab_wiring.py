@@ -3,7 +3,7 @@
 import pytest
 from pydantic import SecretStr
 
-from software_factory_poc.core.application.ports import VcsPort
+from software_factory_poc.core.application.tools import VcsTool
 from software_factory_poc.infrastructure.tools.vcs.gitlab.config.gitlab_settings import (
     GitLabSettings,
 )
@@ -62,7 +62,7 @@ class TestGitLabSettingsFromEnv:
 
 
 class TestGitLabMcpClientWiring:
-    """Verify that building GitlabMcpClient through GitLabSettings yields a valid VcsPort."""
+    """Verify that building GitlabMcpClient through GitLabSettings yields a valid VcsTool."""
 
     def test_client_from_settings_is_vcs_port(self) -> None:
         settings = GitLabSettings(
@@ -74,6 +74,6 @@ class TestGitLabMcpClientWiring:
 
         client = GitlabMcpClient(settings=settings)
 
-        assert isinstance(client, VcsPort)
+        assert isinstance(client, VcsTool)
         assert isinstance(client, GitlabMcpClient)
         assert client._project_id == "99"

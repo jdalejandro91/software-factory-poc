@@ -7,9 +7,10 @@ from software_factory_poc.core.application.agents.code_reviewer.contracts.code_r
 from software_factory_poc.core.application.agents.code_reviewer.prompt_templates.code_review_prompt_builder import (
     CodeReviewPromptBuilder,
 )
-from software_factory_poc.core.application.ports import BrainPort
 from software_factory_poc.core.application.skills.skill import BaseSkill
+from software_factory_poc.core.application.tools import BrainTool
 from software_factory_poc.core.domain.quality import CodeReviewReport, ReviewComment, ReviewSeverity
+from software_factory_poc.core.domain.shared.skill_type import SkillType
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,11 @@ class AnalyzeCodeReviewSkill(BaseSkill[AnalyzeCodeReviewInput, CodeReviewReport]
     critical issues force rejection regardless of the LLM's approval flag.
     """
 
-    def __init__(self, brain: BrainPort, prompt_builder: CodeReviewPromptBuilder) -> None:
+    @property
+    def skill_type(self) -> SkillType:
+        return SkillType.ANALYZE_CODE_REVIEW
+
+    def __init__(self, brain: BrainTool, prompt_builder: CodeReviewPromptBuilder) -> None:
         self._brain = brain
         self._prompt_builder = prompt_builder
 

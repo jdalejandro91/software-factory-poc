@@ -7,9 +7,9 @@ from mcp import McpError
 from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
-from software_factory_poc.core.application.ports import VcsPort
-from software_factory_poc.core.application.ports.common.exceptions import ProviderError
-from software_factory_poc.core.domain.delivery import CommitIntent
+from software_factory_poc.core.application.tools import VcsTool
+from software_factory_poc.core.application.tools.common.exceptions import ProviderError
+from software_factory_poc.core.domain.delivery import CommitIntent, FileContent
 from software_factory_poc.core.domain.quality import CodeReviewReport
 from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
 from software_factory_poc.infrastructure.tools.vcs.gitlab.config.gitlab_settings import (
@@ -19,7 +19,7 @@ from software_factory_poc.infrastructure.tools.vcs.gitlab.config.gitlab_settings
 logger = logging.getLogger(__name__)
 
 
-class GitlabMcpClient(VcsPort):
+class GitlabMcpClient(VcsTool):
     """MCP-stdio client that translates Domain intent into GitLab MCP tool calls."""
 
     def __init__(self, settings: GitLabSettings) -> None:
@@ -151,6 +151,29 @@ class GitlabMcpClient(VcsPort):
         return json.loads(self._extract_text(result)).get("commit_hash", "")
 
     # ── Code Review Flow Operations ──
+
+    async def get_original_branch_code(self, project_id: str, branch: str) -> list[FileContent]:
+        result = await self._invoke_tool(
+            "gitlab_list_repository_tree",
+            {"project_id": project_id, "ref": branch, "recursive": True},
+        )
+        raw = self._extract_text(result)
+        try:
+            entries = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return []
+        return [
+            FileContent(path=e["path"], content="", is_new=False)
+            for e in entries
+            if e.get("type") == "blob"
+        ]
+
+    async def get_updated_code_diff(self, mr_iid: str) -> str:
+        result = await self._invoke_tool(
+            "gitlab_get_merge_request_changes",
+            {"project_id": self._project_id, "merge_request_iid": str(mr_iid)},
+        )
+        return self._extract_text(result)
 
     async def get_merge_request_diff(self, mr_id: str) -> str:
         result = await self._invoke_tool(

@@ -3,11 +3,10 @@ from dataclasses import dataclass, field
 from software_factory_poc.core.application.agents.common.agent_execution_mode import (
     AgentExecutionMode,
 )
-from software_factory_poc.core.application.ports import BrainPort, DocsPort, TrackerPort, VcsPort
 
 
 @dataclass(frozen=True, kw_only=True)
-class BaseAgentConfig:
+class AgentConfig:
     """Immutable configuration shared by all agents."""
 
     execution_mode: AgentExecutionMode = AgentExecutionMode.DETERMINISTIC
@@ -16,10 +15,10 @@ class BaseAgentConfig:
 
 
 @dataclass(frozen=True, kw_only=True)
-class AgentPorts:
-    """Groups the four infrastructure ports injected into every agent."""
+class ScaffolderAgentConfig(AgentConfig):
+    """DI configuration specific to the Scaffolder Agent."""
 
-    vcs: VcsPort
-    tracker: TrackerPort
-    docs: DocsPort
-    brain: BrainPort
+
+@dataclass(frozen=True, kw_only=True)
+class CodeReviewerAgentConfig(AgentConfig):
+    """DI configuration specific to the Code Reviewer Agent."""

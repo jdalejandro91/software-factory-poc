@@ -7,8 +7,8 @@ from mcp import McpError
 from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
-from software_factory_poc.core.application.ports import DocsPort
-from software_factory_poc.core.application.ports.common.exceptions import ProviderError
+from software_factory_poc.core.application.tools import DocsTool
+from software_factory_poc.core.application.tools.common.exceptions import ProviderError
 from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
 from software_factory_poc.infrastructure.tools.docs.confluence.config.confluence_settings import (
     ConfluenceSettings,
@@ -17,7 +17,7 @@ from software_factory_poc.infrastructure.tools.docs.confluence.config.confluence
 logger = logging.getLogger(__name__)
 
 
-class ConfluenceMcpClient(DocsPort):
+class ConfluenceMcpClient(DocsTool):
     """MCP-stdio client that translates Domain intent into Confluence tool calls.
 
     Uses the shared Atlassian MCP server (covers both Jira and Confluence).
@@ -80,7 +80,7 @@ class ConfluenceMcpClient(DocsPort):
             return getattr(first, "text", str(first))
         return ""
 
-    # ── DocsPort implementation ──
+    # ── DocsTool implementation ──
 
     async def get_project_context(self, service_name: str) -> str:
         logger.info("[ConfluenceMCP] Fetching project context for '%s'", service_name)

@@ -9,8 +9,8 @@ from mcp import McpError
 from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
-from software_factory_poc.core.application.ports import TrackerPort
-from software_factory_poc.core.application.ports.common.exceptions import ProviderError
+from software_factory_poc.core.application.tools import TrackerTool
+from software_factory_poc.core.application.tools.common.exceptions import ProviderError
 from software_factory_poc.core.domain.mission import Mission, TaskDescription
 from software_factory_poc.core.domain.quality import CodeReviewReport
 from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
@@ -26,7 +26,7 @@ _CONFIG_BLOCK_RE = re.compile(
 )
 
 
-class JiraMcpClient(TrackerPort):
+class JiraMcpClient(TrackerTool):
     """MCP-stdio client that translates Domain intent into Jira tool calls.
 
     Uses the shared Atlassian MCP server (covers both Jira and Confluence).
@@ -120,7 +120,7 @@ class JiraMcpClient(TrackerPort):
 
         return TaskDescription(raw_content=raw_content, config=config)
 
-    # ── TrackerPort implementation ──
+    # ── TrackerTool implementation ──
 
     async def get_task(self, ticket_id: str) -> Mission:
         logger.info("[JiraMCP] Fetching task %s", ticket_id)
