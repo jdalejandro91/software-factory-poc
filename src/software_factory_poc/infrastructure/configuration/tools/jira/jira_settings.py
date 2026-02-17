@@ -1,4 +1,4 @@
-from typing import Optional
+
 try:
     from enum import StrEnum
 except ImportError:
@@ -7,6 +7,7 @@ except ImportError:
         pass
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class JiraAuthMode(StrEnum):
     CLOUD_API_TOKEN = "cloud_api_token"
@@ -19,9 +20,9 @@ class JiraSettings(BaseSettings):
     """
     base_url: str = Field(..., description="Jira Base URL")
     auth_mode: JiraAuthMode = Field(default=JiraAuthMode.CLOUD_API_TOKEN)
-    user_email:Optional[ str] = Field(default=None)
-    api_token:Optional[ SecretStr] = Field(default=None)
-    bearer_token:Optional[ SecretStr] = Field(default=None)
+    user_email:str | None = Field(default=None)
+    api_token:SecretStr | None = Field(default=None)
+    bearer_token:SecretStr | None = Field(default=None)
     webhook_secret: SecretStr = Field(..., description="Token to validate incoming Jira webhooks")
     transition_in_review: str = Field(default="In Review",
                                       description="Name of the transition to move issue to In Review")

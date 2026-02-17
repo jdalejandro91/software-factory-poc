@@ -5,7 +5,6 @@ except ImportError:
     class StrEnum(str, Enum):
         pass
 
-from typing import Optional
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -23,16 +22,16 @@ class ToolSettings(BaseSettings):
     # Jira Config
     jira_base_url: str = Field(..., description="Jira Base URL, e.g. https://myorg.atlassian.net")
     jira_auth_mode: JiraAuthMode = Field(default=JiraAuthMode.CLOUD_API_TOKEN)
-    jira_user_email: Optional[str] = None
-    jira_api_token: Optional[SecretStr] = None
-    jira_bearer_token: Optional[SecretStr] = None
+    jira_user_email: str | None = None
+    jira_api_token: SecretStr | None = None
+    jira_bearer_token: SecretStr | None = None
     
     # Workflow Config
     jira_transition_in_review: str = Field(default="In Review", description="Name of the transition to move issue to In Review")
 
     # GitLab Config
     gitlab_base_url: str = "https://gitlab.com"
-    gitlab_token: Optional[SecretStr] = None
+    gitlab_token: SecretStr | None = None
 
     # Confluence Config
     confluence_base_url: str = Field(..., description="Confluence Base URL")

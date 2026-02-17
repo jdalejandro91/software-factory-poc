@@ -1,4 +1,4 @@
-from fastapi import Security, HTTPException, status
+from fastapi import HTTPException, Security, status
 from fastapi.security import APIKeyHeader
 
 from software_factory_poc.infrastructure.configuration.main_settings import Settings

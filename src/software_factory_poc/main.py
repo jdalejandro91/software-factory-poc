@@ -2,7 +2,7 @@ import logging
 
 import uvicorn
 
-from software_factory_poc.infrastructure.configuration.main_settings import Settings
+from software_factory_poc.infrastructure.configuration import Settings
 from software_factory_poc.infrastructure.entrypoints.api.app_factory import create_app
 
 logger = logging.getLogger(__name__)

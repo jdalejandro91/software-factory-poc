@@ -11,20 +11,55 @@ Copy `.env.example` to `.env` and configure your keys.
 
 **Critical Configuration**:
 ```bash
-# Provider Selection
-VCS_PROVIDER=gitlab
-TRACKER_PROVIDER=jira
-KNOWLEDGE_PROVIDER=file_system  # or confluence
+PORT=8000
+LOG_LEVEL=DEBUG
 
-# LLM Priority (JSON) - The agent will try these in order
-LLM_MODEL_PRIORITY='[{"provider": "openai", "model": "gpt-4"}, {"provider": "deepseek", "model": "coder"}]'
+# GITLAB
+GITLAB_TOKEN=key-sample
+GITLAB_BASE_URL=https://gitlab.com
+ALLOWLISTED_GROUPS=sample-group
 
-# Credentials
-JIRA_BASE_URL="https://your-domain.atlassian.net"
-JIRA_API_TOKEN="..."
-JIRA_USER_EMAIL="..."
-GITLAB_TOKEN="..."
-OPENAI_API_KEY="..."
+# JIRA
+JIRA_API_TOKEN=key-sample
+JIRA_WEBHOOK_SECRET=key-sample
+JIRA_BASE_URL=https://sample.atlassian.net
+JIRA_USER_EMAIL=sample@gmail.com
+WORKFLOW_STATE_INITIAL="Por hacer"
+WORKFLOW_STATE_SUCCESS="In review"
+
+# CONFLUENCE
+CONFLUENCE_USER_EMAIL=jacadenac@unal.edu.co
+CONFLUENCE_API_TOKEN=key-sample
+CONFLUENCE_BASE_URL=https://sample.atlassian.net/wiki
+CONFLUENCE_SAMPLE_PATH=https://sample.atlassian.net/wiki/spaces/DDS/pages/3571713/Estructura+de+paquetes+-+carrito+de+compra
+ARCHITECTURE_DOC_PAGE_ID=3571713
+
+# LLMS
+OPENAI_API_KEY=key-sample
+GEMINI_API_KEY=key-sample
+DEEPSEEK_API_KEY=key-sample
+ANTHROPIC_API_KEY=key-sample
+
+# EC2
+EC2_USER=ubuntu
+EC2_HOST=98.93.0.27
+
+# Options: GITLAB, GITHUB, BITBUCKET
+VCS_PROVIDER=GITLAB
+SCAFFOLDING_VCS_PROVIDER=GITLAB
+
+# Options: JIRA, AZURE_DEVOPS
+TRACKER_PROVIDER=JIRA
+SCAFFOLDING_TRACKER_PROVIDER=JIRA
+
+# Options: CONFLUENCE, FILE_SYSTEM
+KNOWLEDGE_PROVIDER=CONFLUENCE
+SCAFFOLDING_KNOWLEDGE_PROVIDER=CONFLUENCE
+
+# LLM Priority
+LLM_ALLOWED_MODELS='["openai:gpt-4-turbo", "openai:gpt-4o", "deepseek:deepseek-coder", "gemini:gemini-1.5-pro", "gemini:gemini-3-flash-preview", "anthropic:claude-3-5-sonnet"]'
+SCAFFOLDING_LLM_MODEL_PRIORITY='["gemini:gemini-3-flash-preview", "openai:gpt-4o", "openai:gpt-4-turbo", "anthropic:claude-3-opus", "deepseek:deepseek-coder"]'
+CODE_REVIEW_LLM_MODEL_PRIORITY='["gemini:gemini-3-flash-preview", "openai:gpt-4-turbo", "openai:gpt-4o", "anthropic:claude-3-opus", "deepseek:deepseek-coder"]'
 ```
 
 ### 2. Running Locally (Simulation)

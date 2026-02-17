@@ -1,16 +1,19 @@
 import re
 
-from software_factory_poc.application.agents.code_reviewer.prompt_templates import (
+from software_factory_poc.core.application.agents.code_reviewer.prompt_templates import (
     CodeReviewOrder,
 )
 from software_factory_poc.infrastructure.entrypoints.api.dtos.jira_webhook_dto import (
     JiraWebhookDTO,
 )
+
+# Reuse the robust extraction logic from the main payload mapper
+from software_factory_poc.infrastructure.entrypoints.api.mappers.jira_payload_mapper import (
+    JiraPayloadMapper,
+)
 from software_factory_poc.infrastructure.observability.logger_factory_service import (
     LoggerFactoryService,
 )
-# Reuse the robust extraction logic from the main payload mapper
-from software_factory_poc.infrastructure.entrypoints.api.mappers.jira_payload_mapper import JiraPayloadMapper
 
 logger = LoggerFactoryService.build_logger(__name__)
 

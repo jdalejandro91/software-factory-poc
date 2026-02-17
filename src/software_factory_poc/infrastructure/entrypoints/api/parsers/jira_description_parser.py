@@ -1,10 +1,11 @@
 import re
-from typing import Optional
 
 import yaml
 
-from software_factory_poc.domain.mission.entities import TaskDescription
-from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
+from software_factory_poc.core.domain.mission.entities import TaskDescription
+from software_factory_poc.infrastructure.observability.logger_factory_service import (
+    LoggerFactoryService,
+)
 
 logger = LoggerFactoryService.build_logger(__name__)
 
@@ -15,7 +16,7 @@ class JiraDescriptionParser:
     """
 
     @staticmethod
-    def parse(raw_text: Optional[str]) -> TaskDescription:
+    def parse(raw_text: str | None) -> TaskDescription:
         """
         Parses raw text to extract scaffolder parameters and clean human text.
         """

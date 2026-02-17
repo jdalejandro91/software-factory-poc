@@ -1,11 +1,13 @@
 import re
-from typing import Dict, Union, Any
+from typing import Any
 
 import yaml
 
-from software_factory_poc.domain.mission.entities import Mission, TaskDescription, TaskUser
+from software_factory_poc.core.domain.mission.entities import Mission, TaskDescription, TaskUser
 from software_factory_poc.infrastructure.entrypoints.api.dtos.jira_webhook_dto import JiraWebhookDTO
-from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
+from software_factory_poc.infrastructure.observability.logger_factory_service import (
+    LoggerFactoryService,
+)
 
 logger = LoggerFactoryService.build_logger(__name__)
 
@@ -28,7 +30,7 @@ class JiraPayloadMapper:
     )
 
     @classmethod
-    def to_domain(cls, payload: Union[Dict, JiraWebhookDTO]) -> Mission:
+    def to_domain(cls, payload: dict | JiraWebhookDTO) -> Mission:
         """
         Maps a Jira Payload to a Task Domain Entity.
         Performs one-pass parsing of the description.
@@ -119,7 +121,7 @@ class JiraPayloadMapper:
         match = cls.CODE_BLOCK_PATTERN.search(text)
         logger.info(f"🧩 Match Found: {bool(match)}")
         
-        config: Dict[str, Any] = {}
+        config: dict[str, Any] = {}
         clean_text = text
 
         if match:
@@ -127,7 +129,7 @@ class JiraPayloadMapper:
             raw_yaml = match.group(1)
             
             # Sanitize Invisible Characters (Jira Artifacts)
-            clean_yaml = raw_yaml.replace(u'\xa0', ' ').strip()
+            clean_yaml = raw_yaml.replace('\xa0', ' ').strip()
             
             try:
                 parsed = yaml.safe_load(clean_yaml)
@@ -158,7 +160,7 @@ class JiraPayloadMapper:
         Separates the configuration block from the human-readable text.
         """
         match = cls.CODE_BLOCK_PATTERN.search(text)
-        config: Dict[str, Any] = {}
+        config: dict[str, Any] = {}
         clean_text = text
 
         if match:
@@ -166,7 +168,7 @@ class JiraPayloadMapper:
             raw_yaml = match.group(1)
             
             # Sanitize Invisible Characters (Jira Artifacts)
-            clean_yaml = raw_yaml.replace(u'\xa0', ' ').strip()
+            clean_yaml = raw_yaml.replace('\xa0', ' ').strip()
             
             try:
                 parsed = yaml.safe_load(clean_yaml)

@@ -1,6 +1,7 @@
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
 class ConfluenceSettings(BaseSettings):
     """
     Settings for Confluence integration.

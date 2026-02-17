@@ -3,22 +3,16 @@ import os
 from pathlib import Path
 from typing import Any, cast
 
-from software_factory_poc.application.drivers.common.config.llm_provider_type import (
-    LlmProviderType,
-)
-from software_factory_poc.application.drivers.common import ModelId
-from software_factory_poc.application.drivers import (
-    TaskTrackerType,
-)
-from software_factory_poc.application.drivers import (
-    ResearchProviderType,
-)
-from software_factory_poc.application.agents import (
+from software_factory_poc.core.application.agents.scaffolder.config.scaffolding_agent_config import (
     ScaffoldingAgentConfig,
 )
-from software_factory_poc.application.drivers.vcs import (
-    VcsProviderType,
+from software_factory_poc.core.domain.value_objects.llm.llm_provider_type import LlmProviderType
+from software_factory_poc.core.domain.value_objects.llm.model_id import ModelId
+from software_factory_poc.core.domain.value_objects.research.research_provider_type import (
+    ResearchProviderType,
 )
+from software_factory_poc.core.domain.value_objects.task.task_tracker_type import TaskTrackerType
+from software_factory_poc.core.domain.value_objects.vcs.vcs_provider_type import VcsProviderType
 from software_factory_poc.infrastructure.observability.logger_factory_service import (
     LoggerFactoryService,
 )
@@ -37,32 +31,15 @@ class ScaffoldingConfigLoader:
     @staticmethod
     def load_config() -> ScaffoldingAgentConfig:
         try:
-            # 1. VCS Provider
             vcs_provider = ScaffoldingConfigLoader._load_vcs_provider()
-
-            # 2. Tracker Provider
             tracker_provider = ScaffoldingConfigLoader._load_tracker_provider()
-
-            # 3. Knowledge Provider
             research_provider = ScaffoldingConfigLoader._load_research_provider()
-
-            # 4. LLM Priority List
             llm_priority_list = ScaffoldingConfigLoader._load_llm_priority()
-
-            # 5. Work Dir
             work_dir = Path(os.getenv("WORK_DIR", "/tmp/scaffolding_workspace"))
-
-            # 6. Secure Mode
             enable_secure = os.getenv("ENABLE_SECURE_MODE", "True").lower() == "true"
-
-            # 7. Architecture Page ID (Configuration Injection)
             arch_page_id = ScaffoldingConfigLoader._get_value(
                 "SCAFFOLDING_ARCHITECTURE_PAGE_ID", "ARCHITECTURE_DOC_PAGE_ID", "3571713"
             )
-
-            # 8. Project Allowlist
-            # We pass the raw string value. The ScaffoldingAgentConfig validator
-            # will handle the parsing (JSON or CSV) robustly.
             raw_allowlist = ScaffoldingConfigLoader._get_value(
                 "SCAFFOLDING_ALLOWLISTED_GROUPS", "ALLOWLISTED_GROUPS", ""
             )
@@ -83,7 +60,6 @@ class ScaffoldingConfigLoader:
 
     @staticmethod
     def _get_value(specific_key: str, global_key: str, default: Any) -> str:
-        """Helper to implement precedence rule."""
         if val := os.getenv(specific_key):
             return val
         if val := os.getenv(global_key):
@@ -135,7 +111,6 @@ class ScaffoldingConfigLoader:
 
     @staticmethod
     def _parse_llm_priority(json_str: str) -> list[ModelId]:
-        # Pre-process cleanup for robust handling of shell quotes
         clean_content = json_str.strip()
         if clean_content.startswith("'") and clean_content.endswith("'"):
             clean_content = clean_content[1:-1]
@@ -190,6 +165,6 @@ class ScaffoldingConfigLoader:
 
             return model_ids
 
-        except json.JSONDecodeError as e:
+        except json.JSONDecodeError:
             logger.error(f"Invalid JSON for LLM_MODEL_PRIORITY: {json_str}")
             return [ModelId(provider=LlmProviderType.OPENAI, name="gpt-4-turbo")]

@@ -1,23 +1,25 @@
-import os
 import logging
+import os
 
-from software_factory_poc.infrastructure.configuration.app_config import AppConfig
-
-from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
-from software_factory_poc.infrastructure.drivers.vcs.gitlab_mcp_adapter import GitlabMcpAdapter
-from software_factory_poc.infrastructure.drivers.tracker.jira_mcp_adapter import JiraMcpAdapter
-from software_factory_poc.infrastructure.drivers.research.confluence_mcp_adapter import ConfluenceMcpAdapter
-from software_factory_poc.infrastructure.drivers.llms.llm_gateway_adapter import LlmGatewayAdapter
-
-from software_factory_poc.infrastructure.drivers.tracker.mappers.jira_description_mapper import (
+from software_factory_poc.core.application.agents.code_reviewer.code_reviewer_agent import (
+    CodeReviewerAgent,
+)
+from software_factory_poc.core.application.agents.code_reviewer.prompt_templates.code_review_prompt_builder import (
+    CodeReviewPromptBuilder,
+)
+from software_factory_poc.core.application.agents.scaffolder.prompt_templates.scaffolding_prompt_builder import (
+    ScaffoldingPromptBuilder,
+)
+from software_factory_poc.core.application.agents.scaffolder.scaffolder_agent import ScaffolderAgent
+from software_factory_poc.infrastructure.adapters.mappers.jira_description_mapper import (
     JiraDescriptionMapper,
 )
-from software_factory_poc.infrastructure.drivers.llms.gateway.composite_gateway import CompositeLlmGateway
-
-from software_factory_poc.application.agents.scaffolder.scaffolder_agent import ScaffolderAgent
-from software_factory_poc.application.agents import CodeReviewerAgent
-from software_factory_poc.application.agents.scaffolder.prompt_templates.scaffolding_prompt_builder import ScaffoldingPromptBuilder
-from software_factory_poc.application.agents.code_reviewer.prompt_templates.code_review_prompt_builder import CodeReviewPromptBuilder
+from software_factory_poc.infrastructure.configuration.app_config import AppConfig
+from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
+from software_factory_poc.infrastructure.tools.docs.confluence_mcp_client import ConfluenceMcpClient
+from software_factory_poc.infrastructure.tools.llm.litellm_brain_adapter import LiteLlmBrainAdapter
+from software_factory_poc.infrastructure.tools.tracker.jira_mcp_client import JiraMcpClient
+from software_factory_poc.infrastructure.tools.vcs.gitlab_mcp_client import GitlabMcpClient
 
 logger = logging.getLogger(__name__)
 
@@ -41,59 +43,52 @@ class ProviderResolver:
 
     async def _build_drivers(self, mcp_manager: McpConnectionManager):
         """Factory interno que ensambla los 4 drivers MCP del Tooling Plane."""
-        # 1. VCS Driver (MCP GitLab)
+        # 1. VCS (MCP GitLab)
         session_vcs = await mcp_manager.get_session("mcp_server_gitlab")
         project_id = os.getenv("GITLAB_PROJECT_ID", "default_project")
-        vcs_driver = GitlabMcpAdapter(session_vcs, project_id, self.redactor)
+        vcs = GitlabMcpClient(session_vcs, project_id, self.redactor)
 
-        # 2. Tracker Driver (MCP Jira)
+        # 2. Tracker (MCP Jira)
         session_jira = await mcp_manager.get_session("mcp_server_jira")
-        tracker_driver = JiraMcpAdapter(
+        tracker = JiraMcpClient(
             mcp_session=session_jira,
             desc_mapper=JiraDescriptionMapper(),
             transition_in_review=self.app_config.jira.transition_in_review,
             redactor=self.redactor,
         )
 
-        # 3. Research Driver (MCP Confluence)
+        # 3. Docs (MCP Confluence)
         session_confluence = await mcp_manager.get_session("mcp_server_confluence")
-        research_driver = ConfluenceMcpAdapter(
+        docs = ConfluenceMcpClient(
             mcp_session=session_confluence,
             redactor=self.redactor,
         )
 
-        # 4. LLM Gateway (Composite — sin MCP, usa gateway propio)
-        composite_gateway = CompositeLlmGateway(
-            allowed_models=self.app_config.llm.allowed_models,
-            openai_key=self.app_config.llm.openai_api_key.get_secret_value() if self.app_config.llm.openai_api_key else None,
-            gemini_key=self.app_config.llm.gemini_api_key.get_secret_value() if self.app_config.llm.gemini_api_key else None,
-            deepseek_key=self.app_config.llm.deepseek_api_key.get_secret_value() if self.app_config.llm.deepseek_api_key else None,
-            anthropic_key=self.app_config.llm.anthropic_api_key.get_secret_value() if self.app_config.llm.anthropic_api_key else None,
-        )
-        llm_driver = LlmGatewayAdapter(gateway=composite_gateway)
+        # 4. Brain (LiteLLM)
+        brain = LiteLlmBrainAdapter()
 
-        return vcs_driver, tracker_driver, research_driver, llm_driver
+        return vcs, tracker, docs, brain
 
     async def create_scaffolder_agent(self, mcp_manager: McpConnectionManager) -> ScaffolderAgent:
         """Ensambla el ScaffolderAgent inyectando los 4 drivers MCP + PromptBuilder."""
-        vcs, tracker, research, llm = await self._build_drivers(mcp_manager)
+        vcs, tracker, docs, brain = await self._build_drivers(mcp_manager)
 
         return ScaffolderAgent(
             vcs=vcs,
             tracker=tracker,
-            research=research,
-            llm=llm,
+            research=docs,
+            brain=brain,
             prompt_builder=ScaffoldingPromptBuilder(),
         )
 
     async def create_code_reviewer_agent(self, mcp_manager: McpConnectionManager) -> CodeReviewerAgent:
         """Ensambla el CodeReviewerAgent inyectando los 4 drivers MCP + PromptBuilder."""
-        vcs, tracker, research, llm = await self._build_drivers(mcp_manager)
+        vcs, tracker, docs, brain = await self._build_drivers(mcp_manager)
 
         return CodeReviewerAgent(
             vcs=vcs,
             tracker=tracker,
-            research=research,
-            llm=llm,
+            research=docs,
+            brain=brain,
             prompt_builder=CodeReviewPromptBuilder(),
         )

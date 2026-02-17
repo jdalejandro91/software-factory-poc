@@ -1,54 +1,53 @@
-from typing import Optional, List
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class JiraUserDTO(BaseModel):
     model_config = ConfigDict(extra='ignore')
-    name: Optional[str] = None
-    display_name: Optional[str] = Field(None, alias="displayName")
-    active: Optional[bool] = None
+    name: str | None = None
+    display_name: str | None = Field(None, alias="displayName")
+    active: bool | None = None
 
 
 class JiraProjectDTO(BaseModel):
     model_config = ConfigDict(extra='ignore')
     key: str
-    name: Optional[str] = None
+    name: str | None = None
 
 
 class JiraIssueFieldsDTO(BaseModel):
     model_config = ConfigDict(extra='ignore')
-    summary: Optional[str] = None
-    description: Optional[str] = None
-    project: Optional[JiraProjectDTO] = None
+    summary: str | None = None
+    description: str | None = None
+    project: JiraProjectDTO | None = None
 
 
 class JiraIssueDTO(BaseModel):
     model_config = ConfigDict(extra='ignore')
-    id: Optional[str] = None  # Optional for automation payloads
+    id: str | None = None  # Optional for automation payloads
     key: str
-    fields: Optional[JiraIssueFieldsDTO] = None
-    project: Optional[JiraProjectDTO] = None
+    fields: JiraIssueFieldsDTO | None = None
+    project: JiraProjectDTO | None = None
 
 
 class JiraChangelogItem(BaseModel):
     model_config = ConfigDict(extra='ignore')
-    field: Optional[str] = None
-    fieldtype: Optional[str] = None
-    fromString: Optional[str] = None
-    toString: Optional[str] = None
+    field: str | None = None
+    fieldtype: str | None = None
+    fromString: str | None = None
+    toString: str | None = None
 
 
 class JiraChangelog(BaseModel):
     model_config = ConfigDict(extra='ignore')
-    id: Optional[str] = None
-    items: List[JiraChangelogItem] = []
+    id: str | None = None
+    items: list[JiraChangelogItem] = []
 
 
 class JiraWebhookDTO(BaseModel):
     model_config = ConfigDict(extra='ignore')
-    webhook_event: Optional[str] = Field(None, alias="webhookEvent")
-    timestamp: Optional[int] = None
-    user: Optional[JiraUserDTO] = None
+    webhook_event: str | None = Field(None, alias="webhookEvent")
+    timestamp: int | None = None
+    user: JiraUserDTO | None = None
     issue: JiraIssueDTO
-    changelog: Optional[JiraChangelog] = None
+    changelog: JiraChangelog | None = None

@@ -1,17 +1,22 @@
 from functools import lru_cache
-from typing import Union
 
-from fastapi import APIRouter, BackgroundTasks, Depends, status, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from fastapi.responses import JSONResponse
 
-from software_factory_poc.application.agents.scaffolder.scaffolder_agent import ScaffolderAgent
-from software_factory_poc.domain.mission.entities import Mission
-from software_factory_poc.infrastructure.configuration.resolution.container import McpConnectionManager, \
-    build_scaffolding_agent
+from software_factory_poc.core.application.agents.scaffolder.scaffolder_agent import ScaffolderAgent
+from software_factory_poc.core.domain.mission.entities import Mission
+from software_factory_poc.infrastructure.configuration.resolution.container import (
+    McpConnectionManager,
+    build_scaffolding_agent,
+)
 from software_factory_poc.infrastructure.entrypoints.api.dtos.jira_webhook_dto import JiraWebhookDTO
-from software_factory_poc.infrastructure.entrypoints.api.mappers.jira_payload_mapper import JiraPayloadMapper
+from software_factory_poc.infrastructure.entrypoints.api.mappers.jira_payload_mapper import (
+    JiraPayloadMapper,
+)
 from software_factory_poc.infrastructure.entrypoints.api.security import validate_api_key
-from software_factory_poc.infrastructure.observability.logger_factory_service import LoggerFactoryService
+from software_factory_poc.infrastructure.observability.logger_factory_service import (
+    LoggerFactoryService,
+)
 
 logger = LoggerFactoryService.build_logger(__name__)
 router = APIRouter()
@@ -59,7 +64,7 @@ async def trigger_scaffold(
         )
 
 
-async def _process_incoming_webhook(request: Request) -> Union[Mission, JSONResponse]:
+async def _process_incoming_webhook(request: Request) -> Mission | JSONResponse:
     """Helper to parse, validate and map webhook."""
     body_bytes = await request.body()
     try:
