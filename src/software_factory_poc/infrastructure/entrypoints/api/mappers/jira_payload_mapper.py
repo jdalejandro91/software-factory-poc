@@ -21,7 +21,7 @@ class JiraPayloadMapper:
     # Combined Regex for Markdown (```) and Jira ({code})
     # Supports:
     # - ```yaml, ```scaffolder, ```
-    # - {code:yaml}, {code:scaffolder}, {code}
+    # - {code:yaml}, {code:scaffolder}, {code}  # noqa: ERA001
     # - {code:yaml|borderStyle=solid} (Attributes)
     # Robust Pattern: Handles attributes by matching any char until closing brace logic
     CODE_BLOCK_PATTERN = re.compile(

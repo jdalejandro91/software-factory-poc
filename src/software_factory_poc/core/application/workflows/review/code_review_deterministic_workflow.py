@@ -42,7 +42,7 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
             await self._step_2_report_start(mission)
             _, diffs = await self._step_3_fetch_code_and_diffs(parsed)
             context = await self._step_4_fetch_context(mission.summary)
-            report = await self._step_5_analyze(mission, diffs, context)
+            report = await self._step_5_analyze(mission, diffs, context, parsed)
             await self._step_6_publish_and_transition(mission, parsed, report)
         except WorkflowExecutionError as wfe:
             await self._handle_error(mission, wfe)
@@ -94,15 +94,17 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
         logger.info("[Reviewer] Fetching docs context for '%s'", service_name)
         return await self._docs.get_architecture_context(service_name)
 
-    async def _step_5_analyze(self, mission: Mission, diffs: str, context: str) -> CodeReviewReport:
+    async def _step_5_analyze(
+        self, mission: Mission, diffs: str, context: str, parsed: dict[str, str]
+    ) -> CodeReviewReport:
         """Delegate LLM analysis to the AnalyzeCodeReviewSkill."""
         return await self._analyze.execute(
             AnalyzeCodeReviewInput(
-                mission_summary=mission.summary,
-                mission_description=mission.description.raw_content,
+                mission=mission,
                 mr_diff=diffs,
                 conventions=context,
                 priority_models=self._priority_models,
+                code_review_params=parsed,
             ),
         )
 

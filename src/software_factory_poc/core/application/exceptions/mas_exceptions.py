@@ -14,10 +14,6 @@ class ApplicationError(Exception):
         self.context: dict = context or {}
 
 
-class AgentExecutionError(ApplicationError):
-    """Raised when an agent fails during its run() lifecycle."""
-
-
 class WorkflowExecutionError(ApplicationError):
     """Raised when a deterministic workflow pipeline fails at any step."""
 

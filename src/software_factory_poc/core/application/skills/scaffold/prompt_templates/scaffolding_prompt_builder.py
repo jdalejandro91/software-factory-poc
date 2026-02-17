@@ -1,4 +1,6 @@
+import json
 import logging
+from typing import Any
 
 from software_factory_poc.core.domain.mission import Mission
 
@@ -6,73 +8,136 @@ logger = logging.getLogger(__name__)
 
 
 class ScaffoldingPromptBuilder:
-    """Tool responsible for constructing the prompt for the Reasoner Agent."""
+    """Builds a hardened scaffolding prompt with XML-delimited user data."""
 
     def build_prompt_from_mission(self, mission: Mission, knowledge_context: str) -> str:
         """Builds prompt using the Domain Mission Entity."""
-        knowledge_context = self._validate_context(knowledge_context, mission.key)
+        knowledge_context = self._validate_context(knowledge_context)
 
         config = mission.description.config
         tech_stack = config.get("technology_stack", "unknown")
+        service_name = config.get("parameters", {}).get("service_name", mission.key)
 
-        system_section = self._get_role_definition(tech_stack, mission.key)
-        context_section = self._format_rag_context(knowledge_context)
-        task_section = self._format_task_instructions(tech_stack, mission.summary)
-        example_section = self._get_example_output()
+        sections = [
+            self._role_section(tech_stack),
+            self._goal_section(mission, service_name),
+            self._input_data_section(mission),
+            self._architecture_context_section(knowledge_context),
+            self._hard_constraints_section(),
+            self._output_schema_section(),
+            self._anti_examples_section(),
+        ]
 
-        full_prompt = f"{system_section}\n{context_section}\n{task_section}\n{example_section}"
-        logger.info(f"Prompt generated for mission {mission.key}, stack: {tech_stack}")
+        prompt = "\n\n".join(sections)
+        logger.info("Prompt generated for mission %s, stack: %s", mission.key, tech_stack)
+        return prompt
 
-        return full_prompt
+    # ── Private Composed Methods (each <=14 lines) ────────────────────
 
-    def _validate_context(self, context: str, issue_key: str) -> str:
+    @staticmethod
+    def _validate_context(context: str) -> str:
         if not context or not context.strip():
             return "No specific documentation provided. Follow standard best practices."
         return context
 
-    def _get_role_definition(self, tech_stack: str, issue_key: str) -> str:
+    @staticmethod
+    def _role_section(tech_stack: str) -> str:
         return (
-            f"ROLE: You are a Principal Software Architect specializing in **{tech_stack}**.\n"
-            f"MISSION: Generate the exact file structure and configuration for the project '{issue_key}'."
+            "## ROLE\n"
+            f"You are a Principal Software Architect specializing in **{tech_stack}**.\n"
+            "You generate production-ready project scaffolding that strictly follows "
+            "the architecture standards provided."
         )
 
-    def _format_rag_context(self, context: str) -> str:
+    @staticmethod
+    def _goal_section(mission: Mission, service_name: str) -> str:
+        target = mission.description.config.get("target", {})
+        project_path = target.get("gitlab_project_path", "N/A")
         return (
-            f"================================================================\n"
-            f"SOURCE OF TRUTH (CONFLUENCE ARCHITECTURE DOC)\n"
-            f"================================================================\n"
-            f"The text below defines the MANDATORY architecture (e.g. Modular Monolith, Hexagonal).\n"
-            f"You MUST extract the folder structure defined here:\n\n"
-            f"{context}\n"
-            f"================================================================\n"
+            "## GOAL\n"
+            f"Generate the complete file structure for service **{service_name}** "
+            f"(ticket {mission.key}, project {mission.project_key}, "
+            f"type {mission.issue_type}).\n"
+            f"Target repository: `{project_path}`."
         )
 
-    def _format_task_instructions(self, tech_stack: str, summary: str) -> str:
+    @staticmethod
+    def _input_data_section(mission: Mission) -> str:
+        config = mission.description.config
+        tech_stack = config.get("technology_stack", "unknown")
+        params = config.get("parameters", {})
+        target = config.get("target", {})
+
+        config_payload: dict[str, Any] = {
+            "technology_stack": tech_stack,
+            "parameters": params,
+            "target": target,
+        }
+
         return (
-            f"--- TASK SPECIFICATION ---\n"
-            f"1. **TECHNOLOGY STACK**: {tech_stack}\n"
-            f"   - You MUST use file extensions, config files, and conventions matching this stack.\n"
-            f"   - Example: If NestJS, use 'nest-cli.json', '.ts' files, 'app.module.ts'.\n"
-            f"   - Example: If Python/FastAPI, use 'pyproject.toml', 'main.py'.\n\n"
-            f"   - Example: If Java/Spring, use 'pom.xml' or 'build.gradle'.\n\n"
-            f"2. **BUSINESS GOAL**: {summary}\n"
-            f"   - Extract business modules (e.g., 'cart', 'payment') from the goal or the Confluence doc.\n\n"
-            f"3. **OUTPUT RULES (STRICT)**:\n"
-            f"   - **Structure**: If the Confluence doc explicitly lists folders like 'src/modules/catalog', YOU MUST CREATE THEM.\n"
-            f"   - **Files**: Generate VALID, production-ready content for root config (Dockerfile, package.json/.gitlab-ci.yml).\n"
-            f"   - **Placeholders**: For logic files inside modules, provide a README.md explaining what goes there, OR a skeleton class/interface. Do NOT leave them missing.\n"
-            f"   - **Format**: Return ONLY a JSON list.\n"
+            "## INPUT DATA\n"
+            f"<jira_summary>{mission.summary}</jira_summary>\n\n"
+            f"<jira_description>{mission.description.raw_content}</jira_description>\n\n"
+            f"<mission_config>{json.dumps(config_payload, indent=2)}</mission_config>"
         )
 
-    def _get_example_output(self) -> str:
-        # FIX: Usamos doble llave {{ }} para escapar y que Python imprima una llave literal en el string final.
+    @staticmethod
+    def _architecture_context_section(knowledge_context: str) -> str:
         return (
-            "--- JSON OUTPUT EXAMPLE (Adapt structure to Confluence doc) ---\n"
-            "[\n"
-            '  {"path": ".gitignore", "content": "node_modules/\\ndist/"},\n'
-            '  {"path": "nest-cli.json", "content": "{...}"},\n'
-            '  {"path": "src/main.ts", "content": "import { NestFactory } ..."},\n'
-            '  {"path": "src/modules/cart/cart.module.ts", "content": "@Module({...}) export class CartModule {}"},\n'
-            '  {"path": "src/modules/cart/domain/README.md", "content": "Domain entities for Cart go here."}\n'
-            "]\n"
+            "## ARCHITECTURE CONTEXT\n"
+            "The text below defines the MANDATORY architecture standards.\n"
+            "You MUST extract the folder structure defined here.\n\n"
+            f"<architecture_context>{knowledge_context}</architecture_context>"
+        )
+
+    @staticmethod
+    def _hard_constraints_section() -> str:
+        return (
+            "## HARD CONSTRAINTS\n"
+            "1. Every generated file MUST have non-empty content.\n"
+            "2. Paths MUST be relative to the repository root (no leading `/`).\n"
+            "3. Do NOT include secrets, tokens, or real credentials.\n"
+            "4. File extensions and config files MUST match the technology stack.\n"
+            "5. Follow Conventional Commits for the commit message.\n"
+            "6. The branch name MUST start with `feature/` followed by the ticket key."
+        )
+
+    @staticmethod
+    def _output_schema_section() -> str:
+        return (
+            "## OUTPUT SCHEMA\n"
+            "You MUST respond with a JSON object matching `ScaffoldingResponseSchema`:\n\n"
+            "| Field           | Type               | Description                          |\n"
+            "|-----------------|--------------------|------------------------------------- |\n"
+            "| branch_name     | str                | e.g. feature/PROJ-123-service-name   |\n"
+            "| commit_message  | str                | Conventional Commits format          |\n"
+            "| files           | list[FileSchemaDTO]| Each with path, content, is_new      |\n\n"
+            "Each `FileSchemaDTO`:\n\n"
+            "| Field   | Type | Description                              |\n"
+            "|---------|------|------------------------------------------|\n"
+            "| path    | str  | Relative file path (e.g. src/main.py)    |\n"
+            "| content | str  | Full generated file content              |\n"
+            "| is_new  | bool | Always true for scaffolding               |\n\n"
+            "### Valid JSON example\n"
+            "```json\n"
+            "{\n"
+            '  "branch_name": "feature/PROJ-123-my-service",\n'
+            '  "commit_message": "feat(PROJ-123): scaffold my-service project structure",\n'
+            '  "files": [\n'
+            '    {"path": ".gitignore", "content": "node_modules/\\ndist/", "is_new": true},\n'
+            '    {"path": "src/main.ts", "content": "import { NestFactory } from ...",'
+            ' "is_new": true}\n'
+            "  ]\n"
+            "}\n"
+            "```"
+        )
+
+    @staticmethod
+    def _anti_examples_section() -> str:
+        return (
+            "## ANTI-EXAMPLES (do NOT do this)\n"
+            "- Do NOT return a bare JSON array `[{...}]` — return the full schema object.\n"
+            "- Do NOT leave `content` empty or use placeholder text like `// TODO`.\n"
+            "- Do NOT include absolute paths (e.g. `/home/user/project/src/main.py`).\n"
+            "- Do NOT invent a technology stack different from the one specified."
         )

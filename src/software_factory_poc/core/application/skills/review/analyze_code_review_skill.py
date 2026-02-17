@@ -1,5 +1,5 @@
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from software_factory_poc.core.application.exceptions import SkillExecutionError
 from software_factory_poc.core.application.ports import BrainPort
@@ -10,6 +10,7 @@ from software_factory_poc.core.application.skills.review.prompt_templates.code_r
     CodeReviewPromptBuilder,
 )
 from software_factory_poc.core.application.skills.skill import BaseSkill
+from software_factory_poc.core.domain.mission import Mission
 from software_factory_poc.core.domain.quality import CodeReviewReport, ReviewComment, ReviewSeverity
 from software_factory_poc.core.domain.shared.skill_type import SkillType
 
@@ -20,11 +21,11 @@ logger = logging.getLogger(__name__)
 class AnalyzeCodeReviewInput:
     """Input contract for the LLM code analysis step."""
 
-    mission_summary: str
-    mission_description: str
+    mission: Mission
     mr_diff: str
     conventions: str
     priority_models: list[str]
+    code_review_params: dict[str, str] = field(default_factory=dict)
 
 
 class AnalyzeCodeReviewSkill(BaseSkill[AnalyzeCodeReviewInput, CodeReviewReport]):
@@ -48,10 +49,10 @@ class AnalyzeCodeReviewSkill(BaseSkill[AnalyzeCodeReviewInput, CodeReviewReport]
         try:
             sys_prompt = self._prompt_builder.build_system_prompt()
             user_prompt = self._prompt_builder.build_analysis_prompt(
-                mission_summary=input_data.mission_summary,
-                mission_desc=input_data.mission_description,
+                mission=input_data.mission,
                 mr_diff=input_data.mr_diff,
                 conventions=input_data.conventions,
+                code_review_params=input_data.code_review_params or None,
             )
 
             full_prompt = f"{sys_prompt}\n\n{user_prompt}"

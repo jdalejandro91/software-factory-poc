@@ -1,6 +1,5 @@
 import logging
 import sys
-from typing import Any
 
 
 class LoggerFactoryService:
@@ -23,48 +22,3 @@ class LoggerFactoryService:
         Returns a configured logger instance.
         """
         return logging.getLogger(name)
-
-    @staticmethod
-    def build_log_context(
-        run_id: str | None = None,
-        issue_key: str | None = None,
-        step_name: str | None = None,
-        extra: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """
-        Builds a dictionary for use in logging 'extra' fields or structural logging.
-        """
-        context = {}
-        if run_id:
-            context["run_id"] = run_id
-        if issue_key:
-            context["issue_key"] = issue_key
-        if step_name:
-            context["step_name"] = step_name
-
-        if extra:
-            context.update(extra)
-
-        return context
-
-    @staticmethod
-    def log_context_string(
-        run_id: str | None = None,
-        issue_key: str | None = None,
-        step_name: str | None = None,
-    ) -> str:
-        """
-        Helper to create a standard prefix string '[run_id=... issue_key=...]'
-        """
-        parts = []
-        if run_id:
-            parts.append(f"run_id={run_id}")
-        if issue_key:
-            parts.append(f"issue_key={issue_key}")
-        if step_name:
-            parts.append(f"step={step_name}")
-
-        if not parts:
-            return ""
-
-        return f"[{' '.join(parts)}]"

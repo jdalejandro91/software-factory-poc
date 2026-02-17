@@ -1,7 +1,6 @@
-"""Functional DI container — builds fully-wired Use Cases using MCP adapters.
+"""Functional DI container — builds fully-wired agents using MCP adapters.
 
-This module mirrors the ProviderResolver class but uses free functions,
-making it convenient for FastAPI dependency injection.
+Convenient free-function API for FastAPI dependency injection.
 """
 
 import logging

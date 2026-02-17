@@ -48,10 +48,7 @@ class AgenticLoopRunner:
 
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": f"Mission: {mission.summary}\n\n{mission.description.raw_content}",
-            },
+            {"role": "user", "content": self._build_user_message(mission)},
         ]
 
         for iteration in range(1, max_iterations + 1):
@@ -99,6 +96,15 @@ class AgenticLoopRunner:
             mission.key,
         )
         return str(messages[-1].get("content", ""))
+
+    @staticmethod
+    def _build_user_message(mission: Mission) -> str:
+        """Build user message with XML-delimited Jira data to prevent prompt injection."""
+        return (
+            f"Mission {mission.key} ({mission.issue_type})\n\n"
+            f"<jira_summary>{mission.summary}</jira_summary>\n\n"
+            f"<jira_description>{mission.description.raw_content}</jira_description>"
+        )
 
     @staticmethod
     async def _gather_tools(

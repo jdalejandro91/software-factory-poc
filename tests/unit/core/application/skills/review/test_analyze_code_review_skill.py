@@ -10,16 +10,38 @@ from software_factory_poc.core.application.skills.review.contracts.code_reviewer
     CodeIssueSchema,
     CodeReviewResponseSchema,
 )
+from software_factory_poc.core.domain.mission import Mission, TaskDescription
 from software_factory_poc.core.domain.quality import ReviewSeverity
+
+
+def _make_mission() -> Mission:
+    return Mission(
+        id="10001",
+        key="PROJ-100",
+        summary="Review auth module",
+        status="In Progress",
+        project_key="PROJ",
+        issue_type="Code Review",
+        description=TaskDescription(
+            raw_content="Detailed review description",
+            config={
+                "code_review_params": {
+                    "review_request_url": "https://gitlab.example.com/merge_requests/10",
+                    "gitlab_project_id": "42",
+                    "source_branch_name": "feature/proj-100-auth",
+                },
+            },
+        ),
+    )
 
 
 def _make_input() -> AnalyzeCodeReviewInput:
     return AnalyzeCodeReviewInput(
-        mission_summary="Review auth module",
-        mission_description="Detailed review description",
+        mission=_make_mission(),
         mr_diff="diff content",
         conventions="coding standards",
         priority_models=["openai:gpt-4o"],
+        code_review_params={"mr_url": "https://gitlab.example.com/merge_requests/10"},
     )
 
 
@@ -88,3 +110,20 @@ class TestAnalyzeCodeReviewSkill:
         call_kwargs = brain.generate_structured.call_args[1]
         assert "SYS" in call_kwargs["prompt"]
         assert "USR" in call_kwargs["prompt"]
+
+    async def test_builder_receives_mission_object(self) -> None:
+        brain = AsyncMock()
+        prompt_builder = MagicMock()
+        prompt_builder.build_system_prompt.return_value = "SYS"
+        prompt_builder.build_analysis_prompt.return_value = "USR"
+        brain.generate_structured.return_value = CodeReviewResponseSchema(
+            is_approved=True, summary="ok", issues=[]
+        )
+
+        skill = AnalyzeCodeReviewSkill(brain=brain, prompt_builder=prompt_builder)
+        inp = _make_input()
+        await skill.execute(inp)
+
+        call_kwargs = prompt_builder.build_analysis_prompt.call_args[1]
+        assert isinstance(call_kwargs["mission"], Mission)
+        assert call_kwargs["mission"].key == "PROJ-100"

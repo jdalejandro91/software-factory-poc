@@ -162,10 +162,16 @@ class TestFullPipeline:
 
         call_args = mock_analyze.execute.call_args[0][0]
         assert isinstance(call_args, AnalyzeCodeReviewInput)
-        assert call_args.mission_summary == "Review MR for authentication module"
+        assert call_args.mission.summary == "Review MR for authentication module"
+        assert call_args.mission.key == "PROJ-200"
         assert call_args.mr_diff == "diff content"
         assert call_args.conventions == "conventions text"
         assert call_args.priority_models == ["openai:gpt-4o"]
+        assert (
+            call_args.code_review_params["mr_url"] == "https://gitlab.example.com/merge_requests/55"
+        )
+        assert call_args.code_review_params["project_id"] == "42"
+        assert call_args.code_review_params["branch"] == "feature/proj-200-auth"
 
     @pytest.mark.asyncio
     async def test_error_wraps_in_workflow_execution_error(

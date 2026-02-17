@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from software_factory_poc.core.application.skills.scaffold.prompt_templates.scaffolding_prompt_builder import (
@@ -31,10 +33,10 @@ class TestScaffoldingPromptBuilder:
         context = "Use modular structure."
         prompt = prompt_builder.build_prompt_from_mission(sample_mission, context)
 
-        assert "ROLE: You are a Principal Software Architect" in prompt
-        assert "SOURCE OF TRUTH" in prompt
+        assert "## ROLE" in prompt
+        assert "Principal Software Architect" in prompt
+        assert "## ARCHITECTURE CONTEXT" in prompt
         assert "Use modular structure" in prompt
-        assert "TASK SPECIFICATION" in prompt
         assert "Python/FastAPI" in prompt
 
     def test_build_prompt_empty_context(self, prompt_builder, sample_mission):
@@ -43,9 +45,12 @@ class TestScaffoldingPromptBuilder:
 
         assert "No specific documentation provided" in prompt
 
-    def test_json_example_formatting(self, prompt_builder):
-        """Test that the example JSON is valid JSON structure in the text."""
-        example = prompt_builder._get_example_output()
-        assert "JSON OUTPUT EXAMPLE" in example
-        assert "path" in example
-        assert "content" in example
+    def test_json_example_is_parseable(self, prompt_builder, sample_mission):
+        """Test that the example JSON in the output schema is valid."""
+        prompt = prompt_builder.build_prompt_from_mission(sample_mission, "some context")
+        start = prompt.index("```json\n") + len("```json\n")
+        end = prompt.index("\n```", start)
+        example_json = prompt[start:end]
+        parsed = json.loads(example_json)
+        assert "branch_name" in parsed
+        assert "files" in parsed

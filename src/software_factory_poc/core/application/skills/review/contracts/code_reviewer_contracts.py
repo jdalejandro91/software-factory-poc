@@ -1,22 +1,6 @@
-from dataclasses import dataclass
 from typing import Literal
 
 from pydantic import BaseModel, Field
-
-
-@dataclass
-class CodeReviewOrder:
-    """Incoming request from the entrypoint mapper to trigger a code review."""
-
-    issue_key: str
-    project_id: int
-    mr_id: str
-    source_branch: str
-    vcs_provider: str
-    summary: str
-    description: str
-    mr_url: str
-    requesting_user: str | None = None
 
 
 class CodeIssueSchema(BaseModel):
