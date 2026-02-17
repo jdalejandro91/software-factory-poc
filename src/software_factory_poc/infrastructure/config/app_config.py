@@ -8,7 +8,6 @@ from software_factory_poc.infrastructure.tools.docs.confluence.config.confluence
     ConfluenceSettings,
 )
 from software_factory_poc.infrastructure.tools.llm.config.llm_settings import LlmSettings
-from software_factory_poc.infrastructure.tools.share.tool_settings import ToolSettings
 from software_factory_poc.infrastructure.tools.tracker.jira.config.jira_settings import JiraSettings
 from software_factory_poc.infrastructure.tools.vcs.gitlab.config.gitlab_settings import (
     GitLabSettings,
@@ -26,6 +25,5 @@ class AppConfig(BaseSettings):
     gitlab: GitLabSettings = Field(default_factory=GitLabSettings)
     llm: LlmSettings = Field(default_factory=LlmSettings)
     scaffolding: ScaffoldingSettings = Field(default_factory=ScaffoldingSettings)
-    tools: ToolSettings = Field(default_factory=ToolSettings)  # type: ignore[arg-type]
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

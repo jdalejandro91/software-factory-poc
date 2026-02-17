@@ -17,7 +17,6 @@ from software_factory_poc.core.application.agents.scaffolder.prompt_templates.sc
 )
 from software_factory_poc.core.application.agents.scaffolder.scaffolder_agent import ScaffolderAgent
 from software_factory_poc.infrastructure.config.app_config import AppConfig
-from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
 from software_factory_poc.infrastructure.tools.docs.confluence.confluence_mcp_client import (
     ConfluenceMcpClient,
 )
@@ -37,16 +36,14 @@ class McpConnectionManager:
 
 async def _build_drivers(mcp_manager: McpConnectionManager, config: AppConfig):
     """Factory interno que ensambla los 4 drivers MCP del Tooling Plane."""
-    redactor = RedactionService()
-
     # 1. VCS Driver (MCP GitLab — self-managed stdio connection)
-    vcs = GitlabMcpClient(settings=config.gitlab, redactor=redactor)
+    vcs = GitlabMcpClient(settings=config.gitlab)
 
     # 2. Tracker Driver (MCP Jira — self-managed stdio connection)
-    tracker = JiraMcpClient(settings=config.jira, redactor=redactor)
+    tracker = JiraMcpClient(settings=config.jira)
 
     # 3. Research Driver (MCP Confluence — self-managed stdio connection)
-    docs = ConfluenceMcpClient(settings=config.confluence, redactor=redactor)
+    docs = ConfluenceMcpClient(settings=config.confluence)
 
     # 4. Brain (LiteLLM)
     brain = LiteLlmBrainAdapter(config.llm)

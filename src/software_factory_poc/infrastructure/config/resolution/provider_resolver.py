@@ -11,7 +11,6 @@ from software_factory_poc.core.application.agents.scaffolder.prompt_templates.sc
 )
 from software_factory_poc.core.application.agents.scaffolder.scaffolder_agent import ScaffolderAgent
 from software_factory_poc.infrastructure.config.app_config import AppConfig
-from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
 from software_factory_poc.infrastructure.tools.docs.confluence.confluence_mcp_client import (
     ConfluenceMcpClient,
 )
@@ -37,18 +36,17 @@ class ProviderResolver:
 
     def __init__(self, app_config: AppConfig):
         self.app_config = app_config
-        self.redactor = RedactionService()
 
     async def _build_drivers(self, mcp_manager: McpConnectionManager):
         """Factory interno que ensambla los 4 drivers MCP del Tooling Plane."""
         # 1. VCS (MCP GitLab — self-managed stdio connection)
-        vcs = GitlabMcpClient(settings=self.app_config.gitlab, redactor=self.redactor)
+        vcs = GitlabMcpClient(settings=self.app_config.gitlab)
 
         # 2. Tracker (MCP Jira — self-managed stdio connection)
-        tracker = JiraMcpClient(settings=self.app_config.jira, redactor=self.redactor)
+        tracker = JiraMcpClient(settings=self.app_config.jira)
 
         # 3. Docs (MCP Confluence — self-managed stdio connection)
-        docs = ConfluenceMcpClient(settings=self.app_config.confluence, redactor=self.redactor)
+        docs = ConfluenceMcpClient(settings=self.app_config.confluence)
 
         # 4. Brain (LiteLLM)
         brain = LiteLlmBrainAdapter(self.app_config.llm)

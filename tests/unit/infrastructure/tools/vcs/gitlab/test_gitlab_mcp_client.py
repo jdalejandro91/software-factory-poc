@@ -7,6 +7,8 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from mcp import McpError
+from mcp.types import ErrorData
 from pydantic import SecretStr
 
 from software_factory_poc.core.application.ports.common.exceptions.provider_error import (
@@ -19,7 +21,6 @@ from software_factory_poc.core.domain.delivery.value_objects.file_content import
 from software_factory_poc.core.domain.quality.code_review_report import CodeReviewReport
 from software_factory_poc.core.domain.quality.value_objects.review_comment import ReviewComment
 from software_factory_poc.core.domain.quality.value_objects.review_severity import ReviewSeverity
-from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
 from software_factory_poc.infrastructure.tools.vcs.gitlab.config.gitlab_settings import (
     GitLabSettings,
 )
@@ -75,10 +76,7 @@ def _make_settings(**overrides: Any) -> GitLabSettings:
 
 
 def _build_client(settings: GitLabSettings | None = None) -> GitlabMcpClient:
-    return GitlabMcpClient(
-        settings=settings or _make_settings(),
-        redactor=RedactionService(),
-    )
+    return GitlabMcpClient(settings=settings or _make_settings())
 
 
 def _text_result(text: str) -> FakeCallToolResult:
@@ -131,20 +129,20 @@ class TestPortCompliance:
 
 
 # ══════════════════════════════════════════════════════════════════════
-# _server_params — credential injection
+# _server_params — credential injection for official GitLab MCP server
 # ══════════════════════════════════════════════════════════════════════
 
 
 class TestServerParams:
-    def test_injects_token_and_base_url(self) -> None:
+    def test_injects_personal_access_token_and_api_url(self) -> None:
         client = _build_client()
         params = client._server_params()
 
         assert params.command == "npx"
         assert params.args == ["@modelcontextprotocol/server-gitlab"]
         assert params.env is not None
-        assert params.env["GITLAB_TOKEN"] == "glpat-test-token"
-        assert params.env["GITLAB_BASE_URL"] == "https://gitlab.example.com"
+        assert params.env["GITLAB_PERSONAL_ACCESS_TOKEN"] == "glpat-test-token"
+        assert params.env["GITLAB_API_URL"] == "https://gitlab.example.com"
 
     def test_skips_token_when_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("GITLAB_TOKEN", raising=False)
@@ -158,7 +156,15 @@ class TestServerParams:
         params = client._server_params()
 
         assert params.env is not None
-        assert "GITLAB_TOKEN" not in params.env
+        assert "GITLAB_PERSONAL_ACCESS_TOKEN" not in params.env
+
+    def test_env_is_copy_of_os_environ(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SENTINEL_VAR", "present")
+        client = _build_client()
+        params = client._server_params()
+
+        assert params.env is not None
+        assert params.env["SENTINEL_VAR"] == "present"
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -357,9 +363,6 @@ class TestExecuteTool:
 
 class TestErrorHandling:
     async def test_mcp_error_becomes_provider_error(self, mock_mcp: AsyncMock) -> None:
-        from mcp import McpError
-        from mcp.types import ErrorData
-
         mock_mcp.call_tool.side_effect = McpError(ErrorData(code=-32600, message="Invalid request"))
         client = _build_client()
 
@@ -379,3 +382,13 @@ class TestErrorHandling:
 
         with pytest.raises(ProviderError, match="Tool .* returned error"):
             await client.create_branch("feature/denied")
+
+    async def test_provider_error_includes_provider_name(self, mock_mcp: AsyncMock) -> None:
+        mock_mcp.call_tool.side_effect = RuntimeError("boom")
+        client = _build_client()
+
+        with pytest.raises(ProviderError) as exc_info:
+            await client.create_branch("feature/crash")
+
+        assert exc_info.value.provider == "GitLabMCP"
+        assert exc_info.value.retryable is True

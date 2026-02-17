@@ -24,26 +24,26 @@ logger = logging.getLogger(__name__)
 class GitlabMcpClient(VcsPort):
     """MCP-stdio client that translates Domain intent into GitLab MCP tool calls."""
 
-    def __init__(self, settings: GitLabSettings, redactor: RedactionService) -> None:
+    def __init__(self, settings: GitLabSettings) -> None:
         self._settings = settings
-        self._redactor = redactor
         self._project_id = settings.project_id
+        self._redactor = RedactionService()
 
     # ── MCP connection internals ──
 
     def _server_params(self) -> StdioServerParameters:
         """Build StdioServerParameters with credentials injected into the subprocess env."""
-        env = {**os.environ}
+        env = os.environ.copy()
         if self._settings.token:
-            env["GITLAB_TOKEN"] = self._settings.token.get_secret_value()
-        env["GITLAB_BASE_URL"] = self._settings.base_url
+            env["GITLAB_PERSONAL_ACCESS_TOKEN"] = self._settings.token.get_secret_value()
+        env["GITLAB_API_URL"] = self._settings.base_url
         return StdioServerParameters(
             command=self._settings.mcp_gitlab_command,
             args=self._settings.mcp_gitlab_args,
             env=env,
         )
 
-    async def _call_mcp(self, tool_name: str, arguments: dict[str, Any]) -> Any:
+    async def _invoke_tool(self, tool_name: str, arguments: dict[str, Any]) -> Any:
         """Open an stdio MCP session, invoke the tool, and translate errors."""
         try:
             async with stdio_client(self._server_params()) as (read, write):
@@ -86,7 +86,7 @@ class GitlabMcpClient(VcsPort):
     async def validate_branch_existence(self, branch_name: str) -> bool:
         logger.info("[GitLabMCP] Checking branch existence: '%s'", branch_name)
         try:
-            await self._call_mcp(
+            await self._invoke_tool(
                 "gitlab_get_branch",
                 {"project_id": self._project_id, "branch": branch_name},
             )
@@ -96,7 +96,7 @@ class GitlabMcpClient(VcsPort):
 
     async def create_branch(self, branch_name: str, ref: str = "main") -> str:
         logger.info("[GitLabMCP] Creating branch '%s' from '%s'", branch_name, ref)
-        result = await self._call_mcp(
+        result = await self._invoke_tool(
             "gitlab_create_branch",
             {"project_id": self._project_id, "branch": branch_name, "ref": ref},
         )
@@ -110,7 +110,7 @@ class GitlabMcpClient(VcsPort):
         self, source_branch: str, target_branch: str, title: str, description: str
     ) -> str:
         logger.info("[GitLabMCP] Creating MR: '%s' → '%s'", source_branch, target_branch)
-        result = await self._call_mcp(
+        result = await self._invoke_tool(
             "gitlab_create_merge_request",
             {
                 "project_id": self._project_id,
@@ -141,7 +141,7 @@ class GitlabMcpClient(VcsPort):
             for f in intent.files
         ]
 
-        result = await self._call_mcp(
+        result = await self._invoke_tool(
             "gitlab_create_commit",
             {
                 "project_id": self._project_id,
@@ -155,7 +155,7 @@ class GitlabMcpClient(VcsPort):
     # ── Code Review Flow Operations ──
 
     async def get_merge_request_diff(self, mr_id: str) -> str:
-        result = await self._call_mcp(
+        result = await self._invoke_tool(
             "gitlab_get_merge_request_changes",
             {"project_id": self._project_id, "merge_request_iid": str(mr_id)},
         )
@@ -165,7 +165,7 @@ class GitlabMcpClient(VcsPort):
         status_label = "APPROVED" if report.is_approved else "CHANGES REQUESTED"
         main_note = f"### BrahMAS Code Review: {status_label}\n\n{report.summary}"
 
-        await self._call_mcp(
+        await self._invoke_tool(
             "gitlab_create_merge_request_note",
             {
                 "project_id": self._project_id,
@@ -179,7 +179,7 @@ class GitlabMcpClient(VcsPort):
                 f"**[{issue.severity.value}]** {issue.description}"
                 f"\n\n*Suggestion:* `{issue.suggestion}`"
             )
-            await self._call_mcp(
+            await self._invoke_tool(
                 "gitlab_create_merge_request_discussion",
                 {
                     "project_id": self._project_id,
@@ -191,7 +191,7 @@ class GitlabMcpClient(VcsPort):
             )
 
         if report.is_approved:
-            await self._call_mcp(
+            await self._invoke_tool(
                 "gitlab_approve_merge_request",
                 {"project_id": self._project_id, "merge_request_iid": str(mr_id)},
             )
@@ -220,5 +220,5 @@ class GitlabMcpClient(VcsPort):
             arguments["project_id"] = self._project_id
 
         safe_args = self._redactor.sanitize(arguments)
-        result = await self._call_mcp(real_tool_name, safe_args)
+        result = await self._invoke_tool(real_tool_name, safe_args)
         return self._extract_text(result)

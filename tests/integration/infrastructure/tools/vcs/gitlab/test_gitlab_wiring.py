@@ -4,7 +4,6 @@ import pytest
 from pydantic import SecretStr
 
 from software_factory_poc.core.application.ports.vcs_port import VcsPort
-from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
 from software_factory_poc.infrastructure.tools.vcs.gitlab.config.gitlab_settings import (
     GitLabSettings,
 )
@@ -73,7 +72,7 @@ class TestGitLabMcpClientWiring:
             MCP_GITLAB_ARGS=["server-gitlab"],
         )
 
-        client = GitlabMcpClient(settings=settings, redactor=RedactionService())
+        client = GitlabMcpClient(settings=settings)
 
         assert isinstance(client, VcsPort)
         assert isinstance(client, GitlabMcpClient)

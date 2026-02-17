@@ -35,15 +35,15 @@ class JiraMcpClient(TrackerPort):
     Uses the shared Atlassian MCP server (covers both Jira and Confluence).
     """
 
-    def __init__(self, settings: JiraSettings, redactor: RedactionService) -> None:
+    def __init__(self, settings: JiraSettings) -> None:
         self._settings = settings
-        self._redactor = redactor
+        self._redactor = RedactionService()
 
     # ── MCP connection internals ──
 
     def _server_params(self) -> StdioServerParameters:
         """Build StdioServerParameters with Atlassian credentials injected into subprocess env."""
-        env = {**os.environ}
+        env = os.environ.copy()
         if self._settings.api_token:
             env["ATLASSIAN_API_TOKEN"] = self._settings.api_token.get_secret_value()
         env["ATLASSIAN_USER_EMAIL"] = self._settings.user_email
@@ -54,7 +54,7 @@ class JiraMcpClient(TrackerPort):
             env=env,
         )
 
-    async def _call_mcp(self, tool_name: str, arguments: dict[str, Any]) -> Any:
+    async def _invoke_tool(self, tool_name: str, arguments: dict[str, Any]) -> Any:
         """Open an stdio MCP session, invoke the tool, and translate errors."""
         try:
             async with stdio_client(self._server_params()) as (read, write):
@@ -127,7 +127,7 @@ class JiraMcpClient(TrackerPort):
 
     async def get_task(self, ticket_id: str) -> Mission:
         logger.info("[JiraMCP] Fetching task %s", ticket_id)
-        result = await self._call_mcp("jira_get_issue", {"issue_key": ticket_id})
+        result = await self._invoke_tool("jira_get_issue", {"issue_key": ticket_id})
         data = self._parse_json(self._extract_text(result), context=f"get_task({ticket_id})")
 
         fields = data.get("fields", {})
@@ -146,21 +146,21 @@ class JiraMcpClient(TrackerPort):
 
     async def add_comment(self, ticket_id: str, comment: str) -> None:
         logger.info("[JiraMCP] Adding comment to %s", ticket_id)
-        await self._call_mcp(
+        await self._invoke_tool(
             "jira_add_comment",
             {"issue_key": ticket_id, "comment": comment},
         )
 
     async def update_status(self, ticket_id: str, status: str) -> None:
         logger.info("[JiraMCP] Transitioning %s → '%s'", ticket_id, status)
-        await self._call_mcp(
+        await self._invoke_tool(
             "jira_transition_issue",
             {"issue_key": ticket_id, "transition_name": status},
         )
 
     async def update_task_description(self, ticket_id: str, description: str) -> None:
         logger.info("[JiraMCP] Updating description of %s", ticket_id)
-        await self._call_mcp(
+        await self._invoke_tool(
             "jira_update_issue",
             {"issue_key": ticket_id, "fields": {"description": description}},
         )
@@ -190,7 +190,7 @@ class JiraMcpClient(TrackerPort):
             else self._settings.workflow_state_initial
         )
         await self.update_status(ticket_id, transition)
-        await self._call_mcp(
+        await self._invoke_tool(
             "jira_add_comment",
             {"issue_key": ticket_id, "comment": comment_md},
         )
@@ -216,5 +216,5 @@ class JiraMcpClient(TrackerPort):
     async def execute_tool(self, tool_name: str, arguments: dict) -> Any:
         real_tool_name = tool_name.replace("tracker_", "jira_")
         safe_args = self._redactor.sanitize(arguments)
-        result = await self._call_mcp(real_tool_name, safe_args)
+        result = await self._invoke_tool(real_tool_name, safe_args)
         return self._extract_text(result)

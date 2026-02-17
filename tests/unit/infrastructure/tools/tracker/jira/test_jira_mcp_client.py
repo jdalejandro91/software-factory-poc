@@ -20,7 +20,6 @@ from software_factory_poc.core.domain.mission.value_objects.task_description imp
 from software_factory_poc.core.domain.quality.code_review_report import CodeReviewReport
 from software_factory_poc.core.domain.quality.value_objects.review_comment import ReviewComment
 from software_factory_poc.core.domain.quality.value_objects.review_severity import ReviewSeverity
-from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
 from software_factory_poc.infrastructure.tools.tracker.jira.config.jira_settings import (
     JiraSettings,
 )
@@ -77,10 +76,7 @@ def _make_settings(**overrides: Any) -> JiraSettings:
 
 
 def _build_client(settings: JiraSettings | None = None) -> JiraMcpClient:
-    return JiraMcpClient(
-        settings=settings or _make_settings(),
-        redactor=RedactionService(),
-    )
+    return JiraMcpClient(settings=settings or _make_settings())
 
 
 def _text_result(text: str) -> FakeCallToolResult:
@@ -170,6 +166,14 @@ class TestServerParams:
         assert params.env["ATLASSIAN_API_TOKEN"] == "atlassian-token-123"
         assert params.env["ATLASSIAN_USER_EMAIL"] == "bot@company.io"
         assert params.env["ATLASSIAN_HOST"] == "https://company.atlassian.net"
+
+    def test_env_is_copy_of_os_environ(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SENTINEL_VAR", "present")
+        client = _build_client()
+        params = client._server_params()
+
+        assert params.env is not None
+        assert params.env["SENTINEL_VAR"] == "present"
 
     def test_skips_token_when_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("JIRA_API_TOKEN", raising=False)

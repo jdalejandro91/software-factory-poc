@@ -15,7 +15,6 @@ from software_factory_poc.core.application.ports.common.exceptions.provider_erro
     ProviderError,
 )
 from software_factory_poc.core.application.ports.docs_port import DocsPort
-from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
 from software_factory_poc.infrastructure.tools.docs.confluence.config.confluence_settings import (
     ConfluenceSettings,
 )
@@ -59,10 +58,7 @@ def _make_settings(**overrides: Any) -> ConfluenceSettings:
 
 
 def _build_client(settings: ConfluenceSettings | None = None) -> ConfluenceMcpClient:
-    return ConfluenceMcpClient(
-        settings=settings or _make_settings(),
-        redactor=RedactionService(),
-    )
+    return ConfluenceMcpClient(settings=settings or _make_settings())
 
 
 def _text_result(text: str) -> FakeCallToolResult:
@@ -126,6 +122,14 @@ class TestServerParams:
         assert params.env["ATLASSIAN_API_TOKEN"] == "atlassian-token-123"
         assert params.env["ATLASSIAN_USER_EMAIL"] == "bot@company.io"
         assert params.env["ATLASSIAN_HOST"] == "https://company.atlassian.net"
+
+    def test_env_is_copy_of_os_environ(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SENTINEL_VAR", "present")
+        client = _build_client()
+        params = client._server_params()
+
+        assert params.env is not None
+        assert params.env["SENTINEL_VAR"] == "present"
 
     def test_skips_token_when_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("CONFLUENCE_API_TOKEN", raising=False)

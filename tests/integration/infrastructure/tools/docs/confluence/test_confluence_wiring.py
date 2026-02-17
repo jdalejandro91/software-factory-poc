@@ -4,7 +4,6 @@ import pytest
 from pydantic import SecretStr
 
 from software_factory_poc.core.application.ports.docs_port import DocsPort
-from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
 from software_factory_poc.infrastructure.tools.docs.confluence.config.confluence_settings import (
     ConfluenceSettings,
 )
@@ -75,7 +74,7 @@ class TestConfluenceMcpClientWiring:
             MCP_ATLASSIAN_ARGS=["@anthropic/mcp-server-atlassian"],
         )
 
-        client = ConfluenceMcpClient(settings=settings, redactor=RedactionService())
+        client = ConfluenceMcpClient(settings=settings)
 
         assert isinstance(client, DocsPort)
         assert isinstance(client, ConfluenceMcpClient)

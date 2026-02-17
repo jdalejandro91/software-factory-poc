@@ -11,6 +11,7 @@ class ConfluenceSettings(BaseSettings):
     api_token: SecretStr | None = Field(default=None, alias="CONFLUENCE_API_TOKEN")
     user_email: str = Field(default="", alias="CONFLUENCE_USER_EMAIL")
     base_url: str = Field(default="", alias="CONFLUENCE_BASE_URL")
+    sample_path: str = Field(default="", alias="CONFLUENCE_SAMPLE_PATH")
     architecture_doc_page_id: str = Field(default="3571713", alias="ARCHITECTURE_DOC_PAGE_ID")
 
     # ── Shared Atlassian MCP server configuration ──

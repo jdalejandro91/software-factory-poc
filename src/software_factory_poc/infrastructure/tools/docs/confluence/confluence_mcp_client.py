@@ -11,7 +11,6 @@ from software_factory_poc.core.application.ports.common.exceptions.provider_erro
     ProviderError,
 )
 from software_factory_poc.core.application.ports.docs_port import DocsPort
-from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
 from software_factory_poc.infrastructure.tools.docs.confluence.config.confluence_settings import (
     ConfluenceSettings,
 )
@@ -25,15 +24,14 @@ class ConfluenceMcpClient(DocsPort):
     Uses the shared Atlassian MCP server (covers both Jira and Confluence).
     """
 
-    def __init__(self, settings: ConfluenceSettings, redactor: RedactionService) -> None:
+    def __init__(self, settings: ConfluenceSettings) -> None:
         self._settings = settings
-        self._redactor = redactor
 
     # ── MCP connection internals ──
 
     def _server_params(self) -> StdioServerParameters:
         """Build StdioServerParameters with Atlassian credentials injected into subprocess env."""
-        env = {**os.environ}
+        env = os.environ.copy()
         if self._settings.api_token:
             env["ATLASSIAN_API_TOKEN"] = self._settings.api_token.get_secret_value()
         env["ATLASSIAN_USER_EMAIL"] = self._settings.user_email
@@ -44,7 +42,7 @@ class ConfluenceMcpClient(DocsPort):
             env=env,
         )
 
-    async def _call_mcp(self, tool_name: str, arguments: dict[str, Any]) -> Any:
+    async def _invoke_tool(self, tool_name: str, arguments: dict[str, Any]) -> Any:
         """Open an stdio MCP session, invoke the tool, and translate errors."""
         try:
             async with stdio_client(self._server_params()) as (read, write):
@@ -86,7 +84,7 @@ class ConfluenceMcpClient(DocsPort):
 
     async def get_project_context(self, service_name: str) -> str:
         logger.info("[ConfluenceMCP] Fetching project context for '%s'", service_name)
-        result = await self._call_mcp(
+        result = await self._invoke_tool(
             "confluence_search",
             {"query": service_name},
         )
@@ -94,7 +92,7 @@ class ConfluenceMcpClient(DocsPort):
 
     async def get_architecture_context(self, project_context_id: str) -> str:
         logger.info("[ConfluenceMCP] Fetching architecture page '%s'", project_context_id)
-        result = await self._call_mcp(
+        result = await self._invoke_tool(
             "confluence_get_page",
             {"page_id": project_context_id},
         )
