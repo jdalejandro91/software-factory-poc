@@ -10,7 +10,7 @@ from software_factory_poc.infrastructure.tools.docs.config.confluence_settings i
 from software_factory_poc.infrastructure.tools.llm.config.llm_settings import LlmSettings
 from software_factory_poc.infrastructure.tools.share.tool_settings import ToolSettings
 from software_factory_poc.infrastructure.tools.tracker.jira.config.jira_settings import JiraSettings
-from software_factory_poc.infrastructure.tools.vcs.config.gitlab_settings import GitLabSettings
+from software_factory_poc.infrastructure.tools.vcs.gitlab.config.gitlab_settings import GitLabSettings
 
 
 class AppConfig(BaseSettings):
