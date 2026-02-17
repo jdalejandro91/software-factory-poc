@@ -1,181 +1,179 @@
 import json
 import logging
+import os
+import re
 from typing import Any
 
-from mcp import ClientSession
+import yaml
+from mcp import McpError
+from mcp.client.session import ClientSession
+from mcp.client.stdio import StdioServerParameters, stdio_client
 
 from software_factory_poc.core.application.ports.common.exceptions.provider_error import (
     ProviderError,
 )
 from software_factory_poc.core.application.ports.tracker_port import TrackerPort
-from software_factory_poc.core.domain.mission.entities.mission import Mission, TaskDescription
+from software_factory_poc.core.domain.mission.entities.mission import Mission
+from software_factory_poc.core.domain.mission.value_objects.task_description import TaskDescription
 from software_factory_poc.core.domain.quality.code_review_report import CodeReviewReport
 from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
-from software_factory_poc.infrastructure.tools.tracker.jira.mappers.jira_description_mapper import (
-    JiraDescriptionMapper,
+from software_factory_poc.infrastructure.tools.tracker.jira.config.jira_settings import (
+    JiraSettings,
 )
 
 logger = logging.getLogger(__name__)
 
+_CONFIG_BLOCK_RE = re.compile(
+    r"```(?:scaffolder|yaml|yml)\s*([\s\S]*?)\s*```",
+    re.IGNORECASE,
+)
+
 
 class JiraMcpClient(TrackerPort):
-    """MCP client for Jira. Replaces JiraRestAdapter removing direct HTTP dependencies.
+    """MCP-stdio client that translates Domain intent into Jira tool calls.
 
-    Receives a MCP ClientSession and translates Domain intentions to call_tool
-    calls against the Jira MCP server.
+    Uses the shared Atlassian MCP server (covers both Jira and Confluence).
     """
 
-    def __init__(
-        self,
-        mcp_session: ClientSession,
-        desc_mapper: JiraDescriptionMapper,
-        transition_in_review: str,
-        redactor: RedactionService,
-    ):
-        self.mcp_session = mcp_session
-        self.desc_mapper = desc_mapper
-        self.transition_in_review = transition_in_review
-        self.redactor = redactor
+    def __init__(self, settings: JiraSettings, redactor: RedactionService) -> None:
+        self._settings = settings
+        self._redactor = redactor
 
-    # ──────────────────────────────────────────────
-    #  Helper interno para llamadas MCP con manejo de errores
-    # ──────────────────────────────────────────────
+    # ── MCP connection internals ──
+
+    def _server_params(self) -> StdioServerParameters:
+        """Build StdioServerParameters with Atlassian credentials injected into subprocess env."""
+        env = {**os.environ}
+        if self._settings.api_token:
+            env["ATLASSIAN_API_TOKEN"] = self._settings.api_token.get_secret_value()
+        env["ATLASSIAN_USER_EMAIL"] = self._settings.user_email
+        env["ATLASSIAN_HOST"] = self._settings.base_url
+        return StdioServerParameters(
+            command=self._settings.mcp_atlassian_command,
+            args=self._settings.mcp_atlassian_args,
+            env=env,
+        )
 
     async def _call_mcp(self, tool_name: str, arguments: dict[str, Any]) -> Any:
-        """Ejecuta una herramienta MCP y traduce errores a ProviderError de dominio."""
+        """Open an stdio MCP session, invoke the tool, and translate errors."""
         try:
-            response = await self.mcp_session.call_tool(tool_name, arguments=arguments)
+            async with stdio_client(self._server_params()) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    result = await session.call_tool(tool_name, arguments=arguments)
+        except McpError as exc:
+            raise ProviderError(
+                provider="JiraMCP",
+                message=f"MCP protocol error invoking '{tool_name}': {exc}",
+                retryable=True,
+            ) from exc
         except Exception as exc:
             raise ProviderError(
                 provider="JiraMCP",
-                message=f"Fallo de conexion MCP al invocar '{tool_name}': {exc}",
+                message=f"Connection failure invoking '{tool_name}': {exc}",
                 retryable=True,
             ) from exc
 
-        if hasattr(response, "isError") and response.isError:
-            error_detail = str(response.content) if response.content else "Sin detalle"
+        if result.isError:
+            error_detail = self._extract_text(result) or "No detail"
             raise ProviderError(
                 provider="JiraMCP",
-                message=f"Error en tool '{tool_name}': {error_detail}",
+                message=f"Tool '{tool_name}' returned error: {error_detail}",
                 retryable=False,
             )
 
-        return response
+        return result
 
-    def _extract_text(self, response: Any) -> str:
-        """Extrae el texto plano de la respuesta MCP de forma segura."""
-        if response.content and len(response.content) > 0:
-            return response.content[0].text
+    @staticmethod
+    def _extract_text(result: Any) -> str:
+        """Extract plain text from an MCP CallToolResult safely."""
+        if result.content and len(result.content) > 0:
+            first = result.content[0]
+            return getattr(first, "text", str(first))
         return ""
 
     def _parse_json(self, raw_text: str, context: str) -> dict[str, Any]:
-        """Parsea JSON de respuesta MCP con manejo de errores limpio."""
+        """Parse JSON from MCP response with clean error handling."""
         try:
             return json.loads(raw_text)
         except (json.JSONDecodeError, TypeError) as exc:
             raise ProviderError(
                 provider="JiraMCP",
-                message=f"Respuesta no-JSON en '{context}': {raw_text[:200]}",
+                message=f"Non-JSON response in '{context}': {raw_text[:200]}",
             ) from exc
 
-    # ──────────────────────────────────────────────
-    #  Implementacion de TrackerPort
-    # ──────────────────────────────────────────────
+    @staticmethod
+    def _parse_description(text: str) -> TaskDescription:
+        """Parse Markdown description into TaskDescription, extracting YAML config blocks."""
+        if not text:
+            return TaskDescription(raw_content="", config={})
+
+        config: dict[str, Any] = {}
+        match = _CONFIG_BLOCK_RE.search(text)
+        if match:
+            try:
+                parsed = yaml.safe_load(match.group(1).strip())
+                if isinstance(parsed, dict):
+                    config = parsed
+            except yaml.YAMLError:
+                pass
+            raw_content = text.replace(match.group(0), "").strip()
+        else:
+            raw_content = text
+
+        return TaskDescription(raw_content=raw_content, config=config)
+
+    # ── TrackerPort implementation ──
 
     async def get_task(self, ticket_id: str) -> Mission:
-        """Obtiene una tarea de Jira via MCP y la mapea a la entidad de dominio Mission."""
-        logger.info(f"[JiraMCP] Obteniendo tarea {ticket_id}")
-
-        response = await self._call_mcp("jira_get_issue", arguments={"issue_key": ticket_id})
-        raw_text = self._extract_text(response)
-        data = self._parse_json(raw_text, context=f"get_task({ticket_id})")
+        logger.info("[JiraMCP] Fetching task %s", ticket_id)
+        result = await self._call_mcp("jira_get_issue", {"issue_key": ticket_id})
+        data = self._parse_json(self._extract_text(result), context=f"get_task({ticket_id})")
 
         fields = data.get("fields", {})
-        summary = fields.get("summary", "")
-        status = fields.get("status", {}).get("name", "OPEN")
-        project_key = fields.get("project", {}).get("key", "")
-        issue_type = fields.get("issuetype", {}).get("name", "Task")
-
-        adf_description = fields.get("description", {})
-        task_description: TaskDescription = self.desc_mapper.to_domain(
-            {"content": adf_description.get("content", [])} if adf_description else {"content": []}
-        )
+        description_text = fields.get("description", "") or ""
+        task_description = self._parse_description(description_text)
 
         return Mission(
             id=data.get("id", ticket_id),
             key=data.get("key", ticket_id),
-            summary=summary,
-            status=status,
-            project_key=project_key,
-            issue_type=issue_type,
+            summary=fields.get("summary", ""),
+            status=fields.get("status", {}).get("name", "OPEN"),
+            project_key=fields.get("project", {}).get("key", ""),
+            issue_type=fields.get("issuetype", {}).get("name", "Task"),
             description=task_description,
         )
 
     async def add_comment(self, ticket_id: str, comment: str) -> None:
-        """Agrega un comentario a una tarea de Jira via MCP.
-
-        The MCP server accepts Markdown and handles conversion to ADF/Wiki internally.
-        """
-        logger.info(f"[JiraMCP] Agregando comentario a {ticket_id}")
-
+        logger.info("[JiraMCP] Adding comment to %s", ticket_id)
         await self._call_mcp(
             "jira_add_comment",
-            arguments={
-                "issue_key": ticket_id,
-                "comment": comment,
-            },
+            {"issue_key": ticket_id, "comment": comment},
         )
 
     async def update_status(self, ticket_id: str, status: str) -> None:
-        """Transiciona el estado de una tarea en Jira via MCP."""
-        logger.info(f"[JiraMCP] Transicionando {ticket_id} -> '{status}'")
-
+        logger.info("[JiraMCP] Transitioning %s → '%s'", ticket_id, status)
         await self._call_mcp(
             "jira_transition_issue",
-            arguments={
-                "issue_key": ticket_id,
-                "transition_name": status,
-            },
+            {"issue_key": ticket_id, "transition_name": status},
         )
 
     async def update_task_description(self, ticket_id: str, description: str) -> None:
-        """Updates a task description in Jira via MCP.
-
-        The description should be in Markdown format. The MCP server converts it
-        to ADF (Cloud) or Wiki Markup (Server/DC) internally.
-        """
-        logger.info(f"[JiraMCP] Actualizando descripcion de {ticket_id}")
-
+        logger.info("[JiraMCP] Updating description of %s", ticket_id)
         await self._call_mcp(
             "jira_update_issue",
-            arguments={
-                "issue_key": ticket_id,
-                "fields": {"description": description},
-            },
+            {"issue_key": ticket_id, "fields": {"description": description}},
         )
 
     async def post_review_summary(self, ticket_id: str, report: CodeReviewReport) -> None:
-        """Posts the Code Review summary as a Markdown comment via MCP.
+        logger.info("[JiraMCP] Posting review summary to %s", ticket_id)
+        status_label = "APPROVED" if report.is_approved else "CHANGES REQUESTED"
 
-        The MCP server accepts Markdown and converts to ADF/Wiki internally.
-        No ADF builders needed on our side.
-        """
-        logger.info(f"[JiraMCP] Publicando resumen de review en {ticket_id}")
-
-        emoji = "APROBADO" if report.is_approved else "REQUIERE CAMBIOS"
-
-        lines = [
-            f"## BrahMAS Code Review: {emoji}",
-            "",
-            report.summary,
-        ]
+        lines = [f"## BrahMAS Code Review: {status_label}", "", report.summary]
 
         if report.comments:
-            lines.append("")
-            lines.append("### Hallazgos")
-            lines.append("")
-            lines.append("| Severidad | Archivo | Descripcion |")
-            lines.append("|-----------|---------|-------------|")
+            lines += ["", "### Findings", "", "| Severity | File | Description |"]
+            lines.append("|----------|------|-------------|")
             for issue in report.comments:
                 line_ref = f":{issue.line_number}" if issue.line_number else ""
                 lines.append(
@@ -186,26 +184,25 @@ class JiraMcpClient(TrackerPort):
 
         comment_md = "\n".join(lines)
 
-        # 1. Transition status
-        transition = self.transition_in_review if report.is_approved else "In Progress"
+        transition = (
+            self._settings.workflow_state_success
+            if report.is_approved
+            else self._settings.workflow_state_initial
+        )
         await self.update_status(ticket_id, transition)
-
-        # 2. Post Markdown comment
         await self._call_mcp(
             "jira_add_comment",
-            arguments={
-                "issue_key": ticket_id,
-                "comment": comment_md,
-            },
+            {"issue_key": ticket_id, "comment": comment_md},
         )
 
-    # ──────────────────────────────────────────────
-    #  Soporte Agentic Mode (MCP tool discovery + execution)
-    # ──────────────────────────────────────────────
+    # ── Agentic Operations ──
 
     async def get_mcp_tools(self) -> list[dict[str, Any]]:
-        """Retorna las herramientas MCP disponibles del servidor Jira, normalizando prefijos."""
-        response = await self.mcp_session.list_tools()
+        async with stdio_client(self._server_params()) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                response = await session.list_tools()
+
         return [
             {
                 "name": t.name.replace("jira_", "tracker_"),
@@ -217,9 +214,7 @@ class JiraMcpClient(TrackerPort):
         ]
 
     async def execute_tool(self, tool_name: str, arguments: dict) -> Any:
-        """Proxy seguro para ejecutar herramientas MCP de Jira en modo agentico."""
         real_tool_name = tool_name.replace("tracker_", "jira_")
-        safe_args = self.redactor.sanitize(arguments)
-
-        response = await self._call_mcp(real_tool_name, arguments=safe_args)
-        return self._extract_text(response)
+        safe_args = self._redactor.sanitize(arguments)
+        result = await self._call_mcp(real_tool_name, safe_args)
+        return self._extract_text(result)

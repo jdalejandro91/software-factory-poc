@@ -4,18 +4,14 @@ from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class JiraSettings(BaseSettings):
-    """Settings for Jira integration and shared Atlassian MCP server."""
+class ConfluenceSettings(BaseSettings):
+    """Settings for Confluence integration and shared Atlassian MCP server."""
 
-    # ── Core Jira settings ──
-    api_token: SecretStr | None = Field(default=None, alias="JIRA_API_TOKEN")
-    webhook_secret: SecretStr | None = Field(default=None, alias="JIRA_WEBHOOK_SECRET")
-    base_url: str = Field(default="", alias="JIRA_BASE_URL")
-    user_email: str = Field(default="", alias="JIRA_USER_EMAIL")
-
-    # ── Workflow states ──
-    workflow_state_initial: str = Field(default="To Do", alias="WORKFLOW_STATE_INITIAL")
-    workflow_state_success: str = Field(default="In Review", alias="WORKFLOW_STATE_SUCCESS")
+    # ── Core Confluence settings ──
+    api_token: SecretStr | None = Field(default=None, alias="CONFLUENCE_API_TOKEN")
+    user_email: str = Field(default="", alias="CONFLUENCE_USER_EMAIL")
+    base_url: str = Field(default="", alias="CONFLUENCE_BASE_URL")
+    architecture_doc_page_id: str = Field(default="3571713", alias="ARCHITECTURE_DOC_PAGE_ID")
 
     # ── Shared Atlassian MCP server configuration ──
     mcp_atlassian_command: str = Field(default="npx", alias="MCP_ATLASSIAN_COMMAND")

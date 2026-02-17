@@ -1,93 +1,106 @@
 import json
 import logging
+import os
 from typing import Any
 
-from mcp import ClientSession
+from mcp import McpError
+from mcp.client.session import ClientSession
+from mcp.client.stdio import StdioServerParameters, stdio_client
 
 from software_factory_poc.core.application.ports.common.exceptions.provider_error import (
     ProviderError,
 )
 from software_factory_poc.core.application.ports.docs_port import DocsPort
 from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
+from software_factory_poc.infrastructure.tools.docs.confluence.config.confluence_settings import (
+    ConfluenceSettings,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class ConfluenceMcpClient(DocsPort):
-    """MCP client for Confluence. Replaces ConfluenceRestAdapter removing direct HTTP dependencies.
+    """MCP-stdio client that translates Domain intent into Confluence tool calls.
 
-    Receives a MCP ClientSession and translates Domain intentions to call_tool
-    calls against the Confluence MCP server.
+    Uses the shared Atlassian MCP server (covers both Jira and Confluence).
     """
 
-    def __init__(self, mcp_session: ClientSession, redactor: RedactionService):
-        self.mcp_session = mcp_session
-        self.redactor = redactor
+    def __init__(self, settings: ConfluenceSettings, redactor: RedactionService) -> None:
+        self._settings = settings
+        self._redactor = redactor
 
-    # ──────────────────────────────────────────────
-    #  Helper interno para llamadas MCP con manejo de errores
-    # ──────────────────────────────────────────────
+    # ── MCP connection internals ──
+
+    def _server_params(self) -> StdioServerParameters:
+        """Build StdioServerParameters with Atlassian credentials injected into subprocess env."""
+        env = {**os.environ}
+        if self._settings.api_token:
+            env["ATLASSIAN_API_TOKEN"] = self._settings.api_token.get_secret_value()
+        env["ATLASSIAN_USER_EMAIL"] = self._settings.user_email
+        env["ATLASSIAN_HOST"] = self._settings.base_url
+        return StdioServerParameters(
+            command=self._settings.mcp_atlassian_command,
+            args=self._settings.mcp_atlassian_args,
+            env=env,
+        )
 
     async def _call_mcp(self, tool_name: str, arguments: dict[str, Any]) -> Any:
-        """Ejecuta una herramienta MCP y traduce errores a ProviderError de dominio."""
+        """Open an stdio MCP session, invoke the tool, and translate errors."""
         try:
-            response = await self.mcp_session.call_tool(tool_name, arguments=arguments)
+            async with stdio_client(self._server_params()) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    result = await session.call_tool(tool_name, arguments=arguments)
+        except McpError as exc:
+            raise ProviderError(
+                provider="ConfluenceMCP",
+                message=f"MCP protocol error invoking '{tool_name}': {exc}",
+                retryable=True,
+            ) from exc
         except Exception as exc:
             raise ProviderError(
                 provider="ConfluenceMCP",
-                message=f"Fallo de conexion MCP al invocar '{tool_name}': {exc}",
+                message=f"Connection failure invoking '{tool_name}': {exc}",
                 retryable=True,
             ) from exc
 
-        if hasattr(response, "isError") and response.isError:
-            error_detail = str(response.content) if response.content else "Sin detalle"
+        if result.isError:
+            error_detail = self._extract_text(result) or "No detail"
             raise ProviderError(
                 provider="ConfluenceMCP",
-                message=f"Error en tool '{tool_name}': {error_detail}",
+                message=f"Tool '{tool_name}' returned error: {error_detail}",
                 retryable=False,
             )
 
-        return response
+        return result
 
-    def _extract_text(self, response: Any) -> str:
-        """Extrae el texto plano de la respuesta MCP de forma segura."""
-        if response.content and len(response.content) > 0:
-            return response.content[0].text
+    @staticmethod
+    def _extract_text(result: Any) -> str:
+        """Extract plain text from an MCP CallToolResult safely."""
+        if result.content and len(result.content) > 0:
+            first = result.content[0]
+            return getattr(first, "text", str(first))
         return ""
 
-    # ──────────────────────────────────────────────
-    #  Implementacion de DocsPort
-    # ──────────────────────────────────────────────
+    # ── DocsPort implementation ──
 
     async def get_project_context(self, service_name: str) -> str:
-        """Obtiene el contexto de un proyecto desde Confluence via MCP."""
-        logger.info(f"[ConfluenceMCP] Obteniendo contexto de proyecto para {service_name}")
-
-        response = await self._call_mcp(
+        logger.info("[ConfluenceMCP] Fetching project context for '%s'", service_name)
+        result = await self._call_mcp(
             "confluence_search",
-            arguments={
-                "query": service_name,
-            },
+            {"query": service_name},
         )
-        return self._extract_text(response)
+        return self._extract_text(result)
 
     async def get_architecture_context(self, project_context_id: str) -> str:
-        """Obtiene el contexto arquitectonico desde una pagina de Confluence via MCP."""
-        logger.info(
-            f"[ConfluenceMCP] Obteniendo contexto de arquitectura desde pagina {project_context_id}"
-        )
-
-        response = await self._call_mcp(
+        logger.info("[ConfluenceMCP] Fetching architecture page '%s'", project_context_id)
+        result = await self._call_mcp(
             "confluence_get_page",
-            arguments={
-                "page_id": project_context_id,
-            },
+            {"page_id": project_context_id},
         )
-
-        raw_text = self._extract_text(response)
-
+        raw = self._extract_text(result)
         try:
-            data = json.loads(raw_text)
-            return str(data.get("body", {}).get("storage", {}).get("value", raw_text))
+            data = json.loads(raw)
+            return str(data.get("body", {}).get("storage", {}).get("value", raw))
         except (json.JSONDecodeError, TypeError):
-            return raw_text
+            return raw

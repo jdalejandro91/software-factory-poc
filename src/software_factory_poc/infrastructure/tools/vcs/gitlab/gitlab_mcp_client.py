@@ -1,8 +1,11 @@
 import json
 import logging
+import os
 from typing import Any
 
-from mcp import ClientSession
+from mcp import McpError
+from mcp.client.session import ClientSession
+from mcp.client.stdio import StdioServerParameters, stdio_client
 
 from software_factory_poc.core.application.ports.common.exceptions.provider_error import (
     ProviderError,
@@ -11,110 +14,123 @@ from software_factory_poc.core.application.ports.vcs_port import VcsPort
 from software_factory_poc.core.domain.delivery.commit_intent import CommitIntent
 from software_factory_poc.core.domain.quality.code_review_report import CodeReviewReport
 from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
+from software_factory_poc.infrastructure.tools.vcs.gitlab.config.gitlab_settings import (
+    GitLabSettings,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class GitlabMcpClient(VcsPort):
-    """MCP client that abstracts the protocol and translates Domain intent."""
+    """MCP-stdio client that translates Domain intent into GitLab MCP tool calls."""
 
-    def __init__(self, mcp_session: ClientSession, project_id: str, redactor: RedactionService):
-        self.mcp_session = mcp_session
-        self.project_id = project_id
-        self.redactor = redactor
+    def __init__(self, settings: GitLabSettings, redactor: RedactionService) -> None:
+        self._settings = settings
+        self._redactor = redactor
+        self._project_id = settings.project_id
 
-    # ── Helper interno ──
+    # ── MCP connection internals ──
+
+    def _server_params(self) -> StdioServerParameters:
+        """Build StdioServerParameters with credentials injected into the subprocess env."""
+        env = {**os.environ}
+        if self._settings.token:
+            env["GITLAB_TOKEN"] = self._settings.token.get_secret_value()
+        env["GITLAB_BASE_URL"] = self._settings.base_url
+        return StdioServerParameters(
+            command=self._settings.mcp_gitlab_command,
+            args=self._settings.mcp_gitlab_args,
+            env=env,
+        )
 
     async def _call_mcp(self, tool_name: str, arguments: dict[str, Any]) -> Any:
-        """Ejecuta una herramienta MCP y traduce errores a ProviderError de dominio."""
+        """Open an stdio MCP session, invoke the tool, and translate errors."""
         try:
-            response = await self.mcp_session.call_tool(tool_name, arguments=arguments)
+            async with stdio_client(self._server_params()) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    result = await session.call_tool(tool_name, arguments=arguments)
+        except McpError as exc:
+            raise ProviderError(
+                provider="GitLabMCP",
+                message=f"MCP protocol error invoking '{tool_name}': {exc}",
+                retryable=True,
+            ) from exc
         except Exception as exc:
             raise ProviderError(
                 provider="GitLabMCP",
-                message=f"Fallo de conexion MCP al invocar '{tool_name}': {exc}",
+                message=f"Connection failure invoking '{tool_name}': {exc}",
                 retryable=True,
             ) from exc
 
-        if hasattr(response, "isError") and response.isError:
-            error_detail = str(response.content) if response.content else "Sin detalle"
+        if result.isError:
+            error_detail = self._extract_text(result) or "No detail"
             raise ProviderError(
                 provider="GitLabMCP",
-                message=f"Error en tool '{tool_name}': {error_detail}",
+                message=f"Tool '{tool_name}' returned error: {error_detail}",
                 retryable=False,
             )
 
-        return response
+        return result
 
-    def _extract_text(self, response: Any) -> str:
-        """Extrae el texto plano de la respuesta MCP de forma segura."""
-        if response.content and len(response.content) > 0:
-            first = response.content[0]
+    @staticmethod
+    def _extract_text(result: Any) -> str:
+        """Extract plain text from an MCP CallToolResult safely."""
+        if result.content and len(result.content) > 0:
+            first = result.content[0]
             return getattr(first, "text", str(first))
         return ""
 
     # ── Scaffolding Flow Operations ──
 
     async def validate_branch_existence(self, branch_name: str) -> bool:
-        """Verifica si una rama existe en el proyecto GitLab via MCP."""
-        logger.info(f"[GitLabMCP] Verificando existencia de rama '{branch_name}'")
+        logger.info("[GitLabMCP] Checking branch existence: '%s'", branch_name)
         try:
             await self._call_mcp(
                 "gitlab_get_branch",
-                arguments={
-                    "project_id": self.project_id,
-                    "branch": branch_name,
-                },
+                {"project_id": self._project_id, "branch": branch_name},
             )
             return True
         except ProviderError:
             return False
 
     async def create_branch(self, branch_name: str, ref: str = "main") -> str:
-        """Crea una rama en GitLab via MCP. Retorna la URL de la rama."""
-        logger.info(f"[GitLabMCP] Creando rama '{branch_name}' desde '{ref}'")
-        response = await self._call_mcp(
+        logger.info("[GitLabMCP] Creating branch '%s' from '%s'", branch_name, ref)
+        result = await self._call_mcp(
             "gitlab_create_branch",
-            arguments={
-                "project_id": self.project_id,
-                "branch": branch_name,
-                "ref": ref,
-            },
+            {"project_id": self._project_id, "branch": branch_name, "ref": ref},
         )
-        raw_text = self._extract_text(response)
+        raw = self._extract_text(result)
         try:
-            data = json.loads(raw_text)
-            return data.get("web_url", "")
+            return json.loads(raw).get("web_url", "")
         except (json.JSONDecodeError, TypeError):
-            return raw_text
+            return raw
 
     async def create_merge_request(
         self, source_branch: str, target_branch: str, title: str, description: str
     ) -> str:
-        """Crea un Merge Request en GitLab via MCP. Retorna la URL del MR."""
-        logger.info(f"[GitLabMCP] Creando MR: '{source_branch}' -> '{target_branch}'")
-        response = await self._call_mcp(
+        logger.info("[GitLabMCP] Creating MR: '%s' → '%s'", source_branch, target_branch)
+        result = await self._call_mcp(
             "gitlab_create_merge_request",
-            arguments={
-                "project_id": self.project_id,
+            {
+                "project_id": self._project_id,
                 "source_branch": source_branch,
                 "target_branch": target_branch,
                 "title": title,
                 "description": description,
             },
         )
-        raw_text = self._extract_text(response)
+        raw = self._extract_text(result)
         try:
-            data = json.loads(raw_text)
-            return data.get("web_url", "")
+            return json.loads(raw).get("web_url", "")
         except (json.JSONDecodeError, TypeError):
-            return raw_text
+            return raw
 
     # ── Commit Operation ──
 
     async def commit_changes(self, intent: CommitIntent) -> str:
         if intent.is_empty():
-            raise ValueError("El commit no contiene archivos.")
+            raise ValueError("Commit contains no files.")
 
         actions = [
             {
@@ -125,50 +141,49 @@ class GitlabMcpClient(VcsPort):
             for f in intent.files
         ]
 
-        mcp_args = {
-            "project_id": self.project_id,
-            "branch": intent.branch.value,
-            "commit_message": intent.message,
-            "actions": actions,
-        }
-
-        response = await self.mcp_session.call_tool("gitlab_create_commit", arguments=mcp_args)
-        if hasattr(response, "isError") and response.isError:
-            raise RuntimeError(f"Error MCP GitLab: {response.content}")
-
-        return json.loads(self._extract_text(response)).get("commit_hash")
-
-    async def get_merge_request_diff(self, mr_iid: str) -> str:
-        """Extrae el diff proceduralmente via herramienta MCP."""
-        response = await self.mcp_session.call_tool(
-            "gitlab_get_merge_request_changes",
-            arguments={"project_id": self.project_id, "merge_request_iid": str(mr_iid)},
+        result = await self._call_mcp(
+            "gitlab_create_commit",
+            {
+                "project_id": self._project_id,
+                "branch": intent.branch.value,
+                "commit_message": intent.message,
+                "actions": actions,
+            },
         )
-        if hasattr(response, "isError") and response.isError:
-            raise RuntimeError(f"Error MCP GitLab Diff: {response.content}")
-        return self._extract_text(response)
+        return json.loads(self._extract_text(result)).get("commit_hash", "")
 
-    async def publish_review(self, mr_iid: str, report: CodeReviewReport) -> None:
-        """Publica el analisis usando herramientas MCP de GitLab."""
-        status_icon = "APROBADO" if report.is_approved else "REQUIERE CAMBIOS"
-        main_note = f"### BrahMAS Code Review: {status_icon}\n\n{report.summary}"
+    # ── Code Review Flow Operations ──
 
-        await self.mcp_session.call_tool(
+    async def get_merge_request_diff(self, mr_id: str) -> str:
+        result = await self._call_mcp(
+            "gitlab_get_merge_request_changes",
+            {"project_id": self._project_id, "merge_request_iid": str(mr_id)},
+        )
+        return self._extract_text(result)
+
+    async def publish_review(self, mr_id: str, report: CodeReviewReport) -> None:
+        status_label = "APPROVED" if report.is_approved else "CHANGES REQUESTED"
+        main_note = f"### BrahMAS Code Review: {status_label}\n\n{report.summary}"
+
+        await self._call_mcp(
             "gitlab_create_merge_request_note",
-            arguments={
-                "project_id": self.project_id,
-                "merge_request_iid": str(mr_iid),
+            {
+                "project_id": self._project_id,
+                "merge_request_iid": str(mr_id),
                 "body": main_note,
             },
         )
 
         for issue in report.comments:
-            body = f"**[{issue.severity.value}]** {issue.description}\n\n*Sugerencia:* `{issue.suggestion}`"
-            await self.mcp_session.call_tool(
+            body = (
+                f"**[{issue.severity.value}]** {issue.description}"
+                f"\n\n*Suggestion:* `{issue.suggestion}`"
+            )
+            await self._call_mcp(
                 "gitlab_create_merge_request_discussion",
-                arguments={
-                    "project_id": self.project_id,
-                    "merge_request_iid": str(mr_iid),
+                {
+                    "project_id": self._project_id,
+                    "merge_request_iid": str(mr_id),
                     "file_path": issue.file_path,
                     "line": issue.line_number if issue.line_number else 1,
                     "body": body,
@@ -176,13 +191,19 @@ class GitlabMcpClient(VcsPort):
             )
 
         if report.is_approved:
-            await self.mcp_session.call_tool(
+            await self._call_mcp(
                 "gitlab_approve_merge_request",
-                arguments={"project_id": self.project_id, "merge_request_iid": str(mr_iid)},
+                {"project_id": self._project_id, "merge_request_iid": str(mr_id)},
             )
 
+    # ── Agentic Operations ──
+
     async def get_mcp_tools(self) -> list[dict[str, Any]]:
-        response = await self.mcp_session.list_tools()
+        async with stdio_client(self._server_params()) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                response = await session.list_tools()
+
         return [
             {
                 "name": t.name.replace("gitlab_", "vcs_"),
@@ -196,11 +217,8 @@ class GitlabMcpClient(VcsPort):
     async def execute_tool(self, tool_name: str, arguments: dict) -> Any:
         real_tool_name = tool_name.replace("vcs_", "gitlab_")
         if "project_id" not in arguments:
-            arguments["project_id"] = self.project_id
+            arguments["project_id"] = self._project_id
 
-        safe_args = self.redactor.sanitize(arguments)
-        response = await self.mcp_session.call_tool(real_tool_name, arguments=safe_args)
-
-        if hasattr(response, "isError") and response.isError:
-            raise RuntimeError(response.content)
-        return self._extract_text(response)
+        safe_args = self._redactor.sanitize(arguments)
+        result = await self._call_mcp(real_tool_name, safe_args)
+        return self._extract_text(result)

@@ -1,5 +1,4 @@
 import logging
-import os
 
 from software_factory_poc.core.application.agents.code_reviewer.code_reviewer_agent import (
     CodeReviewerAgent,
@@ -18,9 +17,6 @@ from software_factory_poc.infrastructure.tools.docs.confluence.confluence_mcp_cl
 )
 from software_factory_poc.infrastructure.tools.llm.litellm_brain_adapter import LiteLlmBrainAdapter
 from software_factory_poc.infrastructure.tools.tracker.jira.jira_mcp_client import JiraMcpClient
-from software_factory_poc.infrastructure.tools.tracker.jira.mappers.jira_description_mapper import (
-    JiraDescriptionMapper,
-)
 from software_factory_poc.infrastructure.tools.vcs.gitlab.gitlab_mcp_client import GitlabMcpClient
 
 logger = logging.getLogger(__name__)
@@ -29,7 +25,7 @@ logger = logging.getLogger(__name__)
 class McpConnectionManager:
     """Gestiona conexiones stdio a los servidores MCP."""
 
-    async def get_session(self, server_name: str):
+    async def get_session(self, _server_name: str):
         pass
 
 
@@ -45,26 +41,14 @@ class ProviderResolver:
 
     async def _build_drivers(self, mcp_manager: McpConnectionManager):
         """Factory interno que ensambla los 4 drivers MCP del Tooling Plane."""
-        # 1. VCS (MCP GitLab)
-        session_vcs = await mcp_manager.get_session("mcp_server_gitlab")
-        project_id = os.getenv("GITLAB_PROJECT_ID", "default_project")
-        vcs = GitlabMcpClient(session_vcs, project_id, self.redactor)
+        # 1. VCS (MCP GitLab — self-managed stdio connection)
+        vcs = GitlabMcpClient(settings=self.app_config.gitlab, redactor=self.redactor)
 
-        # 2. Tracker (MCP Jira)
-        session_jira = await mcp_manager.get_session("mcp_server_jira")
-        tracker = JiraMcpClient(
-            mcp_session=session_jira,
-            desc_mapper=JiraDescriptionMapper(),
-            transition_in_review=self.app_config.jira.transition_in_review,
-            redactor=self.redactor,
-        )
+        # 2. Tracker (MCP Jira — self-managed stdio connection)
+        tracker = JiraMcpClient(settings=self.app_config.jira, redactor=self.redactor)
 
-        # 3. Docs (MCP Confluence)
-        session_confluence = await mcp_manager.get_session("mcp_server_confluence")
-        docs = ConfluenceMcpClient(
-            mcp_session=session_confluence,
-            redactor=self.redactor,
-        )
+        # 3. Docs (MCP Confluence — self-managed stdio connection)
+        docs = ConfluenceMcpClient(settings=self.app_config.confluence, redactor=self.redactor)
 
         # 4. Brain (LiteLLM)
         brain = LiteLlmBrainAdapter(self.app_config.llm)
