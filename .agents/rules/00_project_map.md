@@ -6,7 +6,7 @@
 Dependencies ONLY point inwards: `infrastructure` -> `core/application` -> `core/domain`.
 
 ```text
-software_factory/                              # Raíz del proyecto. Agrupa todas las capas bajo un mismo bounded context.
+software_factory_poc/                              # Raíz del proyecto. Agrupa todas las capas bajo un mismo bounded context.
 ├── core/                                      # 🟢 NÚCLEO LIMPIO: dominio + aplicación. No depende de frameworks ni I/O concreto.
 │   ├── domain/                                # MODELO DEL NEGOCIO: invariantes, VOs, entidades y agregados. Sin APIs/DBs.
 │   │   ├── mission/                           # Subdominio de intención: Mission (AR), Intent/Constraints/ContextRefs/Status.
@@ -21,19 +21,25 @@ software_factory/                              # Raíz del proyecto. Agrupa toda
 │       ├── orchestration/                     # Servicios top-level: crean Missions, inician/reanudan Runs, aplican macro-policies.
 │       ├── agents/                            # AGENTIC FLOW: Roles/orquestadores. Deciden skills, controlan flujo, act loops.
 │       ├── skills/                            # DETERMINISTIC FLOW: Unidades reutilizables que producen VOs usando puertos.
-│       │   ├── scaffold/                      # Plan/generate/apply.
-│       │   └── review/                        # Fetch diff/analyze/publish.
+│       │   ├── scaffold/                      # Habilidades del agente de scaffolding.
+│       │   └── review/                        # Habilidades del agente de revisión de código
+│       ├── workflows/                         # DETERMINISTIC FLOW: Flujos de trabajo de macro-policies.
+│       │   ├── scaffold/                      # Flujo del agente de scaffolding.
+│       │   └── review/                        # Flujo del agente de revisión de código
 │       ├── policies/                          # Políticas aplicadas: quality gates, budgets, approvals, naming.
-│       └── tools/                             # INTERFACES HACIA AFUERA: LLM, VCS, tracker, docs
+│       ├── ports/                             # Adaptadores para integraciones externas (no son herramientas utilizables).
+│       └── tools/                             # INTERFACES DE HERRAMIENTAS HACIA AFUERA: LLM, VCS, tracker, docs.
 │
 └── infrastructure/                            # 🔴 MUNDO "SUCIO": implementaciones concretas, frameworks, I/O, DB, HTTP, MCP.
     ├── entrypoints/                           # DRIVERS INBOUND: API/CLI. Reciben requests, validan, y llaman a aplicación.
     │   ├── api/                               # HTTP/webhooks/controllers: traduce request→input, invoca MissionService.
     │   └── mcp_server/                        # MCP Server: Expone endpoints para clientes MCP.
     │
+    ├── adapters/                              # TOOLS OUTBOUND: Integraciones para side-effects (LLM/VCS/Tracker/Docs/CI).
+    │   └── llm/                               # Providers LLM (LiteLLM) + validación schema, retries.
+    │       └── config/                        # litellm config files.
+    │
     ├── tools/                                 # TOOLS OUTBOUND: Integraciones para side-effects (LLM/VCS/Tracker/Docs/CI).
-    │   ├── llm/                               # Providers LLM (LiteLLM) + validación schema, retries.
-    │   │   └── config/                        # litellm config files.
     │   ├── vcs/                               # MCP Clients (GitLab/Bitbucket/GitHub). Enrutamiento dinámico (Coexistencia).
     │   │   └── gitlab/                        # GitLab tool driver.
     │   │       └── config/                    # vsc config files.

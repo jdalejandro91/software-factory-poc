@@ -4,24 +4,30 @@ from typing import Any
 from software_factory_poc.core.application.agents.code_reviewer.code_reviewer_agent import (
     CodeReviewerAgent,
 )
-from software_factory_poc.core.application.agents.code_reviewer.prompt_templates.code_review_prompt_builder import (
-    CodeReviewPromptBuilder,
-)
 from software_factory_poc.core.application.agents.common.agent_config import (
     CodeReviewerAgentConfig,
     ScaffolderAgentConfig,
-)
-from software_factory_poc.core.application.agents.scaffolder.prompt_templates.scaffolding_prompt_builder import (
-    ScaffoldingPromptBuilder,
 )
 from software_factory_poc.core.application.agents.scaffolder.scaffolder_agent import ScaffolderAgent
 from software_factory_poc.core.application.skills.review.analyze_code_review_skill import (
     AnalyzeCodeReviewSkill,
 )
+from software_factory_poc.core.application.skills.review.prompt_templates.code_review_prompt_builder import (
+    CodeReviewPromptBuilder,
+)
 from software_factory_poc.core.application.skills.scaffold.generate_scaffold_plan_skill import (
     GenerateScaffoldPlanSkill,
 )
+from software_factory_poc.core.application.skills.scaffold.prompt_templates.scaffolding_prompt_builder import (
+    ScaffoldingPromptBuilder,
+)
 from software_factory_poc.core.application.skills.skill import BaseSkill
+from software_factory_poc.core.application.workflows.review.code_review_deterministic_workflow import (
+    CodeReviewDeterministicWorkflow,
+)
+from software_factory_poc.core.application.workflows.scaffold.scaffolding_deterministic_workflow import (
+    ScaffoldingDeterministicWorkflow,
+)
 from software_factory_poc.core.domain.shared.base_tool import BaseTool
 from software_factory_poc.core.domain.shared.skill_type import SkillType
 from software_factory_poc.core.domain.shared.tool_type import ToolType
@@ -66,33 +72,40 @@ class ProviderResolver:
         vcs: GitlabMcpClient,
         tracker: JiraMcpClient,
         docs: ConfluenceMcpClient,
-        brain: LiteLlmBrainAdapter,
     ) -> dict[ToolType, BaseTool]:
-        """Build the shared tools registry."""
+        """Build the peripheral tools registry (Brain is NOT a tool)."""
         return {
             ToolType.VCS: vcs,
             ToolType.TRACKER: tracker,
             ToolType.DOCS: docs,
-            ToolType.BRAIN: brain,
         }
 
     async def create_scaffolder_agent(self, mcp_manager: McpConnectionManager) -> ScaffolderAgent:
         """Ensambla el ScaffolderAgent inyectando los 4 drivers MCP + Skills."""
         vcs, tracker, docs, brain = await self._build_drivers(mcp_manager)
-        tools = self._build_tools(vcs, tracker, docs, brain)
+        tools = self._build_tools(vcs, tracker, docs)
+        priority_models = self.app_config.llm.scaffolding_llm_model_priority
 
+        generate_plan = GenerateScaffoldPlanSkill(
+            brain=brain, prompt_builder=ScaffoldingPromptBuilder()
+        )
         skills: dict[SkillType, BaseSkill[Any, Any]] = {
-            SkillType.GENERATE_SCAFFOLD_PLAN: GenerateScaffoldPlanSkill(
-                brain=brain, prompt_builder=ScaffoldingPromptBuilder()
-            ),
+            SkillType.GENERATE_SCAFFOLD_PLAN: generate_plan,
         }
+        deterministic_workflow = ScaffoldingDeterministicWorkflow(
+            vcs=vcs,
+            tracker=tracker,
+            docs=docs,
+            generate_plan=generate_plan,
+            priority_models=priority_models,
+        )
 
         return ScaffolderAgent(
-            config=ScaffolderAgentConfig(
-                priority_models=self.app_config.llm.scaffolding_llm_model_priority,
-            ),
+            config=ScaffolderAgentConfig(priority_models=priority_models),
+            brain=brain,
             tools=tools,
             skills=skills,
+            deterministic_workflow=deterministic_workflow,
         )
 
     async def create_code_reviewer_agent(
@@ -100,18 +113,25 @@ class ProviderResolver:
     ) -> CodeReviewerAgent:
         """Ensambla el CodeReviewerAgent inyectando los 4 drivers MCP + Skills."""
         vcs, tracker, docs, brain = await self._build_drivers(mcp_manager)
-        tools = self._build_tools(vcs, tracker, docs, brain)
+        tools = self._build_tools(vcs, tracker, docs)
+        priority_models = self.app_config.llm.code_review_llm_model_priority
 
+        analyze = AnalyzeCodeReviewSkill(brain=brain, prompt_builder=CodeReviewPromptBuilder())
         skills: dict[SkillType, BaseSkill[Any, Any]] = {
-            SkillType.ANALYZE_CODE_REVIEW: AnalyzeCodeReviewSkill(
-                brain=brain, prompt_builder=CodeReviewPromptBuilder()
-            ),
+            SkillType.ANALYZE_CODE_REVIEW: analyze,
         }
+        deterministic_workflow = CodeReviewDeterministicWorkflow(
+            vcs=vcs,
+            tracker=tracker,
+            docs=docs,
+            analyze=analyze,
+            priority_models=priority_models,
+        )
 
         return CodeReviewerAgent(
-            config=CodeReviewerAgentConfig(
-                priority_models=self.app_config.llm.code_review_llm_model_priority,
-            ),
+            config=CodeReviewerAgentConfig(priority_models=priority_models),
+            brain=brain,
             tools=tools,
             skills=skills,
+            deterministic_workflow=deterministic_workflow,
         )

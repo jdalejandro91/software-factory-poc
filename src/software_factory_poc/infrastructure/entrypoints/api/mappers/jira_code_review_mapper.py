@@ -1,6 +1,6 @@
 import re
 
-from software_factory_poc.core.application.agents.code_reviewer.prompt_templates import (
+from software_factory_poc.core.application.skills.review.prompt_templates import (
     CodeReviewOrder,
 )
 from software_factory_poc.infrastructure.entrypoints.api.dtos.jira_webhook_dto import (

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from software_factory_poc.core.application.agents.common.agent_config import AgentConfig
+from software_factory_poc.core.application.ports import BrainPort
 from software_factory_poc.core.application.skills.skill import BaseSkill
 from software_factory_poc.core.domain.mission import Mission
 from software_factory_poc.core.domain.shared.base_tool import BaseTool
@@ -25,11 +26,13 @@ class BaseAgent(ABC):
         self,
         identity: AgentIdentity,
         config: AgentConfig,
+        brain: BrainPort,
         tools: Mapping[ToolType, BaseTool],
         skills: Mapping[SkillType, BaseSkill[Any, Any]],
     ):
         self._identity = identity
         self._config = config
+        self._brain = brain
         self._tools = tools
         self._skills = skills
         self._execution_mode = config.execution_mode

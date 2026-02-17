@@ -1,4 +1,4 @@
-"""Unit tests — CodeReviewerAgent dual-flow (zero I/O, all Skills mocked)."""
+"""Unit tests — CodeReviewerAgent dual-flow delegation (zero I/O, workflow mocked)."""
 
 from unittest.mock import AsyncMock
 
@@ -14,7 +14,6 @@ from software_factory_poc.core.application.agents.common.agent_execution_mode im
     AgentExecutionMode,
 )
 from software_factory_poc.core.domain.mission import Mission, TaskDescription
-from software_factory_poc.core.domain.quality import CodeReviewReport
 from software_factory_poc.core.domain.shared.skill_type import SkillType
 from software_factory_poc.core.domain.shared.tool_type import ToolType
 
@@ -27,12 +26,16 @@ def agent_config() -> CodeReviewerAgentConfig:
 
 
 @pytest.fixture()
+def mock_brain() -> AsyncMock:
+    return AsyncMock()
+
+
+@pytest.fixture()
 def mock_tools() -> dict[ToolType, AsyncMock]:
     return {
         ToolType.VCS: AsyncMock(),
         ToolType.TRACKER: AsyncMock(),
         ToolType.DOCS: AsyncMock(),
-        ToolType.BRAIN: AsyncMock(),
     }
 
 
@@ -42,12 +45,25 @@ def mock_skills() -> dict[SkillType, AsyncMock]:
 
 
 @pytest.fixture()
+def mock_workflow() -> AsyncMock:
+    return AsyncMock()
+
+
+@pytest.fixture()
 def agent(
     agent_config: CodeReviewerAgentConfig,
+    mock_brain: AsyncMock,
     mock_tools: dict[ToolType, AsyncMock],
     mock_skills: dict[SkillType, AsyncMock],
+    mock_workflow: AsyncMock,
 ) -> CodeReviewerAgent:
-    return CodeReviewerAgent(config=agent_config, tools=mock_tools, skills=mock_skills)
+    return CodeReviewerAgent(
+        config=agent_config,
+        brain=mock_brain,
+        tools=mock_tools,
+        skills=mock_skills,
+        deterministic_workflow=mock_workflow,
+    )
 
 
 @pytest.fixture()
@@ -72,163 +88,36 @@ def mission() -> Mission:
     )
 
 
-@pytest.fixture()
-def approved_report() -> CodeReviewReport:
-    return CodeReviewReport(is_approved=True, summary="LGTM", comments=[])
-
-
 # ══════════════════════════════════════════════════════════════════════
-# Step Methods (Deterministic Pipeline building blocks)
+# Deterministic Delegation
 # ══════════════════════════════════════════════════════════════════════
 
 
-class TestStepMethods:
-    """Verify the individual step methods that compose the deterministic pipeline."""
+class TestDeterministicDelegation:
+    """Verify the agent delegates deterministic mode to the workflow."""
 
     @pytest.mark.asyncio
-    async def test_step_1_parse_mission_extracts_yaml(
-        self, agent: CodeReviewerAgent, mission: Mission
-    ) -> None:
-        parsed = await agent._step_1_parse_mission(mission)
-
-        assert parsed["mr_url"] == "https://gitlab.example.com/merge_requests/55"
-        assert parsed["project_id"] == "42"
-        assert parsed["branch"] == "feature/proj-200-auth"
-        assert parsed["mr_iid"] == "55"
-
-    @pytest.mark.asyncio
-    async def test_step_1_raises_on_missing_params(self, agent: CodeReviewerAgent) -> None:
-        bad_mission = Mission(
-            id="1",
-            key="X-1",
-            summary="s",
-            status="s",
-            project_key="X",
-            issue_type="CR",
-            description=TaskDescription(raw_content="", config={}),
-        )
-        with pytest.raises(ValueError, match="Missing code_review_params"):
-            await agent._step_1_parse_mission(bad_mission)
-
-    @pytest.mark.asyncio
-    async def test_step_2_report_start_comments_to_tracker(
+    async def test_deterministic_mode_delegates_to_workflow(
         self,
         agent: CodeReviewerAgent,
-        mock_tools: dict[ToolType, AsyncMock],
+        mock_workflow: AsyncMock,
         mission: Mission,
     ) -> None:
-        await agent._step_2_report_start(mission)
-
-        mock_tools[ToolType.TRACKER].add_comment.assert_awaited_once()
-        assert "PROJ-200" in mock_tools[ToolType.TRACKER].add_comment.call_args[0][0]
-
-    @pytest.mark.asyncio
-    async def test_step_3_validate_existence_passes_when_branch_exists(
-        self,
-        agent: CodeReviewerAgent,
-        mock_tools: dict[ToolType, AsyncMock],
-    ) -> None:
-        mock_tools[ToolType.VCS].validate_branch_existence.return_value = True
-
-        await agent._step_3_validate_existence("feature/x", "https://gitlab.com/mr/1")
-        mock_tools[ToolType.VCS].validate_branch_existence.assert_awaited_once_with("feature/x")
-
-    @pytest.mark.asyncio
-    async def test_step_3_validate_existence_raises_when_missing(
-        self,
-        agent: CodeReviewerAgent,
-        mock_tools: dict[ToolType, AsyncMock],
-    ) -> None:
-        mock_tools[ToolType.VCS].validate_branch_existence.return_value = False
-
-        with pytest.raises(ValueError, match="not found"):
-            await agent._step_3_validate_existence("feature/gone", "https://gitlab.com/mr/1")
-
-    @pytest.mark.asyncio
-    async def test_step_3_validate_existence_raises_on_empty_branch(
-        self, agent: CodeReviewerAgent
-    ) -> None:
-        with pytest.raises(ValueError, match="empty"):
-            await agent._step_3_validate_existence("", "https://gitlab.com/mr/1")
-
-    @pytest.mark.asyncio
-    async def test_extract_mr_iid_from_url(self) -> None:
-        assert CodeReviewerAgent._extract_mr_iid("https://gitlab.com/merge_requests/42") == "42"
-
-    @pytest.mark.asyncio
-    async def test_extract_mr_iid_from_plain_number(self) -> None:
-        assert CodeReviewerAgent._extract_mr_iid("99") == "99"
-
-    @pytest.mark.asyncio
-    async def test_extract_mr_iid_raises_on_invalid(self) -> None:
-        with pytest.raises(ValueError, match="Cannot extract"):
-            CodeReviewerAgent._extract_mr_iid("not-a-url")
-
-
-# ══════════════════════════════════════════════════════════════════════
-# Deterministic Pipeline (end-to-end)
-# ══════════════════════════════════════════════════════════════════════
-
-
-class TestDeterministicPipeline:
-    """Verify the agent orchestrates all steps in order."""
-
-    @pytest.mark.asyncio
-    async def test_full_pipeline_calls_all_tools_in_order(
-        self,
-        agent: CodeReviewerAgent,
-        mock_tools: dict[ToolType, AsyncMock],
-        mock_skills: dict[SkillType, AsyncMock],
-        mission: Mission,
-        approved_report: CodeReviewReport,
-    ) -> None:
-        mock_tools[ToolType.VCS].validate_branch_existence.return_value = True
-        mock_tools[ToolType.VCS].get_original_branch_code.return_value = []
-        mock_tools[ToolType.VCS].get_updated_code_diff.return_value = "diff --git ..."
-        mock_tools[ToolType.DOCS].get_architecture_context.return_value = "conventions"
-        mock_skills[SkillType.ANALYZE_CODE_REVIEW].execute.return_value = approved_report
-
         await agent.run(mission)
 
-        mock_tools[ToolType.TRACKER].add_comment.assert_awaited()
-        mock_tools[ToolType.VCS].validate_branch_existence.assert_awaited_once_with(
-            "feature/proj-200-auth"
-        )
-        mock_tools[ToolType.VCS].get_original_branch_code.assert_awaited_once_with(
-            "42", "feature/proj-200-auth"
-        )
-        mock_tools[ToolType.VCS].get_updated_code_diff.assert_awaited_once_with("55")
-        mock_tools[ToolType.DOCS].get_architecture_context.assert_awaited_once()
-        mock_skills[SkillType.ANALYZE_CODE_REVIEW].execute.assert_awaited_once()
-        mock_tools[ToolType.VCS].publish_review.assert_awaited_once_with("55", approved_report)
-        mock_tools[ToolType.TRACKER].update_status.assert_awaited_once_with("PROJ-200", "Done")
+        mock_workflow.execute.assert_awaited_once_with(mission)
 
     @pytest.mark.asyncio
-    async def test_branch_validation_failure_propagates(
+    async def test_workflow_error_propagates(
         self,
         agent: CodeReviewerAgent,
-        mock_tools: dict[ToolType, AsyncMock],
+        mock_workflow: AsyncMock,
         mission: Mission,
     ) -> None:
-        mock_tools[ToolType.VCS].validate_branch_existence.return_value = False
+        mock_workflow.execute.side_effect = RuntimeError("workflow failed")
 
-        with pytest.raises(ValueError, match="not found"):
+        with pytest.raises(RuntimeError, match="workflow failed"):
             await agent.run(mission)
-
-    @pytest.mark.asyncio
-    async def test_error_handler_posts_comment_to_tracker(
-        self,
-        agent: CodeReviewerAgent,
-        mock_tools: dict[ToolType, AsyncMock],
-        mission: Mission,
-    ) -> None:
-        mock_tools[ToolType.VCS].validate_branch_existence.side_effect = RuntimeError("VCS down")
-
-        with pytest.raises(RuntimeError, match="VCS down"):
-            await agent.run(mission)
-
-        error_comment_calls = mock_tools[ToolType.TRACKER].add_comment.call_args_list
-        assert any("VCS down" in str(c) for c in error_comment_calls)
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -241,13 +130,23 @@ class TestAgenticRouting:
 
     @pytest.mark.asyncio
     async def test_react_mode_delegates_to_loop_runner(
-        self, mock_tools: dict[ToolType, AsyncMock], mock_skills: dict[SkillType, AsyncMock]
+        self,
+        mock_brain: AsyncMock,
+        mock_tools: dict[ToolType, AsyncMock],
+        mock_skills: dict[SkillType, AsyncMock],
     ) -> None:
         config = CodeReviewerAgentConfig(
             priority_models=["openai:gpt-4o"],
             execution_mode=AgentExecutionMode.REACT_LOOP,
         )
-        agent = CodeReviewerAgent(config=config, tools=mock_tools, skills=mock_skills)
+        mock_workflow = AsyncMock()
+        agent = CodeReviewerAgent(
+            config=config,
+            brain=mock_brain,
+            tools=mock_tools,
+            skills=mock_skills,
+            deterministic_workflow=mock_workflow,
+        )
         mission = Mission(
             id="20001",
             key="PROJ-200",
@@ -279,14 +178,24 @@ class TestAgenticRouting:
         assert call_kwargs["tools_registry"] is agent._tools
 
     @pytest.mark.asyncio
-    async def test_react_mode_does_not_call_deterministic_skills(
-        self, mock_tools: dict[ToolType, AsyncMock], mock_skills: dict[SkillType, AsyncMock]
+    async def test_react_mode_does_not_call_workflow(
+        self,
+        mock_brain: AsyncMock,
+        mock_tools: dict[ToolType, AsyncMock],
+        mock_skills: dict[SkillType, AsyncMock],
     ) -> None:
         config = CodeReviewerAgentConfig(
             priority_models=["openai:gpt-4o"],
             execution_mode=AgentExecutionMode.REACT_LOOP,
         )
-        agent = CodeReviewerAgent(config=config, tools=mock_tools, skills=mock_skills)
+        mock_workflow = AsyncMock()
+        agent = CodeReviewerAgent(
+            config=config,
+            brain=mock_brain,
+            tools=mock_tools,
+            skills=mock_skills,
+            deterministic_workflow=mock_workflow,
+        )
         mission = Mission(
             id="20001",
             key="PROJ-200",
@@ -312,6 +221,4 @@ class TestAgenticRouting:
 
         await agent.run(mission)
 
-        mock_skills[SkillType.ANALYZE_CODE_REVIEW].execute.assert_not_awaited()
-        mock_tools[ToolType.VCS].publish_review.assert_not_awaited()
-        mock_tools[ToolType.TRACKER].update_status.assert_not_awaited()
+        mock_workflow.execute.assert_not_awaited()

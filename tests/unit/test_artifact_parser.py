@@ -1,6 +1,6 @@
 import pytest
 
-from software_factory_poc.core.application.agents.scaffolder.prompt_templates.scaffolding_prompt_builder import (
+from software_factory_poc.core.application.skills.scaffold.prompt_templates.scaffolding_prompt_builder import (
     ScaffoldingPromptBuilder,
 )
 from software_factory_poc.core.domain.mission import Mission, TaskDescription

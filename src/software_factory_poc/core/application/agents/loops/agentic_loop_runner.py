@@ -3,7 +3,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from software_factory_poc.core.application.policies.tool_safety_policy import ToolSafetyPolicy
-from software_factory_poc.core.application.tools import BrainTool
+from software_factory_poc.core.application.ports import BrainPort
 from software_factory_poc.core.domain.mission import Mission
 from software_factory_poc.core.domain.shared.base_tool import BaseTool
 from software_factory_poc.core.domain.shared.tool_type import ToolType
@@ -14,12 +14,12 @@ logger = logging.getLogger(__name__)
 class AgenticLoopRunner:
     """Pure-Python ReAct loop engine.
 
-    Drives a Think -> Act -> Observe cycle using ``BrainTool.generate_with_tools``
+    Drives a Think -> Act -> Observe cycle using ``BrainPort.generate_with_tools``
     and an auto-discovered tool registry.  A ``ToolSafetyPolicy``
     gates which tools are exposed to the LLM.
     """
 
-    def __init__(self, brain: BrainTool, policy: ToolSafetyPolicy) -> None:
+    def __init__(self, brain: BrainPort, policy: ToolSafetyPolicy) -> None:
         self._brain = brain
         self._policy = policy
 
@@ -126,8 +126,15 @@ class AgenticLoopRunner:
         try:
             tool = name_to_tool.get(tool_name)
             if tool is None:
+                logger.warning(
+                    "[AgenticLoop] Unknown tool requested: '%s' (available: %s)",
+                    tool_name,
+                    list(name_to_tool.keys()),
+                )
                 return f"Error: unknown tool '{tool_name}'"
             return str(await tool.execute_tool(tool_name, tool_args))
         except Exception as exc:
-            logger.warning("[AgenticLoop] Tool '%s' failed: %s", tool_name, exc)
-            return f"Error: Tool execution failed — {exc}"
+            logger.exception(
+                "[AgenticLoop] Tool '%s' failed: %s (args=%s)", tool_name, exc, tool_args
+            )
+            return f"Error: Tool execution failed — {type(exc).__name__}: {exc}"

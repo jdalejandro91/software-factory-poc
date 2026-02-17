@@ -4,7 +4,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from software_factory_poc.core.application.agents.scaffolder.contracts.scaffolder_contracts import (
+from software_factory_poc.core.application.exceptions import SkillExecutionError
+from software_factory_poc.core.application.skills.scaffold.contracts.scaffolder_contracts import (
     FileSchemaDTO,
     ScaffoldingResponseSchema,
 )
@@ -67,7 +68,7 @@ class TestGenerateScaffoldPlanSkill:
             priority_models=["openai:gpt-4o"],
         )
 
-    async def test_raises_value_error_when_zero_files(self) -> None:
+    async def test_raises_skill_execution_error_when_zero_files(self) -> None:
         brain = AsyncMock()
         prompt_builder = MagicMock()
         prompt_builder.build_prompt_from_mission.return_value = "prompt"
@@ -75,7 +76,23 @@ class TestGenerateScaffoldPlanSkill:
 
         skill = GenerateScaffoldPlanSkill(brain=brain, prompt_builder=prompt_builder)
 
-        with pytest.raises(ValueError, match="0 archivos"):
+        with pytest.raises(SkillExecutionError, match="0 files"):
+            await skill.execute(
+                GenerateScaffoldPlanInput(
+                    mission=_make_mission(),
+                    arch_context="arch",
+                    priority_models=["openai:gpt-4o"],
+                )
+            )
+
+    async def test_wraps_unexpected_errors_in_skill_execution_error(self) -> None:
+        brain = AsyncMock()
+        prompt_builder = MagicMock()
+        prompt_builder.build_prompt_from_mission.side_effect = RuntimeError("prompt build failed")
+
+        skill = GenerateScaffoldPlanSkill(brain=brain, prompt_builder=prompt_builder)
+
+        with pytest.raises(SkillExecutionError, match="prompt build failed"):
             await skill.execute(
                 GenerateScaffoldPlanInput(
                     mission=_make_mission(),

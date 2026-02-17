@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from pydantic import BaseModel, SecretStr
 
-from software_factory_poc.core.application.tools import BrainTool
+from software_factory_poc.core.application.ports import BrainPort
 from software_factory_poc.core.application.tools.common.exceptions import ProviderError
 from software_factory_poc.infrastructure.tools.llm.config.llm_settings import LlmSettings
 from software_factory_poc.infrastructure.tools.llm.litellm_brain_adapter import (
@@ -387,4 +387,4 @@ class TestApiKeyInjection:
 
     def test_adapter_is_brain_port(self, settings: LlmSettings) -> None:
         adapter = LiteLlmBrainAdapter(settings)
-        assert isinstance(adapter, BrainTool)
+        assert isinstance(adapter, BrainPort)

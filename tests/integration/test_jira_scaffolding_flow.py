@@ -5,13 +5,16 @@ import pytest
 from software_factory_poc.core.application.agents.common.agent_config import (
     ScaffolderAgentConfig,
 )
-from software_factory_poc.core.application.agents.scaffolder.contracts.scaffolder_contracts import (
+from software_factory_poc.core.application.agents.scaffolder.scaffolder_agent import ScaffolderAgent
+from software_factory_poc.core.application.skills.scaffold.contracts.scaffolder_contracts import (
     FileSchemaDTO,
     ScaffoldingResponseSchema,
 )
-from software_factory_poc.core.application.agents.scaffolder.scaffolder_agent import ScaffolderAgent
 from software_factory_poc.core.application.skills.scaffold.generate_scaffold_plan_skill import (
     GenerateScaffoldPlanSkill,
+)
+from software_factory_poc.core.application.workflows.scaffold.scaffolding_deterministic_workflow import (
+    ScaffoldingDeterministicWorkflow,
 )
 from software_factory_poc.core.domain.mission import Mission, TaskDescription
 from software_factory_poc.core.domain.shared.skill_type import SkillType
@@ -33,8 +36,8 @@ async def test_scaffolder_agent_flow():
 
     mock_tracker = AsyncMock()
 
-    mock_research = AsyncMock()
-    mock_research.get_architecture_context.return_value = "Architecture Guidelines..."
+    mock_docs = AsyncMock()
+    mock_docs.get_architecture_context.return_value = "Architecture Guidelines..."
 
     mock_brain = AsyncMock()
     mock_brain.generate_structured.return_value = ScaffoldingResponseSchema(
@@ -64,24 +67,34 @@ async def test_scaffolder_agent_flow():
         description=description,
     )
 
-    # 3. Build tools and skills dicts
+    # 3. Build tools, skills, and workflow
     tools = {
         ToolType.VCS: mock_vcs,
         ToolType.TRACKER: mock_tracker,
-        ToolType.DOCS: mock_research,
-        ToolType.BRAIN: mock_brain,
+        ToolType.DOCS: mock_docs,
     }
+    generate_plan_skill = GenerateScaffoldPlanSkill(
+        brain=mock_brain, prompt_builder=mock_prompt_builder
+    )
     skills = {
-        SkillType.GENERATE_SCAFFOLD_PLAN: GenerateScaffoldPlanSkill(
-            brain=mock_brain, prompt_builder=mock_prompt_builder
-        ),
+        SkillType.GENERATE_SCAFFOLD_PLAN: generate_plan_skill,
     }
+    priority_models = ["openai:gpt-4o"]
+    deterministic_workflow = ScaffoldingDeterministicWorkflow(
+        vcs=mock_vcs,
+        tracker=mock_tracker,
+        docs=mock_docs,
+        generate_plan=generate_plan_skill,
+        priority_models=priority_models,
+    )
 
     # 4. Instantiate Agent
     agent = ScaffolderAgent(
-        config=ScaffolderAgentConfig(priority_models=["openai:gpt-4o"]),
+        config=ScaffolderAgentConfig(priority_models=priority_models),
+        brain=mock_brain,
         tools=tools,
         skills=skills,
+        deterministic_workflow=deterministic_workflow,
     )
 
     # 5. Execute Flow
@@ -101,7 +114,7 @@ async def test_scaffolder_agent_flow():
     mock_vcs.create_merge_request.assert_called()
 
     # Docs: Architecture context
-    mock_research.get_architecture_context.assert_called()
+    mock_docs.get_architecture_context.assert_called()
 
     # Brain: Generate (via skill)
     mock_brain.generate_structured.assert_called()
