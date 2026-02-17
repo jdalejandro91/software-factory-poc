@@ -26,6 +26,7 @@ vars
 env_production_source
 dev-container.sh
 build_secrets.sh
+.claude/
 
 # OS specific
 .DS_Store
@@ -34,9 +35,6 @@ build_secrets.sh
 # Ignore JSON stores but keep the directory structure via .keep
 runtime_data/*.json
 !runtime_data/.keep
-
-# Local container shims
-.container-bin/
 
 # Local container shims
 .container-bin/

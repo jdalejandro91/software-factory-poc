@@ -7,11 +7,9 @@ import pytest
 from software_factory_poc.core.application.agents.code_reviewer.code_reviewer_agent import (
     CodeReviewerAgent,
 )
-from software_factory_poc.core.application.agents.common.agent_config import (
-    CodeReviewerAgentConfig,
-)
-from software_factory_poc.core.application.agents.common.agent_execution_mode import (
+from software_factory_poc.core.domain.agent import (
     AgentExecutionMode,
+    CodeReviewerAgentConfig,
 )
 from software_factory_poc.core.domain.mission import Mission, TaskDescription
 from software_factory_poc.core.domain.shared.skill_type import SkillType

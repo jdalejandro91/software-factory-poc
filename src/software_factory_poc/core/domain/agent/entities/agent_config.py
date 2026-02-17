@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from software_factory_poc.core.application.agents.common.agent_execution_mode import (
+from software_factory_poc.core.domain.agent.value_objects.agent_execution_mode import (
     AgentExecutionMode,
 )
 

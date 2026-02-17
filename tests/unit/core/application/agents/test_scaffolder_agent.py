@@ -4,13 +4,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from software_factory_poc.core.application.agents.common.agent_config import (
+from software_factory_poc.core.application.agents.scaffolder.scaffolder_agent import ScaffolderAgent
+from software_factory_poc.core.domain.agent import (
+    AgentExecutionMode,
     ScaffolderAgentConfig,
 )
-from software_factory_poc.core.application.agents.common.agent_execution_mode import (
-    AgentExecutionMode,
-)
-from software_factory_poc.core.application.agents.scaffolder.scaffolder_agent import ScaffolderAgent
 from software_factory_poc.core.domain.mission import Mission, TaskDescription
 from software_factory_poc.core.domain.shared.skill_type import SkillType
 from software_factory_poc.core.domain.shared.tool_type import ToolType

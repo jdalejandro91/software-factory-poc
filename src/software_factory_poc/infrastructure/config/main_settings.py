@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from software_factory_poc.infrastructure.tools.llm.config.llm_settings import LlmSettings
+from software_factory_poc.infrastructure.adapters.llm.config.llm_settings import LlmSettings
 
 
 class Settings(LlmSettings):

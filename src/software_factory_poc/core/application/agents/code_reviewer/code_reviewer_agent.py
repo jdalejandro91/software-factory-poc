@@ -2,13 +2,7 @@ import logging
 from collections.abc import Mapping
 from typing import Any
 
-from software_factory_poc.core.application.agents.common.agent_config import (
-    CodeReviewerAgentConfig,
-)
-from software_factory_poc.core.application.agents.common.agent_execution_mode import (
-    AgentExecutionMode,
-)
-from software_factory_poc.core.application.agents.common.base_agent import AgentIdentity, BaseAgent
+from software_factory_poc.core.application.agents.common.base_agent import BaseAgent
 from software_factory_poc.core.application.agents.loops.agentic_loop_runner import (
     AgenticLoopRunner,
 )
@@ -16,6 +10,11 @@ from software_factory_poc.core.application.policies.tool_safety_policy import To
 from software_factory_poc.core.application.ports import BrainPort
 from software_factory_poc.core.application.skills.skill import BaseSkill
 from software_factory_poc.core.application.workflows.base_workflow import BaseWorkflow
+from software_factory_poc.core.domain.agent import (
+    AgentExecutionMode,
+    AgentIdentity,
+    CodeReviewerAgentConfig,
+)
 from software_factory_poc.core.domain.mission import Mission
 from software_factory_poc.core.domain.shared.base_tool import BaseTool
 from software_factory_poc.core.domain.shared.skill_type import SkillType

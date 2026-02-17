@@ -2,23 +2,15 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
-from dataclasses import dataclass
 from typing import Any
 
-from software_factory_poc.core.application.agents.common.agent_config import AgentConfig
 from software_factory_poc.core.application.ports import BrainPort
 from software_factory_poc.core.application.skills.skill import BaseSkill
+from software_factory_poc.core.domain.agent import AgentConfig, AgentIdentity
 from software_factory_poc.core.domain.mission import Mission
 from software_factory_poc.core.domain.shared.base_tool import BaseTool
 from software_factory_poc.core.domain.shared.skill_type import SkillType
 from software_factory_poc.core.domain.shared.tool_type import ToolType
-
-
-@dataclass(frozen=True)
-class AgentIdentity:
-    name: str
-    role: str
-    goal: str
 
 
 class BaseAgent(ABC):

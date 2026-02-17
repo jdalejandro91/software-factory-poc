@@ -4,10 +4,6 @@ from typing import Any
 from software_factory_poc.core.application.agents.code_reviewer.code_reviewer_agent import (
     CodeReviewerAgent,
 )
-from software_factory_poc.core.application.agents.common.agent_config import (
-    CodeReviewerAgentConfig,
-    ScaffolderAgentConfig,
-)
 from software_factory_poc.core.application.agents.scaffolder.scaffolder_agent import ScaffolderAgent
 from software_factory_poc.core.application.skills.review.analyze_code_review_skill import (
     AnalyzeCodeReviewSkill,
@@ -28,14 +24,17 @@ from software_factory_poc.core.application.workflows.review.code_review_determin
 from software_factory_poc.core.application.workflows.scaffold.scaffolding_deterministic_workflow import (
     ScaffoldingDeterministicWorkflow,
 )
+from software_factory_poc.core.domain.agent import CodeReviewerAgentConfig, ScaffolderAgentConfig
 from software_factory_poc.core.domain.shared.base_tool import BaseTool
 from software_factory_poc.core.domain.shared.skill_type import SkillType
 from software_factory_poc.core.domain.shared.tool_type import ToolType
+from software_factory_poc.infrastructure.adapters.llm.litellm_brain_adapter import (
+    LiteLlmBrainAdapter,
+)
 from software_factory_poc.infrastructure.config.app_config import AppConfig
 from software_factory_poc.infrastructure.tools.docs.confluence.confluence_mcp_client import (
     ConfluenceMcpClient,
 )
-from software_factory_poc.infrastructure.tools.llm.litellm_brain_adapter import LiteLlmBrainAdapter
 from software_factory_poc.infrastructure.tools.tracker.jira.jira_mcp_client import JiraMcpClient
 from software_factory_poc.infrastructure.tools.vcs.gitlab.gitlab_mcp_client import GitlabMcpClient
 

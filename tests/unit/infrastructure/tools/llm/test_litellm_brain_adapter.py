@@ -9,8 +9,8 @@ from pydantic import BaseModel, SecretStr
 
 from software_factory_poc.core.application.ports import BrainPort
 from software_factory_poc.core.application.tools.common.exceptions import ProviderError
-from software_factory_poc.infrastructure.tools.llm.config.llm_settings import LlmSettings
-from software_factory_poc.infrastructure.tools.llm.litellm_brain_adapter import (
+from software_factory_poc.infrastructure.adapters.llm.config.llm_settings import LlmSettings
+from software_factory_poc.infrastructure.adapters.llm.litellm_brain_adapter import (
     LiteLlmBrainAdapter,
 )
 
@@ -71,7 +71,7 @@ PRIORITY_MODELS = ["openai:gpt-4o", "deepseek:deepseek-coder"]
 class TestGenerateStructuredSuccess:
     @pytest.mark.asyncio
     @patch(
-        "software_factory_poc.infrastructure.tools.llm.litellm_brain_adapter.litellm.acompletion"
+        "software_factory_poc.infrastructure.adapters.llm.litellm_brain_adapter.litellm.acompletion"
     )
     async def test_returns_validated_pydantic_instance(
         self, mock_acompletion: AsyncMock, adapter: LiteLlmBrainAdapter
@@ -95,7 +95,7 @@ class TestGenerateStructuredSuccess:
 
     @pytest.mark.asyncio
     @patch(
-        "software_factory_poc.infrastructure.tools.llm.litellm_brain_adapter.litellm.acompletion"
+        "software_factory_poc.infrastructure.adapters.llm.litellm_brain_adapter.litellm.acompletion"
     )
     async def test_model_id_normalized_to_slash(
         self, mock_acompletion: AsyncMock, adapter: LiteLlmBrainAdapter
@@ -117,7 +117,7 @@ class TestGenerateStructuredSuccess:
 class TestFallbackRoutingLogic:
     @pytest.mark.asyncio
     @patch(
-        "software_factory_poc.infrastructure.tools.llm.litellm_brain_adapter.litellm.acompletion"
+        "software_factory_poc.infrastructure.adapters.llm.litellm_brain_adapter.litellm.acompletion"
     )
     async def test_falls_back_to_second_model_on_first_failure(
         self, mock_acompletion: AsyncMock, adapter: LiteLlmBrainAdapter
@@ -141,7 +141,7 @@ class TestFallbackRoutingLogic:
 
     @pytest.mark.asyncio
     @patch(
-        "software_factory_poc.infrastructure.tools.llm.litellm_brain_adapter.litellm.acompletion"
+        "software_factory_poc.infrastructure.adapters.llm.litellm_brain_adapter.litellm.acompletion"
     )
     async def test_fallback_uses_correct_model_ids(
         self, mock_acompletion: AsyncMock, adapter: LiteLlmBrainAdapter
@@ -167,7 +167,7 @@ class TestFallbackRoutingLogic:
 class TestAllModelsExhausted:
     @pytest.mark.asyncio
     @patch(
-        "software_factory_poc.infrastructure.tools.llm.litellm_brain_adapter.litellm.acompletion"
+        "software_factory_poc.infrastructure.adapters.llm.litellm_brain_adapter.litellm.acompletion"
     )
     async def test_raises_provider_error_when_all_fail(
         self, mock_acompletion: AsyncMock, adapter: LiteLlmBrainAdapter
@@ -187,7 +187,7 @@ class TestAllModelsExhausted:
 
     @pytest.mark.asyncio
     @patch(
-        "software_factory_poc.infrastructure.tools.llm.litellm_brain_adapter.litellm.acompletion"
+        "software_factory_poc.infrastructure.adapters.llm.litellm_brain_adapter.litellm.acompletion"
     )
     async def test_raises_provider_error_on_empty_model_list(
         self, mock_acompletion: AsyncMock, adapter: LiteLlmBrainAdapter
@@ -205,7 +205,7 @@ class TestAllModelsExhausted:
 class TestStructuredResponseParsing:
     @pytest.mark.asyncio
     @patch(
-        "software_factory_poc.infrastructure.tools.llm.litellm_brain_adapter.litellm.acompletion"
+        "software_factory_poc.infrastructure.adapters.llm.litellm_brain_adapter.litellm.acompletion"
     )
     async def test_empty_content_raises_provider_error(
         self, mock_acompletion: AsyncMock, adapter: LiteLlmBrainAdapter
@@ -220,7 +220,7 @@ class TestStructuredResponseParsing:
 
     @pytest.mark.asyncio
     @patch(
-        "software_factory_poc.infrastructure.tools.llm.litellm_brain_adapter.litellm.acompletion"
+        "software_factory_poc.infrastructure.adapters.llm.litellm_brain_adapter.litellm.acompletion"
     )
     async def test_invalid_json_raises_provider_error(
         self, mock_acompletion: AsyncMock, adapter: LiteLlmBrainAdapter
@@ -234,7 +234,7 @@ class TestStructuredResponseParsing:
 
     @pytest.mark.asyncio
     @patch(
-        "software_factory_poc.infrastructure.tools.llm.litellm_brain_adapter.litellm.acompletion"
+        "software_factory_poc.infrastructure.adapters.llm.litellm_brain_adapter.litellm.acompletion"
     )
     async def test_schema_validation_failure_raises_provider_error(
         self, mock_acompletion: AsyncMock, adapter: LiteLlmBrainAdapter
@@ -256,7 +256,7 @@ class TestStructuredResponseParsing:
 class TestGenerateWithToolsSuccess:
     @pytest.mark.asyncio
     @patch(
-        "software_factory_poc.infrastructure.tools.llm.litellm_brain_adapter.litellm.acompletion"
+        "software_factory_poc.infrastructure.adapters.llm.litellm_brain_adapter.litellm.acompletion"
     )
     async def test_returns_content_when_no_tool_calls(
         self, mock_acompletion: AsyncMock, adapter: LiteLlmBrainAdapter
@@ -276,7 +276,7 @@ class TestGenerateWithToolsSuccess:
 
     @pytest.mark.asyncio
     @patch(
-        "software_factory_poc.infrastructure.tools.llm.litellm_brain_adapter.litellm.acompletion"
+        "software_factory_poc.infrastructure.adapters.llm.litellm_brain_adapter.litellm.acompletion"
     )
     async def test_returns_tool_calls_with_parsed_arguments(
         self, mock_acompletion: AsyncMock, adapter: LiteLlmBrainAdapter
@@ -304,7 +304,7 @@ class TestGenerateWithToolsSuccess:
 class TestGenerateWithToolsFallback:
     @pytest.mark.asyncio
     @patch(
-        "software_factory_poc.infrastructure.tools.llm.litellm_brain_adapter.litellm.acompletion"
+        "software_factory_poc.infrastructure.adapters.llm.litellm_brain_adapter.litellm.acompletion"
     )
     async def test_all_models_fail_raises_provider_error(
         self, mock_acompletion: AsyncMock, adapter: LiteLlmBrainAdapter
@@ -322,7 +322,7 @@ class TestGenerateWithToolsFallback:
 
     @pytest.mark.asyncio
     @patch(
-        "software_factory_poc.infrastructure.tools.llm.litellm_brain_adapter.litellm.acompletion"
+        "software_factory_poc.infrastructure.adapters.llm.litellm_brain_adapter.litellm.acompletion"
     )
     async def test_fallback_succeeds_on_second_model(
         self, mock_acompletion: AsyncMock, adapter: LiteLlmBrainAdapter

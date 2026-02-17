@@ -2,9 +2,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from software_factory_poc.core.application.agents.common.agent_config import (
-    ScaffolderAgentConfig,
-)
 from software_factory_poc.core.application.agents.scaffolder.scaffolder_agent import ScaffolderAgent
 from software_factory_poc.core.application.skills.scaffold.contracts.scaffolder_contracts import (
     FileSchemaDTO,
@@ -16,6 +13,7 @@ from software_factory_poc.core.application.skills.scaffold.generate_scaffold_pla
 from software_factory_poc.core.application.workflows.scaffold.scaffolding_deterministic_workflow import (
     ScaffoldingDeterministicWorkflow,
 )
+from software_factory_poc.core.domain.agent import ScaffolderAgentConfig
 from software_factory_poc.core.domain.mission import Mission, TaskDescription
 from software_factory_poc.core.domain.shared.skill_type import SkillType
 from software_factory_poc.core.domain.shared.tool_type import ToolType
