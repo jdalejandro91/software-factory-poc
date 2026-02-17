@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from software_factory_poc.core.application.agents.code_reviewer.code_reviewer_agent import (
     CodeReviewerAgent,
 )
-from software_factory_poc.core.domain.mission.entities import Mission
+from software_factory_poc.core.domain.mission import Mission
 from software_factory_poc.infrastructure.config.resolution.container import (
     McpConnectionManager,
     build_code_review_agent,
@@ -50,7 +50,7 @@ async def trigger_code_review(
         if isinstance(task_entity, JSONResponse):
             return task_entity
 
-        background_tasks.add_task(agent.execute_flow, task_entity)
+        background_tasks.add_task(agent.run, task_entity)
         return {
             "status": "accepted",
             "message": "Code Review queued.",

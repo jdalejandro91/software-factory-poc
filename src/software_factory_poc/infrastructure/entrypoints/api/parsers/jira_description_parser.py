@@ -2,7 +2,7 @@ import re
 
 import yaml
 
-from software_factory_poc.core.domain.mission.entities import TaskDescription
+from software_factory_poc.core.domain.mission import TaskDescription
 from software_factory_poc.infrastructure.observability.logger_factory_service import (
     LoggerFactoryService,
 )

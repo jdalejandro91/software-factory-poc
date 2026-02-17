@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from software_factory_poc.core.domain.mission.entities.mission import Mission
-from software_factory_poc.core.domain.quality.code_review_report import CodeReviewReport
+from software_factory_poc.core.domain.mission import Mission
+from software_factory_poc.core.domain.quality import CodeReviewReport
 
 
 class TrackerPort(ABC):

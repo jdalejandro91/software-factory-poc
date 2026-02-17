@@ -3,7 +3,7 @@
 import pytest
 from pydantic import SecretStr
 
-from software_factory_poc.core.application.ports.tracker_port import TrackerPort
+from software_factory_poc.core.application.ports import TrackerPort
 from software_factory_poc.infrastructure.tools.tracker.jira.config.jira_settings import (
     JiraSettings,
 )

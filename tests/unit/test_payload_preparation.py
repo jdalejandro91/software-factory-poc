@@ -1,4 +1,4 @@
-from software_factory_poc.core.domain.mission.entities.mission import Mission
+from software_factory_poc.core.domain.mission import Mission
 from software_factory_poc.infrastructure.entrypoints.api.mappers.jira_payload_mapper import (
     JiraPayloadMapper,
 )

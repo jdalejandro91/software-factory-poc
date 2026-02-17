@@ -7,10 +7,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from pydantic import BaseModel, SecretStr
 
-from software_factory_poc.core.application.ports.brain_port import BrainPort
-from software_factory_poc.core.application.ports.common.exceptions.provider_error import (
-    ProviderError,
-)
+from software_factory_poc.core.application.ports import BrainPort
+from software_factory_poc.core.application.ports.common.exceptions import ProviderError
 from software_factory_poc.infrastructure.tools.llm.config.llm_settings import LlmSettings
 from software_factory_poc.infrastructure.tools.llm.litellm_brain_adapter import (
     LiteLlmBrainAdapter,

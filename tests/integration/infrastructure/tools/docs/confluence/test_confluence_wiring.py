@@ -3,7 +3,7 @@
 import pytest
 from pydantic import SecretStr
 
-from software_factory_poc.core.application.ports.docs_port import DocsPort
+from software_factory_poc.core.application.ports import DocsPort
 from software_factory_poc.infrastructure.tools.docs.confluence.config.confluence_settings import (
     ConfluenceSettings,
 )

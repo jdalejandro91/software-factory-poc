@@ -6,10 +6,8 @@ from typing import Any, NoReturn
 import litellm
 from pydantic import ValidationError
 
-from software_factory_poc.core.application.ports.brain_port import BrainPort, T
-from software_factory_poc.core.application.ports.common.exceptions.provider_error import (
-    ProviderError,
-)
+from software_factory_poc.core.application.ports import BrainPort, T
+from software_factory_poc.core.application.ports.common.exceptions import ProviderError
 from software_factory_poc.infrastructure.tools.llm.config.llm_settings import LlmSettings
 
 logger = logging.getLogger(__name__)

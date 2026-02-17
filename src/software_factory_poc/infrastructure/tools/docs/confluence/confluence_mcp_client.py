@@ -7,10 +7,8 @@ from mcp import McpError
 from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
-from software_factory_poc.core.application.ports.common.exceptions.provider_error import (
-    ProviderError,
-)
-from software_factory_poc.core.application.ports.docs_port import DocsPort
+from software_factory_poc.core.application.ports import DocsPort
+from software_factory_poc.core.application.ports.common.exceptions import ProviderError
 from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
 from software_factory_poc.infrastructure.tools.docs.confluence.config.confluence_settings import (
     ConfluenceSettings,

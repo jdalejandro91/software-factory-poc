@@ -12,8 +12,7 @@ from software_factory_poc.core.application.skills.scaffold.generate_scaffold_pla
     GenerateScaffoldPlanInput,
     GenerateScaffoldPlanSkill,
 )
-from software_factory_poc.core.domain.mission.entities.mission import Mission
-from software_factory_poc.core.domain.mission.value_objects.task_description import TaskDescription
+from software_factory_poc.core.domain.mission import Mission, TaskDescription
 
 
 def _make_mission() -> Mission:

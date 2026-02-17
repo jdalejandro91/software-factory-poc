@@ -3,8 +3,8 @@ from collections.abc import Callable, Coroutine
 from typing import Any
 
 from software_factory_poc.core.application.policies.tool_safety_policy import ToolSafetyPolicy
-from software_factory_poc.core.application.ports.brain_port import BrainPort
-from software_factory_poc.core.domain.mission.entities.mission import Mission
+from software_factory_poc.core.application.ports import BrainPort
+from software_factory_poc.core.domain.mission import Mission
 
 logger = logging.getLogger(__name__)
 

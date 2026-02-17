@@ -3,7 +3,7 @@
 import pytest
 from pydantic import SecretStr
 
-from software_factory_poc.core.application.ports.vcs_port import VcsPort
+from software_factory_poc.core.application.ports import VcsPort
 from software_factory_poc.infrastructure.tools.vcs.gitlab.config.gitlab_settings import (
     GitLabSettings,
 )

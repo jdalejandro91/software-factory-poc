@@ -7,9 +7,9 @@ from software_factory_poc.core.application.agents.scaffolder.contracts.scaffolde
 from software_factory_poc.core.application.agents.scaffolder.prompt_templates.scaffolding_prompt_builder import (
     ScaffoldingPromptBuilder,
 )
-from software_factory_poc.core.application.ports.brain_port import BrainPort
+from software_factory_poc.core.application.ports import BrainPort
 from software_factory_poc.core.application.skills.skill import BaseSkill
-from software_factory_poc.core.domain.mission.entities.mission import Mission
+from software_factory_poc.core.domain.mission import Mission
 
 logger = logging.getLogger(__name__)
 

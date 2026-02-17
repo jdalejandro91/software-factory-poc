@@ -10,7 +10,7 @@ from software_factory_poc.core.application.skills.review.analyze_code_review_ski
     AnalyzeCodeReviewInput,
     AnalyzeCodeReviewSkill,
 )
-from software_factory_poc.core.domain.quality.value_objects.review_severity import ReviewSeverity
+from software_factory_poc.core.domain.quality import ReviewSeverity
 
 
 def _make_input() -> AnalyzeCodeReviewInput:

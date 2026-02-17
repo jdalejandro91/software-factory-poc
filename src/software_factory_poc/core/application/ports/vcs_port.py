@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from software_factory_poc.core.domain.delivery.commit_intent import CommitIntent
-from software_factory_poc.core.domain.quality.code_review_report import CodeReviewReport
+from software_factory_poc.core.domain.delivery import CommitIntent
+from software_factory_poc.core.domain.quality import CodeReviewReport
 
 
 class VcsPort(ABC):

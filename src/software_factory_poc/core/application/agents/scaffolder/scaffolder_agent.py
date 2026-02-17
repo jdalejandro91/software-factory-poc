@@ -4,14 +4,14 @@ from typing import Any
 from software_factory_poc.core.application.agents.common.agent_execution_mode import (
     AgentExecutionMode,
 )
+from software_factory_poc.core.application.agents.common.agent_structures import AgentPorts
 from software_factory_poc.core.application.agents.common.base_agent import AgentIdentity, BaseAgent
 from software_factory_poc.core.application.agents.loops.agentic_loop_runner import (
     AgenticLoopRunner,
 )
-from software_factory_poc.core.application.ports.brain_port import BrainPort
-from software_factory_poc.core.application.ports.docs_port import DocsPort
-from software_factory_poc.core.application.ports.tracker_port import TrackerPort
-from software_factory_poc.core.application.ports.vcs_port import VcsPort
+from software_factory_poc.core.application.agents.scaffolder.config.scaffolder_agent_di_config import (
+    ScaffolderAgentConfig,
+)
 from software_factory_poc.core.application.skills.scaffold.apply_scaffold_delivery_skill import (
     ApplyScaffoldDeliveryInput,
     ApplyScaffoldDeliverySkill,
@@ -31,36 +31,24 @@ from software_factory_poc.core.application.skills.scaffold.report_success_skill 
     ReportSuccessInput,
     ReportSuccessSkill,
 )
-from software_factory_poc.core.domain.mission.entities.mission import Mission
+from software_factory_poc.core.domain.mission import Mission
 
 logger = logging.getLogger(__name__)
 
 
 class ScaffolderAgent(BaseAgent):
-    """BrahMAS Scaffolder Agent — Dual-Flow (Deterministic + Agentic).
-
-    Deterministic mode orchestrates injected Skills sequentially.
-    Agentic mode delegates to a ReAct loop with MCP tools from Ports.
-    """
+    """BrahMAS Scaffolder Agent — Dual-Flow (Deterministic + Agentic)."""
 
     def __init__(
         self,
-        # Ports (agentic MCP tool exposure + failure reporting)
-        vcs: VcsPort,
-        tracker: TrackerPort,
-        research: DocsPort,
-        brain: BrainPort,
-        # Skills (deterministic pipeline)
+        config: ScaffolderAgentConfig,
+        ports: AgentPorts,
         idempotency_check: IdempotencyCheckSkill,
         fetch_context: FetchScaffoldContextSkill,
         generate_plan: GenerateScaffoldPlanSkill,
         apply_delivery: ApplyScaffoldDeliverySkill,
         report_success: ReportSuccessSkill,
-        # Agentic infrastructure
         loop_runner: AgenticLoopRunner,
-        # Config
-        priority_models: list[str],
-        execution_mode: AgentExecutionMode = AgentExecutionMode.DETERMINISTIC,
     ):
         super().__init__(
             identity=AgentIdentity(
@@ -68,13 +56,12 @@ class ScaffolderAgent(BaseAgent):
                 role="Orchestrator",
                 goal="Orchestrate scaffolding creation",
             ),
-            brain=brain,
-            priority_models=priority_models,
-            execution_mode=execution_mode,
+            brain=ports.brain,
+            priority_models=config.priority_models,
+            execution_mode=config.execution_mode,
         )
-        self._vcs = vcs
-        self._tracker = tracker
-        self._research = research
+        self._config = config
+        self._ports = ports
         self._idempotency_check = idempotency_check
         self._fetch_context = fetch_context
         self._generate_plan = generate_plan
@@ -82,95 +69,75 @@ class ScaffolderAgent(BaseAgent):
         self._report_success = report_success
         self._loop_runner = loop_runner
 
-    # ══════════════════════════════════════════════════════════════
-    #  Public entry point (used by API router)
-    # ══════════════════════════════════════════════════════════════
-
-    async def execute_flow(self, mission: Mission) -> None:
+    async def run(self, mission: Mission) -> None:
+        """Public entry point — dispatches to deterministic or agentic mode."""
         if self._execution_mode == AgentExecutionMode.REACT_LOOP:
             await self._run_agentic_loop(mission)
         else:
             await self._run_deterministic(mission)
 
-    # ══════════════════════════════════════════════════════════════
-    #  Mode A: Deterministic Skill Pipeline
-    # ══════════════════════════════════════════════════════════════
-
-    async def _run_deterministic(self, mission: Mission) -> None:
+    async def _run_deterministic(self, mission: Mission) -> Any:
         logger.info("[Scaffolder] Starting deterministic flow for %s", mission.key)
 
-        config = mission.description.config
-        service_name = config.get("parameters", {}).get("service_name", "")
-        gitlab_project_id = config.get("target", {}).get("gitlab_project_id", "") or config.get(
+        cfg = mission.description.config
+        service_name = cfg.get("parameters", {}).get("service_name", "")
+        project_id = cfg.get("target", {}).get("gitlab_project_id", "") or cfg.get(
             "target", {}
         ).get("gitlab_project_path", "")
-        target_branch = config.get("target", {}).get("default_branch", "main")
+        target_branch = cfg.get("target", {}).get("default_branch", "main")
         branch_name = ApplyScaffoldDeliverySkill.build_branch_name(mission.key, service_name)
 
-        try:
-            should_abort = await self._idempotency_check.execute(
-                IdempotencyCheckInput(mission_key=mission.key, branch_name=branch_name),
-            )
-            if should_abort:
-                return
+        if await self._idempotency_check.execute(
+            IdempotencyCheckInput(mission_key=mission.key, branch_name=branch_name),
+        ):
+            return
 
-            arch_context = await self._fetch_context.execute(service_name or mission.key)
+        arch_context = await self._fetch_context.execute(service_name or mission.key)
 
-            scaffold_plan = await self._generate_plan.execute(
-                GenerateScaffoldPlanInput(
-                    mission=mission,
-                    arch_context=arch_context,
-                    priority_models=self._priority_models,
-                ),
-            )
+        plan = await self._generate_plan.execute(
+            GenerateScaffoldPlanInput(
+                mission=mission, arch_context=arch_context, priority_models=self._priority_models
+            ),
+        )
 
-            mr_url = await self._apply_delivery.execute(
-                ApplyScaffoldDeliveryInput(
-                    mission_key=mission.key,
-                    mission_summary=mission.summary,
-                    branch_name=branch_name,
-                    target_branch=target_branch,
-                    scaffold_plan=scaffold_plan,
-                ),
-            )
+        mr_url = await self._apply_delivery.execute(
+            ApplyScaffoldDeliveryInput(
+                mission_key=mission.key,
+                mission_summary=mission.summary,
+                branch_name=branch_name,
+                target_branch=target_branch,
+                scaffold_plan=plan,
+            ),
+        )
 
-            await self._report_success.execute(
-                ReportSuccessInput(
-                    mission_key=mission.key,
-                    gitlab_project_id=gitlab_project_id,
-                    branch_name=branch_name,
-                    mr_url=mr_url,
-                    commit_hash="",
-                    files_count=len(scaffold_plan.files),
-                ),
-            )
+        await self._report_success.execute(
+            ReportSuccessInput(
+                mission_key=mission.key,
+                gitlab_project_id=project_id,
+                branch_name=branch_name,
+                mr_url=mr_url,
+                commit_hash="",
+                files_count=len(plan.files),
+            ),
+        )
 
-            logger.info("[Scaffolder] %s completed — MR: %s", mission.key, mr_url)
+        logger.info("[Scaffolder] %s completed — MR: %s", mission.key, mr_url)
 
-        except Exception as e:
-            logger.error("[Scaffolder] Critical error for %s: %s", mission.key, e, exc_info=True)
-            await self._report_failure(mission.key, e)
-            raise
-
-    # ══════════════════════════════════════════════════════════════
-    #  Mode B: Agentic ReAct Loop
-    # ══════════════════════════════════════════════════════════════
-
-    async def _run_agentic_loop(self, mission: Mission) -> str:
+    async def _run_agentic_loop(self, mission: Mission) -> None:
         logger.info("[Scaffolder] Starting agentic loop for %s", mission.key)
 
-        vcs_tools = await self._vcs.get_mcp_tools()
-        tracker_tools = await self._tracker.get_mcp_tools()
-        docs_tools = await self._research.get_mcp_tools()
+        vcs_tools = await self._ports.vcs.get_mcp_tools()
+        tracker_tools = await self._ports.tracker.get_mcp_tools()
+        docs_tools = await self._ports.docs.get_mcp_tools()
         all_tools = vcs_tools + tracker_tools + docs_tools
 
         async def _tool_executor(tool_name: str, arguments: dict[str, Any]) -> str:
             if tool_name.startswith("vcs_"):
-                return str(await self._vcs.execute_tool(tool_name, arguments))
+                return str(await self._ports.vcs.execute_tool(tool_name, arguments))
             if tool_name.startswith("tracker_"):
-                return str(await self._tracker.execute_tool(tool_name, arguments))
+                return str(await self._ports.tracker.execute_tool(tool_name, arguments))
             if tool_name.startswith("docs_"):
-                return str(await self._research.execute_tool(tool_name, arguments))
+                return str(await self._ports.docs.execute_tool(tool_name, arguments))
             return f"Error: unknown tool prefix for '{tool_name}'"
 
         system_prompt = (
@@ -183,20 +150,11 @@ class ScaffolderAgent(BaseAgent):
             "- Never leak secrets or tokens in generated files.\n"
         )
 
-        return await self._loop_runner.run_loop(
+        await self._loop_runner.run_loop(
             mission=mission,
             system_prompt=system_prompt,
             available_tools=all_tools,
             tool_executor=_tool_executor,
             priority_models=self._priority_models,
+            max_iterations=self._config.max_iterations,
         )
-
-    # ══════════════════════════════════════════════════════════════
-    #  Error reporting
-    # ══════════════════════════════════════════════════════════════
-
-    async def _report_failure(self, mission_key: str, error: Exception) -> None:
-        try:
-            await self._tracker.add_comment(mission_key, f"Fallo en Scaffolding: {error}")
-        except Exception as report_err:
-            logger.error("[Scaffolder] Failed to report error to Jira: %s", report_err)

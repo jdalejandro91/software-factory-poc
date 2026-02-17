@@ -4,7 +4,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from fastapi.responses import JSONResponse
 
 from software_factory_poc.core.application.agents.scaffolder.scaffolder_agent import ScaffolderAgent
-from software_factory_poc.core.domain.mission.entities import Mission
+from software_factory_poc.core.domain.mission import Mission
 from software_factory_poc.infrastructure.config.resolution.container import (
     McpConnectionManager,
     build_scaffolding_agent,
@@ -49,7 +49,7 @@ async def trigger_scaffold(
         if isinstance(task_entity, JSONResponse):
             return task_entity
 
-        background_tasks.add_task(agent.execute_flow, task_entity)
+        background_tasks.add_task(agent.run, task_entity)
 
         return {
             "status": "accepted",

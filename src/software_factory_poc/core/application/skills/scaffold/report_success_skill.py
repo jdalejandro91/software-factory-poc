@@ -2,7 +2,7 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from software_factory_poc.core.application.ports.tracker_port import TrackerPort
+from software_factory_poc.core.application.ports import TrackerPort
 from software_factory_poc.core.application.skills.skill import BaseSkill
 
 logger = logging.getLogger(__name__)

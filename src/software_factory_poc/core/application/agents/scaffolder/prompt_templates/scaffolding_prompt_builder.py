@@ -1,6 +1,6 @@
 import logging
 
-from software_factory_poc.core.domain.mission.entities.mission import Mission
+from software_factory_poc.core.domain.mission import Mission
 
 logger = logging.getLogger(__name__)
 

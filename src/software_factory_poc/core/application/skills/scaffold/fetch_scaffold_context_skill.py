@@ -1,6 +1,6 @@
 import logging
 
-from software_factory_poc.core.application.ports.docs_port import DocsPort
+from software_factory_poc.core.application.ports import DocsPort
 from software_factory_poc.core.application.skills.skill import BaseSkill
 
 logger = logging.getLogger(__name__)

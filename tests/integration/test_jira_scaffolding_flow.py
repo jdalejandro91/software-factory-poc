@@ -2,8 +2,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from software_factory_poc.core.application.agents.common.agent_structures import AgentPorts
 from software_factory_poc.core.application.agents.loops.agentic_loop_runner import (
     AgenticLoopRunner,
+)
+from software_factory_poc.core.application.agents.scaffolder.config.scaffolder_agent_di_config import (
+    ScaffolderAgentConfig,
 )
 from software_factory_poc.core.application.agents.scaffolder.contracts.scaffolder_contracts import (
     FileSchemaDTO,
@@ -26,14 +30,13 @@ from software_factory_poc.core.application.skills.scaffold.idempotency_check_ski
 from software_factory_poc.core.application.skills.scaffold.report_success_skill import (
     ReportSuccessSkill,
 )
-from software_factory_poc.core.domain.mission.entities.mission import Mission
-from software_factory_poc.core.domain.mission.value_objects.task_description import TaskDescription
+from software_factory_poc.core.domain.mission import Mission, TaskDescription
 
 
 @pytest.mark.asyncio
 async def test_scaffolder_agent_flow():
     """
-    Integration test for ScaffolderAgent.execute_flow.
+    Integration test for ScaffolderAgent.run.
     Verifies the orchestration of Skills from Idempotency -> Context -> Plan -> Delivery -> Report.
     """
 
@@ -78,10 +81,13 @@ async def test_scaffolder_agent_flow():
 
     # 3. Instantiate Agent with Skills
     agent = ScaffolderAgent(
-        vcs=mock_vcs,
-        tracker=mock_tracker,
-        research=mock_research,
-        brain=mock_brain,
+        config=ScaffolderAgentConfig(priority_models=["openai:gpt-4o"]),
+        ports=AgentPorts(
+            vcs=mock_vcs,
+            tracker=mock_tracker,
+            docs=mock_research,
+            brain=mock_brain,
+        ),
         idempotency_check=IdempotencyCheckSkill(vcs=mock_vcs, tracker=mock_tracker),
         fetch_context=FetchScaffoldContextSkill(docs=mock_research),
         generate_plan=GenerateScaffoldPlanSkill(
@@ -90,11 +96,10 @@ async def test_scaffolder_agent_flow():
         apply_delivery=ApplyScaffoldDeliverySkill(vcs=mock_vcs),
         report_success=ReportSuccessSkill(tracker=mock_tracker),
         loop_runner=AgenticLoopRunner(brain=mock_brain, policy=ToolSafetyPolicy()),
-        priority_models=["openai:gpt-4o"],
     )
 
     # 4. Execute Flow
-    await agent.execute_flow(mission)
+    await agent.run(mission)
 
     # 5. Assertions
 

@@ -3,11 +3,18 @@ import logging
 from software_factory_poc.core.application.agents.code_reviewer.code_reviewer_agent import (
     CodeReviewerAgent,
 )
+from software_factory_poc.core.application.agents.code_reviewer.config.code_reviewer_agent_di_config import (
+    CodeReviewerAgentConfig,
+)
 from software_factory_poc.core.application.agents.code_reviewer.prompt_templates.code_review_prompt_builder import (
     CodeReviewPromptBuilder,
 )
+from software_factory_poc.core.application.agents.common.agent_structures import AgentPorts
 from software_factory_poc.core.application.agents.loops.agentic_loop_runner import (
     AgenticLoopRunner,
+)
+from software_factory_poc.core.application.agents.scaffolder.config.scaffolder_agent_di_config import (
+    ScaffolderAgentConfig,
 )
 from software_factory_poc.core.application.agents.scaffolder.prompt_templates.scaffolding_prompt_builder import (
     ScaffoldingPromptBuilder,
@@ -83,17 +90,16 @@ class ProviderResolver:
         prompt_builder = ScaffoldingPromptBuilder()
 
         return ScaffolderAgent(
-            vcs=vcs,
-            tracker=tracker,
-            research=docs,
-            brain=brain,
+            config=ScaffolderAgentConfig(
+                priority_models=self.app_config.llm.scaffolding_llm_model_priority,
+            ),
+            ports=AgentPorts(vcs=vcs, tracker=tracker, docs=docs, brain=brain),
             idempotency_check=IdempotencyCheckSkill(vcs=vcs, tracker=tracker),
             fetch_context=FetchScaffoldContextSkill(docs=docs),
             generate_plan=GenerateScaffoldPlanSkill(brain=brain, prompt_builder=prompt_builder),
             apply_delivery=ApplyScaffoldDeliverySkill(vcs=vcs),
             report_success=ReportSuccessSkill(tracker=tracker),
             loop_runner=AgenticLoopRunner(brain=brain, policy=ToolSafetyPolicy()),
-            priority_models=self.app_config.llm.scaffolding_llm_model_priority,
         )
 
     async def create_code_reviewer_agent(
@@ -104,14 +110,13 @@ class ProviderResolver:
         prompt_builder = CodeReviewPromptBuilder()
 
         return CodeReviewerAgent(
-            vcs=vcs,
-            tracker=tracker,
-            research=docs,
-            brain=brain,
+            config=CodeReviewerAgentConfig(
+                priority_models=self.app_config.llm.code_review_llm_model_priority,
+            ),
+            ports=AgentPorts(vcs=vcs, tracker=tracker, docs=docs, brain=brain),
             validate_context=ValidateReviewContextSkill(tracker=tracker),
             fetch_diff=FetchReviewDiffSkill(vcs=vcs, docs=docs),
             analyze=AnalyzeCodeReviewSkill(brain=brain, prompt_builder=prompt_builder),
             publish=PublishCodeReviewSkill(vcs=vcs, tracker=tracker),
             loop_runner=AgenticLoopRunner(brain=brain, policy=ToolSafetyPolicy()),
-            priority_models=self.app_config.llm.code_review_llm_model_priority,
         )

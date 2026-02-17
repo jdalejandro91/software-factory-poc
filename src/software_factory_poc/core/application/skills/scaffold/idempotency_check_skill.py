@@ -1,8 +1,7 @@
 import logging
 from dataclasses import dataclass
 
-from software_factory_poc.core.application.ports.tracker_port import TrackerPort
-from software_factory_poc.core.application.ports.vcs_port import VcsPort
+from software_factory_poc.core.application.ports import TrackerPort, VcsPort
 from software_factory_poc.core.application.skills.skill import BaseSkill
 
 logger = logging.getLogger(__name__)

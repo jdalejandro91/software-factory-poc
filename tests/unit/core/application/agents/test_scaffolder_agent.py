@@ -1,4 +1,4 @@
-"""Unit tests — ScaffolderAgent routing (zero I/O, all Skills mocked)."""
+"""Unit tests — ScaffolderAgent dual-flow (zero I/O, all Skills mocked)."""
 
 from unittest.mock import AsyncMock
 
@@ -6,6 +6,10 @@ import pytest
 
 from software_factory_poc.core.application.agents.common.agent_execution_mode import (
     AgentExecutionMode,
+)
+from software_factory_poc.core.application.agents.common.agent_structures import AgentPorts
+from software_factory_poc.core.application.agents.scaffolder.config.scaffolder_agent_di_config import (
+    ScaffolderAgentConfig,
 )
 from software_factory_poc.core.application.agents.scaffolder.contracts.scaffolder_contracts import (
     FileSchemaDTO,
@@ -21,8 +25,7 @@ from software_factory_poc.core.application.skills.scaffold.generate_scaffold_pla
 from software_factory_poc.core.application.skills.scaffold.report_success_skill import (
     ReportSuccessInput,
 )
-from software_factory_poc.core.domain.mission.entities.mission import Mission
-from software_factory_poc.core.domain.mission.value_objects.task_description import TaskDescription
+from software_factory_poc.core.domain.mission import Mission, TaskDescription
 
 # ── Helpers ──
 
@@ -65,7 +68,7 @@ def _build_agent(
     mocks = {
         "vcs": AsyncMock(),
         "tracker": AsyncMock(),
-        "research": AsyncMock(),
+        "docs": AsyncMock(),
         "brain": AsyncMock(),
         "idempotency_check": AsyncMock(),
         "fetch_context": AsyncMock(),
@@ -76,28 +79,32 @@ def _build_agent(
     }
 
     agent = ScaffolderAgent(
-        vcs=mocks["vcs"],
-        tracker=mocks["tracker"],
-        research=mocks["research"],
-        brain=mocks["brain"],
+        config=ScaffolderAgentConfig(
+            priority_models=["openai:gpt-4o"],
+            execution_mode=execution_mode,
+        ),
+        ports=AgentPorts(
+            vcs=mocks["vcs"],
+            tracker=mocks["tracker"],
+            docs=mocks["docs"],
+            brain=mocks["brain"],
+        ),
         idempotency_check=mocks["idempotency_check"],
         fetch_context=mocks["fetch_context"],
         generate_plan=mocks["generate_plan"],
         apply_delivery=mocks["apply_delivery"],
         report_success=mocks["report_success"],
         loop_runner=mocks["loop_runner"],
-        priority_models=["openai:gpt-4o"],
-        execution_mode=execution_mode,
     )
     return agent, mocks
 
 
 # ══════════════════════════════════════════════════════════════════════
-# Deterministic Routing
+# Deterministic Pipeline
 # ══════════════════════════════════════════════════════════════════════
 
 
-class TestDeterministicRouting:
+class TestDeterministicPipeline:
     """Verify the agent orchestrates the 5-skill pipeline in order."""
 
     async def test_full_pipeline_calls_all_skills_in_order(self) -> None:
@@ -111,7 +118,7 @@ class TestDeterministicRouting:
         mocks["apply_delivery"].execute.return_value = "https://gitlab.com/mr/1"
         mocks["report_success"].execute.return_value = None
 
-        await agent.execute_flow(mission)
+        await agent.run(mission)
 
         mocks["idempotency_check"].execute.assert_awaited_once()
         mocks["fetch_context"].execute.assert_awaited_once_with("my-service")
@@ -125,7 +132,7 @@ class TestDeterministicRouting:
 
         mocks["idempotency_check"].execute.return_value = True
 
-        await agent.execute_flow(mission)
+        await agent.run(mission)
 
         mocks["idempotency_check"].execute.assert_awaited_once()
         mocks["fetch_context"].execute.assert_not_awaited()
@@ -143,7 +150,7 @@ class TestDeterministicRouting:
         mocks["generate_plan"].execute.return_value = plan
         mocks["apply_delivery"].execute.return_value = "https://gitlab.com/mr/1"
 
-        await agent.execute_flow(mission)
+        await agent.run(mission)
 
         call_args = mocks["generate_plan"].execute.call_args[0][0]
         assert isinstance(call_args, GenerateScaffoldPlanInput)
@@ -161,7 +168,7 @@ class TestDeterministicRouting:
         mocks["generate_plan"].execute.return_value = plan
         mocks["apply_delivery"].execute.return_value = "https://gitlab.com/mr/1"
 
-        await agent.execute_flow(mission)
+        await agent.run(mission)
 
         call_args = mocks["apply_delivery"].execute.call_args[0][0]
         assert isinstance(call_args, ApplyScaffoldDeliveryInput)
@@ -179,7 +186,7 @@ class TestDeterministicRouting:
         mocks["generate_plan"].execute.return_value = plan
         mocks["apply_delivery"].execute.return_value = "https://gitlab.com/mr/1"
 
-        await agent.execute_flow(mission)
+        await agent.run(mission)
 
         call_args = mocks["report_success"].execute.call_args[0][0]
         assert isinstance(call_args, ReportSuccessInput)
@@ -187,7 +194,7 @@ class TestDeterministicRouting:
         assert call_args.gitlab_project_id == "42"
         assert call_args.files_count == 1
 
-    async def test_skill_failure_reports_to_tracker(self) -> None:
+    async def test_skill_failure_propagates(self) -> None:
         agent, mocks = _build_agent()
         mission = _make_mission()
 
@@ -195,9 +202,7 @@ class TestDeterministicRouting:
         mocks["fetch_context"].execute.side_effect = RuntimeError("Confluence down")
 
         with pytest.raises(RuntimeError, match="Confluence down"):
-            await agent.execute_flow(mission)
-
-        mocks["tracker"].add_comment.assert_awaited_once()
+            await agent.run(mission)
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -218,10 +223,10 @@ class TestAgenticRouting:
         mocks["tracker"].get_mcp_tools.return_value = [
             {"type": "function", "function": {"name": "tracker_add_comment"}}
         ]
-        mocks["research"].get_mcp_tools.return_value = []
+        mocks["docs"].get_mcp_tools.return_value = []
         mocks["loop_runner"].run_loop.return_value = "done"
 
-        await agent.execute_flow(mission)
+        await agent.run(mission)
 
         mocks["loop_runner"].run_loop.assert_awaited_once()
         call_kwargs = mocks["loop_runner"].run_loop.call_args[1]
@@ -235,10 +240,10 @@ class TestAgenticRouting:
 
         mocks["vcs"].get_mcp_tools.return_value = []
         mocks["tracker"].get_mcp_tools.return_value = []
-        mocks["research"].get_mcp_tools.return_value = []
+        mocks["docs"].get_mcp_tools.return_value = []
         mocks["loop_runner"].run_loop.return_value = "done"
 
-        await agent.execute_flow(mission)
+        await agent.run(mission)
 
         mocks["idempotency_check"].execute.assert_not_awaited()
         mocks["fetch_context"].execute.assert_not_awaited()

@@ -3,6 +3,7 @@ line-length = 100
 target-version = "py312"
 
 src = ["src", "tests"]
+exclude = ["vulture_whitelist.py"]
 
 [lint]
 select = ["E", "F", "I", "B", "UP"]

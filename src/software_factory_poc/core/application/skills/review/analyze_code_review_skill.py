@@ -7,11 +7,9 @@ from software_factory_poc.core.application.agents.code_reviewer.contracts.code_r
 from software_factory_poc.core.application.agents.code_reviewer.prompt_templates.code_review_prompt_builder import (
     CodeReviewPromptBuilder,
 )
-from software_factory_poc.core.application.ports.brain_port import BrainPort
+from software_factory_poc.core.application.ports import BrainPort
 from software_factory_poc.core.application.skills.skill import BaseSkill
-from software_factory_poc.core.domain.quality.code_review_report import CodeReviewReport
-from software_factory_poc.core.domain.quality.value_objects.review_comment import ReviewComment
-from software_factory_poc.core.domain.quality.value_objects.review_severity import ReviewSeverity
+from software_factory_poc.core.domain.quality import CodeReviewReport, ReviewComment, ReviewSeverity
 
 logger = logging.getLogger(__name__)
 

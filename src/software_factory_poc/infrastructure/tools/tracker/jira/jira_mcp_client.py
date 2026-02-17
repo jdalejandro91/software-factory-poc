@@ -9,13 +9,10 @@ from mcp import McpError
 from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
-from software_factory_poc.core.application.ports.common.exceptions.provider_error import (
-    ProviderError,
-)
-from software_factory_poc.core.application.ports.tracker_port import TrackerPort
-from software_factory_poc.core.domain.mission.entities.mission import Mission
-from software_factory_poc.core.domain.mission.value_objects.task_description import TaskDescription
-from software_factory_poc.core.domain.quality.code_review_report import CodeReviewReport
+from software_factory_poc.core.application.ports import TrackerPort
+from software_factory_poc.core.application.ports.common.exceptions import ProviderError
+from software_factory_poc.core.domain.mission import Mission, TaskDescription
+from software_factory_poc.core.domain.quality import CodeReviewReport
 from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
 from software_factory_poc.infrastructure.tools.tracker.jira.config.jira_settings import (
     JiraSettings,

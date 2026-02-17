@@ -7,8 +7,7 @@ import pytest
 from software_factory_poc.core.application.skills.review.validate_review_context_skill import (
     ValidateReviewContextSkill,
 )
-from software_factory_poc.core.domain.mission.entities.mission import Mission
-from software_factory_poc.core.domain.mission.value_objects.task_description import TaskDescription
+from software_factory_poc.core.domain.mission import Mission, TaskDescription
 
 
 def _make_mission(

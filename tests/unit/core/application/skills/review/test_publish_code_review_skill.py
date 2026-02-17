@@ -6,9 +6,7 @@ from software_factory_poc.core.application.skills.review.publish_code_review_ski
     PublishCodeReviewInput,
     PublishCodeReviewSkill,
 )
-from software_factory_poc.core.domain.quality.code_review_report import CodeReviewReport
-from software_factory_poc.core.domain.quality.value_objects.review_comment import ReviewComment
-from software_factory_poc.core.domain.quality.value_objects.review_severity import ReviewSeverity
+from software_factory_poc.core.domain.quality import CodeReviewReport, ReviewComment, ReviewSeverity
 
 
 def _make_input(approved: bool = True) -> PublishCodeReviewInput:

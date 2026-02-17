@@ -11,16 +11,10 @@ from mcp import McpError
 from mcp.types import ErrorData
 from pydantic import SecretStr
 
-from software_factory_poc.core.application.ports.common.exceptions.provider_error import (
-    ProviderError,
-)
-from software_factory_poc.core.application.ports.vcs_port import VcsPort
-from software_factory_poc.core.domain.delivery.commit_intent import CommitIntent
-from software_factory_poc.core.domain.delivery.value_objects.branch_name import BranchName
-from software_factory_poc.core.domain.delivery.value_objects.file_content import FileContent
-from software_factory_poc.core.domain.quality.code_review_report import CodeReviewReport
-from software_factory_poc.core.domain.quality.value_objects.review_comment import ReviewComment
-from software_factory_poc.core.domain.quality.value_objects.review_severity import ReviewSeverity
+from software_factory_poc.core.application.ports import VcsPort
+from software_factory_poc.core.application.ports.common.exceptions import ProviderError
+from software_factory_poc.core.domain.delivery import BranchName, CommitIntent, FileContent
+from software_factory_poc.core.domain.quality import CodeReviewReport, ReviewComment, ReviewSeverity
 from software_factory_poc.infrastructure.tools.vcs.gitlab.config.gitlab_settings import (
     GitLabSettings,
 )

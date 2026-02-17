@@ -7,12 +7,10 @@ from mcp import McpError
 from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
-from software_factory_poc.core.application.ports.common.exceptions.provider_error import (
-    ProviderError,
-)
-from software_factory_poc.core.application.ports.vcs_port import VcsPort
-from software_factory_poc.core.domain.delivery.commit_intent import CommitIntent
-from software_factory_poc.core.domain.quality.code_review_report import CodeReviewReport
+from software_factory_poc.core.application.ports import VcsPort
+from software_factory_poc.core.application.ports.common.exceptions import ProviderError
+from software_factory_poc.core.domain.delivery import CommitIntent
+from software_factory_poc.core.domain.quality import CodeReviewReport
 from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
 from software_factory_poc.infrastructure.tools.vcs.gitlab.config.gitlab_settings import (
     GitLabSettings,

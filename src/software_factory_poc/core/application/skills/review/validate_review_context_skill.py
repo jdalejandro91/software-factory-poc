@@ -2,9 +2,9 @@ import logging
 import re
 from dataclasses import dataclass
 
-from software_factory_poc.core.application.ports.tracker_port import TrackerPort
+from software_factory_poc.core.application.ports import TrackerPort
 from software_factory_poc.core.application.skills.skill import BaseSkill
-from software_factory_poc.core.domain.mission.entities.mission import Mission
+from software_factory_poc.core.domain.mission import Mission
 
 logger = logging.getLogger(__name__)
 

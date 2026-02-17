@@ -3,7 +3,7 @@
 import pytest
 from pydantic import SecretStr
 
-from software_factory_poc.core.application.ports.brain_port import BrainPort
+from software_factory_poc.core.application.ports import BrainPort
 from software_factory_poc.infrastructure.tools.llm.config.llm_settings import LlmSettings
 from software_factory_poc.infrastructure.tools.llm.litellm_brain_adapter import (
     LiteLlmBrainAdapter,

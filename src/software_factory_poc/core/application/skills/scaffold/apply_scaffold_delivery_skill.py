@@ -5,11 +5,9 @@ from dataclasses import dataclass
 from software_factory_poc.core.application.agents.scaffolder.contracts.scaffolder_contracts import (
     ScaffoldingResponseSchema,
 )
-from software_factory_poc.core.application.ports.vcs_port import VcsPort
+from software_factory_poc.core.application.ports import VcsPort
 from software_factory_poc.core.application.skills.skill import BaseSkill
-from software_factory_poc.core.domain.delivery.commit_intent import CommitIntent
-from software_factory_poc.core.domain.delivery.value_objects.branch_name import BranchName
-from software_factory_poc.core.domain.delivery.value_objects.file_content import FileContent
+from software_factory_poc.core.domain.delivery import BranchName, CommitIntent, FileContent
 
 logger = logging.getLogger(__name__)
 
