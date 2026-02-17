@@ -7,7 +7,7 @@ class LoggerFactoryService:
     @staticmethod
     def configure_root_logger() -> None:
         """
-        Basic configuration to ensure logs go to stdout.
+        Basic config to ensure logs go to stdout.
         Should be called at application startup.
         """
         logging.basicConfig(

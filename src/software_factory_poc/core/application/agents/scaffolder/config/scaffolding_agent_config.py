@@ -8,12 +8,10 @@ from pydantic_settings import BaseSettings
 from software_factory_poc.core.application.agents.common.agent_execution_mode import (
     AgentExecutionMode,
 )
-from software_factory_poc.core.domain.value_objects.llm.model_id import ModelId
-from software_factory_poc.core.domain.value_objects.research.research_provider_type import (
-    ResearchProviderType,
-)
-from software_factory_poc.core.domain.value_objects.task.task_tracker_type import TaskTrackerType
-from software_factory_poc.core.domain.value_objects.vcs.vcs_provider_type import VcsProviderType
+from software_factory_poc.core.domain.shared.model_id import ModelId
+from software_factory_poc.core.domain.shared.research_provider_type import ResearchProviderType
+from software_factory_poc.core.domain.shared.task_tracker_type import TaskTrackerType
+from software_factory_poc.core.domain.shared.vcs_provider_type import VcsProviderType
 
 
 class ScaffolderAgentConfig(BaseSettings):

@@ -1,6 +1,6 @@
 import json
 
-from software_factory_poc.infrastructure.drivers.tracker.mappers import JiraPanelFactory
+from software_factory_poc.infrastructure.tools.tracker.jira.mappers import JiraPanelFactory
 
 # 1. Scaffolding Case (Existing Branch)
 scaff_data = {

@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from typing import Any
 
-from software_factory_poc.core.domain.value_objects.task.task_description import TaskDescription
-from software_factory_poc.core.domain.value_objects.task.task_user import TaskUser
+from software_factory_poc.core.domain.mission.value_objects.task_description import TaskDescription
+from software_factory_poc.core.domain.mission.value_objects.task_user import TaskUser
 
 
 @dataclass
@@ -13,7 +13,7 @@ class Mission:
     status: str
     project_key: str
     issue_type: str
-    description: TaskDescription  # Composición Obligatoria
+    description: TaskDescription
     reporter: TaskUser | None = None
     event_type: str | None = None
     created_at: int | None = None
@@ -31,7 +31,7 @@ class Mission:
 
     def update_metadata(self, new_context: dict[str, Any]) -> "Mission":
         """
-        Creates a new Task instance with merged configuration.
+        Creates a new Task instance with merged config.
         Does NOT modify raw_content string (assumes it is pure text).
         """
         import copy

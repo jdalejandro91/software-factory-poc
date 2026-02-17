@@ -22,23 +22,27 @@ software_factory/                              # Raíz del proyecto. Agrupa toda
 │       ├── agents/                            # AGENTIC FLOW: Roles/orquestadores. Deciden skills, controlan flujo, act loops.
 │       ├── skills/                            # DETERMINISTIC FLOW: Unidades reutilizables que producen VOs usando puertos.
 │       │   ├── scaffold/                      # Plan/generate/apply.
-│       │   ├── review/                        # Fetch diff/analyze/publish.
-│       │   ├── change/                        # Generate CommitIntent/apply/open MR.
-│       │   └── diagnosis/                     # Collect logs/root cause/propose fix.
+│       │   └── review/                        # Fetch diff/analyze/publish.
 │       ├── policies/                          # Políticas aplicadas: quality gates, budgets, approvals, naming.
 │       └── ports/                             # INTERFACES HACIA AFUERA: LLM, VCS, tracker, docs, CI, stores.
 │
 └── infrastructure/                            # 🔴 MUNDO "SUCIO": implementaciones concretas, frameworks, I/O, DB, HTTP, MCP.
     ├── entrypoints/                           # DRIVERS INBOUND: API/CLI. Reciben requests, validan, y llaman a aplicación.
     │   ├── api/                               # HTTP/webhooks/controllers: traduce request→input, invoca MissionService.
-    │   └── cli/                               # CLI commands: operaciones locales.
+    │   └── mcp_server/                        # MCP Server: Expone endpoints para clientes MCP.
     │
     ├── tools/                                 # DRIVERS OUTBOUND: Integraciones para side-effects (LLM/VCS/Tracker/Docs/CI).
     │   ├── llm/                               # Providers LLM (LiteLLM) + validación schema, retries.
+    │   │   └── config/                        # litellm config files.
     │   ├── vcs/                               # MCP Clients (GitLab/Bitbucket/GitHub). Enrutamiento dinámico (Coexistencia).
+    │   │   └── gitlab/                        # GitLab tool driver.
+    │   │       └── config/                    # vsc config files.
     │   ├── tracker/                           # MCP Clients (Jira/AzureDevOps). Enrutamiento dinámico.
-    │   ├── docs/                              # MCP Clients (Confluence/Notion).
-    │   └── ci/                                # MCP Clients (GitLab CI/Jenkins).
+    │   │   └── jira/                          # Jira tool driver.
+    │   │       └── config/                    # Jira config files.
+    │   └── docs/                              # MCP Clients (Confluence/Notion).
+    │       └── confluence/                    # Confluence tool driver.
+    │           └── config/                    # Confluence config files.
     │
     ├── persistence/                           # PERSISTENCIA CONCRETA: DBs y storage.
     │   ├── run_store/                         # Almacén durable de Runs/steps (Mongo/Postgres/etc.).

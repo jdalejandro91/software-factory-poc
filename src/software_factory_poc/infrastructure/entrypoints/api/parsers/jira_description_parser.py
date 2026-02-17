@@ -11,7 +11,7 @@ logger = LoggerFactoryService.build_logger(__name__)
 
 class JiraDescriptionParser:
     """
-    Utility parser to extract scaffolder configuration from raw Jira descriptions.
+    Utility parser to extract scaffolder config from raw Jira descriptions.
     Identifies and removes '```scaffolder' blocks to separate system input from user text.
     """
 

@@ -21,11 +21,11 @@ from software_factory_poc.core.application.ports.tracker_port import TrackerPort
 # Ports (Interfaces)
 from software_factory_poc.core.application.ports.vcs_port import VcsPort
 from software_factory_poc.core.domain.delivery.commit_intent import CommitIntent
+from software_factory_poc.core.domain.delivery.value_objects.branch_name import BranchName
+from software_factory_poc.core.domain.delivery.value_objects.file_content import FileContent
 
 # Domain Entities & Value Objects
 from software_factory_poc.core.domain.mission.entities.mission import Mission
-from software_factory_poc.core.domain.value_objects.vcs.branch_name import BranchName
-from software_factory_poc.core.domain.value_objects.vcs.file_content import FileContent
 
 logger = logging.getLogger(__name__)
 

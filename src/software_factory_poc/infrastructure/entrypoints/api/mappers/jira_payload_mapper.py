@@ -115,7 +115,7 @@ class JiraPayloadMapper:
     def _parse_description_config(cls, text: str) -> TaskDescription:
         """
         Extracts YAML config from text using robust Regex.
-        Separates the configuration block from the human-readable text.
+        Separates the config block from the human-readable text.
         """
         logger.info(f"� Scanning Description ({len(text)} chars) for Config Block...")
         match = cls.CODE_BLOCK_PATTERN.search(text)
@@ -140,12 +140,12 @@ class JiraPayloadMapper:
             except yaml.YAMLError as e:
                 logger.warning(f"Failed to parse YAML block in description: {e}")
             
-            # Remove the configuration block from the raw text
+            # Remove the config block from the raw text
             # We replace the *entire match* (delimiters + content) with empty string
             clean_text = text.replace(match.group(0), "").strip()
             logger.info("✂️  Config Block STRIPPED successfully.")
         else:
-            logger.debug("No configuration block found in description.")
+            logger.debug("No config block found in description.")
 
         return TaskDescription(
             raw_content=clean_text,
@@ -157,7 +157,7 @@ class JiraPayloadMapper:
     def _parse_description_config(cls, text: str) -> TaskDescription:
         """
         Extracts YAML config from text using robust Regex.
-        Separates the configuration block from the human-readable text.
+        Separates the config block from the human-readable text.
         """
         match = cls.CODE_BLOCK_PATTERN.search(text)
         config: dict[str, Any] = {}
@@ -179,11 +179,11 @@ class JiraPayloadMapper:
             except yaml.YAMLError as e:
                 logger.warning(f"Failed to parse YAML block in description: {e}")
             
-            # Remove the configuration block from the raw text
+            # Remove the config block from the raw text
             # We replace the *entire match* (delimiters + content) with empty string
             clean_text = text.replace(match.group(0), "").strip()
         else:
-            logger.debug("No configuration block found in description.")
+            logger.debug("No config block found in description.")
 
         return TaskDescription(
             raw_content=clean_text,

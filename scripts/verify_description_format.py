@@ -5,7 +5,7 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 
 from software_factory_poc.core.domain.mission.entities import TaskDescription
-from software_factory_poc.infrastructure.adapters.mappers.jira_description_mapper import (
+from software_factory_poc.infrastructure.tools.tracker.jira.mappers.jira_description_mapper import (
     JiraDescriptionMapper,
 )
 from software_factory_poc.infrastructure.entrypoints.api.mappers.jira_payload_mapper import (

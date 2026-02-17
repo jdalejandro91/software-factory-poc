@@ -7,7 +7,9 @@
       "WebSearch",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "WebFetch(domain:developer.atlassian.com)"
+      "WebFetch(domain:developer.atlassian.com)",
+      "Bash(git mv:*)",
+      "Bash(uv run ruff check:*)"
     ]
   }
 }

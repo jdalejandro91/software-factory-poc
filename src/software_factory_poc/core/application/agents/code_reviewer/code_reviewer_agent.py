@@ -22,8 +22,8 @@ from software_factory_poc.core.application.ports.vcs_port import VcsPort
 # Domain Entities & Value Objects
 from software_factory_poc.core.domain.mission.entities.mission import Mission
 from software_factory_poc.core.domain.quality.code_review_report import CodeReviewReport
-from software_factory_poc.core.domain.value_objects.vcs.review_comment import ReviewComment
-from software_factory_poc.core.domain.value_objects.vcs.review_severity import ReviewSeverity
+from software_factory_poc.core.domain.quality.value_objects.review_comment import ReviewComment
+from software_factory_poc.core.domain.quality.value_objects.review_severity import ReviewSeverity
 
 logger = logging.getLogger(__name__)
 
