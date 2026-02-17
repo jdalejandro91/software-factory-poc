@@ -340,8 +340,10 @@ class TestGetMcpTools:
 
         tools = await client.get_mcp_tools()
         assert len(tools) == 2
-        assert tools[0]["name"] == "vcs_create_branch"
-        assert tools[1]["name"] == "vcs_list_issues"
+        assert tools[0]["type"] == "function"
+        assert tools[0]["function"]["name"] == "vcs_create_branch"
+        assert tools[0]["function"]["description"] == "Creates a branch"
+        assert tools[1]["function"]["name"] == "vcs_list_issues"
 
 
 class TestExecuteTool:

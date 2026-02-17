@@ -205,9 +205,12 @@ class JiraMcpClient(TrackerPort):
 
         return [
             {
-                "name": t.name.replace("jira_", "tracker_"),
-                "description": t.description,
-                "inputSchema": t.inputSchema,
+                "type": "function",
+                "function": {
+                    "name": t.name.replace("jira_", "tracker_"),
+                    "description": t.description or "",
+                    "parameters": t.inputSchema or {},
+                },
             }
             for t in response.tools
             if t.name.startswith("jira_")

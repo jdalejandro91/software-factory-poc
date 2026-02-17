@@ -6,10 +6,41 @@ from software_factory_poc.core.application.agents.code_reviewer.code_reviewer_ag
 from software_factory_poc.core.application.agents.code_reviewer.prompt_templates.code_review_prompt_builder import (
     CodeReviewPromptBuilder,
 )
+from software_factory_poc.core.application.agents.loops.agentic_loop_runner import (
+    AgenticLoopRunner,
+)
 from software_factory_poc.core.application.agents.scaffolder.prompt_templates.scaffolding_prompt_builder import (
     ScaffoldingPromptBuilder,
 )
 from software_factory_poc.core.application.agents.scaffolder.scaffolder_agent import ScaffolderAgent
+from software_factory_poc.core.application.policies.tool_safety_policy import ToolSafetyPolicy
+from software_factory_poc.core.application.skills.review.analyze_code_review_skill import (
+    AnalyzeCodeReviewSkill,
+)
+from software_factory_poc.core.application.skills.review.fetch_review_diff_skill import (
+    FetchReviewDiffSkill,
+)
+from software_factory_poc.core.application.skills.review.publish_code_review_skill import (
+    PublishCodeReviewSkill,
+)
+from software_factory_poc.core.application.skills.review.validate_review_context_skill import (
+    ValidateReviewContextSkill,
+)
+from software_factory_poc.core.application.skills.scaffold.apply_scaffold_delivery_skill import (
+    ApplyScaffoldDeliverySkill,
+)
+from software_factory_poc.core.application.skills.scaffold.fetch_scaffold_context_skill import (
+    FetchScaffoldContextSkill,
+)
+from software_factory_poc.core.application.skills.scaffold.generate_scaffold_plan_skill import (
+    GenerateScaffoldPlanSkill,
+)
+from software_factory_poc.core.application.skills.scaffold.idempotency_check_skill import (
+    IdempotencyCheckSkill,
+)
+from software_factory_poc.core.application.skills.scaffold.report_success_skill import (
+    ReportSuccessSkill,
+)
 from software_factory_poc.infrastructure.config.app_config import AppConfig
 from software_factory_poc.infrastructure.tools.docs.confluence.confluence_mcp_client import (
     ConfluenceMcpClient,
@@ -39,42 +70,48 @@ class ProviderResolver:
 
     async def _build_drivers(self, mcp_manager: McpConnectionManager):
         """Factory interno que ensambla los 4 drivers MCP del Tooling Plane."""
-        # 1. VCS (MCP GitLab — self-managed stdio connection)
         vcs = GitlabMcpClient(settings=self.app_config.gitlab)
-
-        # 2. Tracker (MCP Jira — self-managed stdio connection)
         tracker = JiraMcpClient(settings=self.app_config.jira)
-
-        # 3. Docs (MCP Confluence — self-managed stdio connection)
         docs = ConfluenceMcpClient(settings=self.app_config.confluence)
-
-        # 4. Brain (LiteLLM)
         brain = LiteLlmBrainAdapter(self.app_config.llm)
 
         return vcs, tracker, docs, brain
 
     async def create_scaffolder_agent(self, mcp_manager: McpConnectionManager) -> ScaffolderAgent:
-        """Ensambla el ScaffolderAgent inyectando los 4 drivers MCP + PromptBuilder."""
+        """Ensambla el ScaffolderAgent inyectando los 4 drivers MCP + Skills + LoopRunner."""
         vcs, tracker, docs, brain = await self._build_drivers(mcp_manager)
+        prompt_builder = ScaffoldingPromptBuilder()
 
         return ScaffolderAgent(
             vcs=vcs,
             tracker=tracker,
             research=docs,
             brain=brain,
-            prompt_builder=ScaffoldingPromptBuilder(),
+            idempotency_check=IdempotencyCheckSkill(vcs=vcs, tracker=tracker),
+            fetch_context=FetchScaffoldContextSkill(docs=docs),
+            generate_plan=GenerateScaffoldPlanSkill(brain=brain, prompt_builder=prompt_builder),
+            apply_delivery=ApplyScaffoldDeliverySkill(vcs=vcs),
+            report_success=ReportSuccessSkill(tracker=tracker),
+            loop_runner=AgenticLoopRunner(brain=brain, policy=ToolSafetyPolicy()),
+            priority_models=self.app_config.llm.scaffolding_llm_model_priority,
         )
 
     async def create_code_reviewer_agent(
         self, mcp_manager: McpConnectionManager
     ) -> CodeReviewerAgent:
-        """Ensambla el CodeReviewerAgent inyectando los 4 drivers MCP + PromptBuilder."""
+        """Ensambla el CodeReviewerAgent inyectando los 4 drivers MCP + Skills + LoopRunner."""
         vcs, tracker, docs, brain = await self._build_drivers(mcp_manager)
+        prompt_builder = CodeReviewPromptBuilder()
 
         return CodeReviewerAgent(
             vcs=vcs,
             tracker=tracker,
             research=docs,
             brain=brain,
-            prompt_builder=CodeReviewPromptBuilder(),
+            validate_context=ValidateReviewContextSkill(tracker=tracker),
+            fetch_diff=FetchReviewDiffSkill(vcs=vcs, docs=docs),
+            analyze=AnalyzeCodeReviewSkill(brain=brain, prompt_builder=prompt_builder),
+            publish=PublishCodeReviewSkill(vcs=vcs, tracker=tracker),
+            loop_runner=AgenticLoopRunner(brain=brain, policy=ToolSafetyPolicy()),
+            priority_models=self.app_config.llm.code_review_llm_model_priority,
         )

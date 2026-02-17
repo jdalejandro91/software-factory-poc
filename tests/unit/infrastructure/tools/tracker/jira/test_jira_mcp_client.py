@@ -497,9 +497,10 @@ class TestGetMcpTools:
         tools = await client.get_mcp_tools()
 
         assert len(tools) == 2
-        assert tools[0]["name"] == "tracker_get_issue"
-        assert tools[0]["description"] == "Gets an issue"
-        assert tools[1]["name"] == "tracker_add_comment"
+        assert tools[0]["type"] == "function"
+        assert tools[0]["function"]["name"] == "tracker_get_issue"
+        assert tools[0]["function"]["description"] == "Gets an issue"
+        assert tools[1]["function"]["name"] == "tracker_add_comment"
 
     async def test_excludes_non_jira_tools(self, mock_mcp: AsyncMock) -> None:
         mock_mcp.list_tools.return_value = FakeListToolsResult(

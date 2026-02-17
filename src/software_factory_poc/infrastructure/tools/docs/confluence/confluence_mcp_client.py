@@ -11,6 +11,7 @@ from software_factory_poc.core.application.ports.common.exceptions.provider_erro
     ProviderError,
 )
 from software_factory_poc.core.application.ports.docs_port import DocsPort
+from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
 from software_factory_poc.infrastructure.tools.docs.confluence.config.confluence_settings import (
     ConfluenceSettings,
 )
@@ -26,6 +27,7 @@ class ConfluenceMcpClient(DocsPort):
 
     def __init__(self, settings: ConfluenceSettings) -> None:
         self._settings = settings
+        self._redactor = RedactionService()
 
     # ── MCP connection internals ──
 
@@ -102,3 +104,30 @@ class ConfluenceMcpClient(DocsPort):
             return str(data.get("body", {}).get("storage", {}).get("value", raw))
         except (json.JSONDecodeError, TypeError):
             return raw
+
+    # ── Agentic Operations ──
+
+    async def get_mcp_tools(self) -> list[dict[str, Any]]:
+        async with stdio_client(self._server_params()) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                response = await session.list_tools()
+
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": t.name.replace("confluence_", "docs_"),
+                    "description": t.description or "",
+                    "parameters": t.inputSchema or {},
+                },
+            }
+            for t in response.tools
+            if t.name.startswith("confluence_")
+        ]
+
+    async def execute_tool(self, tool_name: str, arguments: dict[str, Any]) -> str:
+        real_tool_name = tool_name.replace("docs_", "confluence_")
+        safe_args = self._redactor.sanitize(arguments)
+        result = await self._invoke_tool(real_tool_name, safe_args)
+        return self._extract_text(result)

@@ -24,10 +24,12 @@ class BaseAgent(ABC):
         self,
         identity: AgentIdentity,
         brain: BrainPort,
+        priority_models: list[str],
         execution_mode: AgentExecutionMode = AgentExecutionMode.DETERMINISTIC,
     ):
         self._identity = identity
         self._brain = brain
+        self._priority_models = priority_models
         self._execution_mode = execution_mode
 
     @property
@@ -70,7 +72,7 @@ class BaseAgent(ABC):
             response = await self._brain.generate_with_tools(
                 messages=messages,
                 tools=tools_payload,
-                priority_models=[],
+                priority_models=self._priority_models,
             )
 
             tool_calls: list[dict[str, Any]] = response.get("tool_calls", [])

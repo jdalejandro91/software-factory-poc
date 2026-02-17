@@ -206,9 +206,12 @@ class GitlabMcpClient(VcsPort):
 
         return [
             {
-                "name": t.name.replace("gitlab_", "vcs_"),
-                "description": t.description,
-                "inputSchema": t.inputSchema,
+                "type": "function",
+                "function": {
+                    "name": t.name.replace("gitlab_", "vcs_"),
+                    "description": t.description or "",
+                    "parameters": t.inputSchema or {},
+                },
             }
             for t in response.tools
             if t.name.startswith("gitlab_")

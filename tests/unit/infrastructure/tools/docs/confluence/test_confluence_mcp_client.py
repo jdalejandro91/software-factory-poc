@@ -41,6 +41,18 @@ class FakeCallToolResult:
     meta: dict[str, Any] | None = None
 
 
+@dataclass
+class FakeTool:
+    name: str
+    description: str = "A tool"
+    inputSchema: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class FakeListToolsResult:
+    tools: list[FakeTool] = field(default_factory=list)
+
+
 # ── Helpers ──
 
 
@@ -78,6 +90,7 @@ def mock_mcp():
     mock_session = AsyncMock()
     mock_session.initialize = AsyncMock()
     mock_session.call_tool = AsyncMock()
+    mock_session.list_tools = AsyncMock()
 
     @asynccontextmanager
     async def fake_stdio_client(_params: Any):
@@ -242,3 +255,67 @@ class TestErrorHandling:
 
         assert exc_info.value.provider == "ConfluenceMCP"
         assert exc_info.value.retryable is True
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Agentic operations — get_mcp_tools
+# ══════════════════════════════════════════════════════════════════════
+
+
+class TestGetMcpTools:
+    async def test_filters_and_renames_confluence_tools(self, mock_mcp: AsyncMock) -> None:
+        mock_mcp.list_tools.return_value = FakeListToolsResult(
+            tools=[
+                FakeTool(name="confluence_search", description="Searches Confluence"),
+                FakeTool(name="confluence_get_page", description="Gets a page"),
+                FakeTool(name="jira_get_issue", description="Not confluence"),
+            ]
+        )
+        client = _build_client()
+
+        tools = await client.get_mcp_tools()
+
+        assert len(tools) == 2
+        assert tools[0]["type"] == "function"
+        assert tools[0]["function"]["name"] == "docs_search"
+        assert tools[0]["function"]["description"] == "Searches Confluence"
+        assert tools[1]["function"]["name"] == "docs_get_page"
+
+    async def test_excludes_non_confluence_tools(self, mock_mcp: AsyncMock) -> None:
+        mock_mcp.list_tools.return_value = FakeListToolsResult(
+            tools=[
+                FakeTool(name="jira_get_issue"),
+                FakeTool(name="gitlab_create_branch"),
+            ]
+        )
+        client = _build_client()
+
+        tools = await client.get_mcp_tools()
+        assert tools == []
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Agentic operations — execute_tool
+# ══════════════════════════════════════════════════════════════════════
+
+
+class TestExecuteTool:
+    async def test_translates_docs_prefix_to_confluence(self, mock_mcp: AsyncMock) -> None:
+        mock_mcp.call_tool.return_value = _text_result("result-data")
+        client = _build_client()
+
+        result = await client.execute_tool("docs_search", {"query": "BrahMAS"})
+
+        assert result == "result-data"
+        call_args = mock_mcp.call_tool.call_args
+        assert call_args[0][0] == "confluence_search"
+
+    async def test_sanitizes_arguments_via_redactor(self, mock_mcp: AsyncMock) -> None:
+        mock_mcp.call_tool.return_value = _text_result("ok")
+        client = _build_client()
+
+        await client.execute_tool("docs_get_page", {"page_id": "123"})
+
+        call_args = mock_mcp.call_tool.call_args
+        payload = call_args[1]["arguments"]
+        assert "page_id" in payload
