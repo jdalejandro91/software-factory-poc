@@ -95,10 +95,14 @@ class TestMandatorySections:
         assert "INSTRUCCION" in _build_user_prompt()
 
     def test_output_schema_in_system(self) -> None:
-        assert "## OUTPUT SCHEMA" in BUILDER.build_system_prompt()
+        system = BUILDER.build_system_prompt()
+        assert "<output_schema>" in system
+        assert "</output_schema>" in system
 
     def test_anti_examples_in_system(self) -> None:
-        assert "## ANTI-EXAMPLES" in BUILDER.build_system_prompt()
+        system = BUILDER.build_system_prompt()
+        assert "<anti_examples>" in system
+        assert "</anti_examples>" in system
 
 
 class TestXmlDelimiters:

@@ -10,6 +10,7 @@ from software_factory_poc.core.application.skills.review.prompt_templates.code_r
     CodeReviewPromptBuilder,
 )
 from software_factory_poc.core.application.skills.skill import BaseSkill
+from software_factory_poc.core.domain.delivery import FileContent
 from software_factory_poc.core.domain.mission import Mission
 from software_factory_poc.core.domain.quality import CodeReviewReport, ReviewComment, ReviewSeverity
 from software_factory_poc.core.domain.shared.skill_type import SkillType
@@ -27,6 +28,7 @@ class AnalyzeCodeReviewInput:
     priority_models: list[str]
     repository_tree: str = ""
     code_review_params: dict[str, str] = field(default_factory=dict)
+    original_branch_code: list[FileContent] = field(default_factory=list)
 
 
 class AnalyzeCodeReviewSkill(BaseSkill[AnalyzeCodeReviewInput, CodeReviewReport]):
@@ -55,6 +57,7 @@ class AnalyzeCodeReviewSkill(BaseSkill[AnalyzeCodeReviewInput, CodeReviewReport]
                 conventions=input_data.conventions,
                 code_review_params=input_data.code_review_params or None,
                 repository_tree=input_data.repository_tree,
+                original_branch_code=input_data.original_branch_code,
             )
 
             review_schema: CodeReviewResponseSchema = await self._brain.generate_structured(

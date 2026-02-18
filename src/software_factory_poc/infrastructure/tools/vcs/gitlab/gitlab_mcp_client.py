@@ -448,24 +448,59 @@ class GitlabMcpClient(VcsTool):
             },
         )
 
-        for issue in report.comments:
-            body = self._format_inline_comment(issue)
-            await self._invoke_tool(
-                "gitlab_create_merge_request_discussion",
-                {
-                    "project_id": self._project_id,
-                    "merge_request_iid": str(mr_id),
-                    "file_path": issue.file_path,
-                    "line": issue.line_number if issue.line_number else 1,
-                    "body": body,
-                },
-            )
+        failed_inline = await self._publish_inline_comments(mr_id, report.comments)
+        if failed_inline:
+            await self._publish_fallback_note(mr_id, failed_inline)
 
         if report.is_approved:
             await self._invoke_tool(
                 "gitlab_approve_merge_request",
                 {"project_id": self._project_id, "merge_request_iid": str(mr_id)},
             )
+
+    async def _publish_inline_comments(
+        self, mr_id: str, comments: list[ReviewComment]
+    ) -> list[ReviewComment]:
+        """Attempt inline discussions; return comments that failed."""
+        failed: list[ReviewComment] = []
+        for issue in comments:
+            try:
+                await self._invoke_tool(
+                    "gitlab_create_merge_request_discussion",
+                    {
+                        "project_id": self._project_id,
+                        "merge_request_iid": str(mr_id),
+                        "file_path": issue.file_path,
+                        "line": issue.line_number if issue.line_number else 1,
+                        "body": self._format_inline_comment(issue),
+                    },
+                )
+            except ProviderError:
+                logger.warning(
+                    "Inline comment failed — will include in fallback note",
+                    file_path=issue.file_path,
+                    line_number=issue.line_number,
+                    source_system="GitLabMCP",
+                )
+                failed.append(issue)
+        return failed
+
+    async def _publish_fallback_note(self, mr_id: str, failed: list[ReviewComment]) -> None:
+        """Post a fallback MR note for inline comments that could not be placed."""
+        lines = ["### Inline Comments (fallback)", ""]
+        for issue in failed:
+            loc = f":{issue.line_number}" if issue.line_number else ""
+            lines.append(
+                f"- **[{issue.severity.value}]** `{issue.file_path}{loc}` — {issue.description}"
+            )
+        await self._invoke_tool(
+            "gitlab_create_merge_request_note",
+            {
+                "project_id": self._project_id,
+                "merge_request_iid": str(mr_id),
+                "body": "\n".join(lines),
+            },
+        )
 
     # ── Review Formatting Helpers ──
 

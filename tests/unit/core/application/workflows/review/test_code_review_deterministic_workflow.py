@@ -12,7 +12,7 @@ from software_factory_poc.core.application.tools.common.exceptions import Provid
 from software_factory_poc.core.application.workflows.review.code_review_deterministic_workflow import (
     CodeReviewDeterministicWorkflow,
 )
-from software_factory_poc.core.domain.delivery import FileChangesDTO
+from software_factory_poc.core.domain.delivery import FileChangesDTO, FileContent
 from software_factory_poc.core.domain.mission import Mission, TaskDescription
 from software_factory_poc.core.domain.quality import CodeReviewReport
 
@@ -101,6 +101,9 @@ def rejected_report() -> CodeReviewReport:
 
 
 _SAMPLE_TREE = "src/\n  auth.py\n  main.py"
+_SAMPLE_ORIGINAL_CODE = [
+    FileContent(path="src/auth.py", content="import os\n\ndef login(): pass", is_new=False),
+]
 
 
 def _setup_happy_path(
@@ -115,6 +118,7 @@ def _setup_happy_path(
     mock_vcs.validate_merge_request_existence.return_value = True
     mock_vcs.get_repository_tree.return_value = _SAMPLE_TREE
     mock_vcs.get_updated_code_diff.return_value = file_changes
+    mock_vcs.get_original_branch_code.return_value = _SAMPLE_ORIGINAL_CODE
     mock_docs.get_architecture_context.return_value = "conventions"
     mock_analyze.execute.return_value = report
 
@@ -148,6 +152,7 @@ class TestFullPipeline:
         mock_vcs.validate_merge_request_existence.assert_awaited_once_with("55")
         mock_vcs.get_repository_tree.assert_awaited_once_with("42", "feature/proj-200-auth")
         mock_vcs.get_updated_code_diff.assert_awaited_once_with("55")
+        mock_vcs.get_original_branch_code.assert_awaited_once_with("42", "feature/proj-200-auth")
         mock_docs.get_architecture_context.assert_awaited_once()
         mock_analyze.execute.assert_awaited_once()
         mock_vcs.publish_review.assert_awaited_once_with("55", approved_report)
@@ -200,6 +205,7 @@ class TestFullPipeline:
         assert call_args.code_review_params["project_id"] == "42"
         assert call_args.code_review_params["branch"] == "feature/proj-200-auth"
         assert call_args.repository_tree == _SAMPLE_TREE
+        assert call_args.original_branch_code == _SAMPLE_ORIGINAL_CODE
 
     @pytest.mark.asyncio
     async def test_error_wraps_in_workflow_execution_error(

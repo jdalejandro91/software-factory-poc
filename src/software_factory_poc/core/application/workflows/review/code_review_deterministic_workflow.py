@@ -16,9 +16,9 @@ from software_factory_poc.core.application.skills.review.analyze_code_review_ski
 from software_factory_poc.core.application.tools import DocsTool, TrackerTool, VcsTool
 from software_factory_poc.core.application.tools.common.exceptions import ProviderError
 from software_factory_poc.core.application.workflows.base_workflow import BaseWorkflow
-from software_factory_poc.core.domain.delivery import FileChangesDTO
+from software_factory_poc.core.domain.delivery import FileChangesDTO, FileContent
 from software_factory_poc.core.domain.mission import Mission
-from software_factory_poc.core.domain.quality import CodeReviewReport
+from software_factory_poc.core.domain.quality import CodeReviewReport, ReviewSeverity
 
 logger = structlog.get_logger()
 
@@ -48,10 +48,12 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
             parsed = self._step_1_validate_metadata(mission)
             await self._step_2_report_start(mission)
             await self._step_3_validate_mr(mission, parsed)
-            repo_tree, file_changes = await self._step_4_fetch_tree_and_diffs(parsed)
+            repo_tree, file_changes, original_code = await self._step_4_fetch_tree_and_diffs(parsed)
             context = await self._step_5_fetch_context(mission.summary)
             diffs_text = self._file_changes_to_diff_text(file_changes)
-            report = await self._step_6_analyze(mission, diffs_text, context, parsed, repo_tree)
+            report = await self._step_6_analyze(
+                mission, diffs_text, context, parsed, repo_tree, original_code
+            )
             await self._step_7_publish_and_transition(mission, parsed, report)
             logger.info("Code review workflow completed", mission_key=mission.key)
         except WorkflowHaltedException:
@@ -107,16 +109,20 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
 
     async def _step_4_fetch_tree_and_diffs(
         self, parsed: dict[str, str]
-    ) -> tuple[str, list[FileChangesDTO]]:
-        """Fetch lightweight directory tree and structured MR diff."""
+    ) -> tuple[str, list[FileChangesDTO], list[FileContent]]:
+        """Fetch directory tree, structured MR diff, and original branch file contents."""
         branch, project_id, mr_iid = parsed["branch"], parsed["project_id"], parsed["mr_iid"]
         logger.info("Step 4: Fetching repository tree and diffs", branch=branch, mr_iid=mr_iid)
         repo_tree = await self._vcs.get_repository_tree(project_id, branch)
         file_changes = await self._vcs.get_updated_code_diff(mr_iid)
+        original_code = await self._vcs.get_original_branch_code(project_id, branch)
         logger.info(
-            "Tree and diffs fetched", tree_length=len(repo_tree), file_changes=len(file_changes)
+            "Tree, diffs, and branch code fetched",
+            tree_length=len(repo_tree),
+            file_changes=len(file_changes),
+            original_files=len(original_code),
         )
-        return repo_tree, file_changes
+        return repo_tree, file_changes, original_code
 
     async def _step_5_fetch_context(self, service_name: str) -> str:
         """Retrieve architectural conventions from Confluence via Docs tool."""
@@ -132,6 +138,7 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
         context: str,
         parsed: dict[str, str],
         repo_tree: str = "",
+        original_code: list[FileContent] | None = None,
     ) -> CodeReviewReport:
         """Delegate LLM analysis to the AnalyzeCodeReviewSkill."""
         logger.info("Step 6: Analyzing code via LLM", mission_key=mission.key)
@@ -143,6 +150,7 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
                 priority_models=self._priority_models,
                 repository_tree=repo_tree,
                 code_review_params=parsed,
+                original_branch_code=original_code or [],
             ),
         )
         logger.info(
@@ -200,15 +208,24 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
     async def _post_success_comment(
         self, mission: Mission, mr_url: str, report: CodeReviewReport
     ) -> None:
-        """Post a summary comment to Jira with the review verdict."""
+        """Post a summary comment to Jira with the review verdict and severity breakdown."""
         verdict = "APPROVED" if report.is_approved else "CHANGES REQUESTED"
+        breakdown = self._severity_breakdown(report)
         comment = (
             f"Code Review completado: **{verdict}**\n"
             f"- MR: {mr_url}\n"
-            f"- Issues encontrados: {len(report.comments)}\n"
+            f"- Issues encontrados: {len(report.comments)} ({breakdown})\n"
             f"- Resumen: {report.summary}"
         )
         await self._tracker.add_comment(mission.key, comment)
+
+    @staticmethod
+    def _severity_breakdown(report: CodeReviewReport) -> str:
+        """Build a compact severity breakdown string: CRITICAL: N, WARNING: N, SUGGESTION: N."""
+        counts = {s: 0 for s in ReviewSeverity}
+        for c in report.comments:
+            counts[c.severity] += 1
+        return ", ".join(f"{s.value}: {counts[s]}" for s in ReviewSeverity)
 
     @staticmethod
     def _file_changes_to_diff_text(file_changes: list[FileChangesDTO]) -> str:

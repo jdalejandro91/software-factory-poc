@@ -247,6 +247,32 @@ class TestFullPipeline:
 
         mock_tracker.add_comment.assert_awaited()
 
+    @pytest.mark.asyncio
+    async def test_update_task_description_failure_prevents_status_transition(
+        self,
+        workflow: ScaffoldingDeterministicWorkflow,
+        mock_vcs: AsyncMock,
+        mock_tracker: AsyncMock,
+        mock_docs: AsyncMock,
+        mock_generate_plan: AsyncMock,
+        mission: Mission,
+        scaffold_plan: ScaffoldingResponseSchema,
+    ) -> None:
+        """If update_task_description fails, status must NOT transition to In Review."""
+        mock_vcs.validate_branch_existence.return_value = False
+        mock_docs.get_architecture_context.return_value = "arch"
+        mock_generate_plan.execute.return_value = scaffold_plan
+        mock_vcs.commit_changes.return_value = "abc123"
+        mock_vcs.create_merge_request.return_value = "https://gitlab.com/mr/1"
+        mock_tracker.update_task_description.side_effect = RuntimeError("Jira write failed")
+
+        with pytest.raises(WorkflowExecutionError):
+            await workflow.execute(mission)
+
+        mock_tracker.update_status.assert_not_awaited()
+        error_comment = mock_tracker.add_comment.call_args_list[-1][0][1]
+        assert "Jira write failed" in error_comment
+
 
 # ══════════════════════════════════════════════════════════════════════
 # Step Method Unit Tests

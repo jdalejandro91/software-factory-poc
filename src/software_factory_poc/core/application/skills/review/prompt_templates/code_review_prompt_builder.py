@@ -1,6 +1,7 @@
 import json
 from typing import Any
 
+from software_factory_poc.core.domain.delivery import FileContent
 from software_factory_poc.core.domain.mission import Mission
 
 
@@ -33,6 +34,7 @@ class CodeReviewPromptBuilder:
         conventions: str,
         code_review_params: dict[str, str] | None = None,
         repository_tree: str = "",
+        original_branch_code: list[FileContent] | None = None,
     ) -> str:
         """Build the user prompt with XML-delimited inputs."""
         sections = [
@@ -41,6 +43,8 @@ class CodeReviewPromptBuilder:
         ]
         if repository_tree:
             sections.append(_repository_tree_section(repository_tree))
+        if original_branch_code:
+            sections.append(_original_branch_code_section(original_branch_code))
         sections.append(_merge_request_diffs_section(mr_diff))
         sections.append(_final_instruction_section())
         return "\n\n".join(sections)
@@ -152,6 +156,15 @@ def _architecture_standards_section(conventions: str) -> str:
 
 def _repository_tree_section(repo_tree: str) -> str:
     return f"<repository_tree>\n{repo_tree}\n</repository_tree>"
+
+
+def _original_branch_code_section(files: list[FileContent]) -> str:
+    """Format original branch files as XML-delimited code blocks for LLM context."""
+    parts: list[str] = ["<original_branch_code>"]
+    for f in files:
+        parts.append(f'<file path="{f.path}">\n{f.content}\n</file>')
+    parts.append("</original_branch_code>")
+    return "\n".join(parts)
 
 
 def _merge_request_diffs_section(mr_diff: str) -> str:

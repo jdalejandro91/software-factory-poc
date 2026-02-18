@@ -69,11 +69,13 @@ class TestSystemPromptSections:
 
     def test_output_schema_section_present(self) -> None:
         system, _ = _build()
-        assert "## OUTPUT SCHEMA" in system
+        assert "<output_schema>" in system
+        assert "</output_schema>" in system
 
     def test_anti_examples_section_present(self) -> None:
         system, _ = _build()
-        assert "## ANTI-EXAMPLES" in system
+        assert "<anti_examples>" in system
+        assert "</anti_examples>" in system
 
     def test_tech_stack_in_system_role(self) -> None:
         system, _ = _build()
