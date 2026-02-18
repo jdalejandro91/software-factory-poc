@@ -1,9 +1,9 @@
 import json
-import logging
 import os
 import re
 from typing import Any
 
+import structlog
 from mcp import McpError
 from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
@@ -12,12 +12,14 @@ from software_factory_poc.core.application.tools import VcsTool
 from software_factory_poc.core.application.tools.common.exceptions import ProviderError
 from software_factory_poc.core.domain.delivery import CommitIntent, FileChangesDTO, FileContent
 from software_factory_poc.core.domain.quality import CodeReviewReport, ReviewComment, ReviewSeverity
+from software_factory_poc.infrastructure.observability.metrics_service import MCP_CALLS_TOTAL
 from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
+from software_factory_poc.infrastructure.observability.tracing_setup import get_tracer
 from software_factory_poc.infrastructure.tools.vcs.gitlab.config.gitlab_settings import (
     GitLabSettings,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 _HUNK_HEADER_RE = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@", re.MULTILINE)
 
@@ -94,33 +96,73 @@ class GitlabMcpClient(VcsTool):
 
     async def _invoke_tool(self, tool_name: str, arguments: dict[str, Any]) -> Any:
         """Open an stdio MCP session, invoke the tool, and translate errors."""
-        try:
-            async with stdio_client(self._server_params()) as (read, write):
-                async with ClientSession(read, write) as session:
-                    await session.initialize()
-                    result = await session.call_tool(tool_name, arguments=arguments)
-        except McpError as exc:
-            raise ProviderError(
-                provider="GitLabMCP",
-                message=f"MCP protocol error invoking '{tool_name}': {exc}",
-                retryable=True,
-            ) from exc
-        except Exception as exc:
-            raise ProviderError(
-                provider="GitLabMCP",
-                message=f"Connection failure invoking '{tool_name}': {exc}",
-                retryable=True,
-            ) from exc
+        tracer = get_tracer()
+        with tracer.start_as_current_span("mcp.call_tool") as span:
+            span.set_attribute("mcp.server", "GitLabMCP")
+            span.set_attribute("mcp.tool_name", tool_name)
+            logger.info("Invoking MCP tool", tool_name=tool_name, source_system="GitLabMCP")
+            try:
+                async with stdio_client(self._server_params()) as (read, write):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        result = await session.call_tool(tool_name, arguments=arguments)
+            except McpError as exc:
+                span.set_attribute("error", True)
+                MCP_CALLS_TOTAL.labels(provider="gitlab", tool=tool_name, outcome="error").inc()
+                logger.error(
+                    "MCP protocol error",
+                    processing_status="ERROR",
+                    error_type="McpError",
+                    error_details=str(exc),
+                    error_retryable=True,
+                    source_system="GitLabMCP",
+                    tags=["mcp-error"],
+                )
+                raise ProviderError(
+                    provider="GitLabMCP",
+                    message=f"MCP protocol error invoking '{tool_name}': {exc}",
+                    retryable=True,
+                ) from exc
+            except Exception as exc:
+                span.set_attribute("error", True)
+                MCP_CALLS_TOTAL.labels(provider="gitlab", tool=tool_name, outcome="error").inc()
+                logger.error(
+                    "MCP connection failure",
+                    processing_status="ERROR",
+                    error_type=type(exc).__name__,
+                    error_details=str(exc),
+                    error_retryable=True,
+                    source_system="GitLabMCP",
+                    tags=["mcp-error"],
+                )
+                raise ProviderError(
+                    provider="GitLabMCP",
+                    message=f"Connection failure invoking '{tool_name}': {exc}",
+                    retryable=True,
+                ) from exc
 
-        if result.isError:
-            error_detail = self._extract_text(result) or "No detail"
-            raise ProviderError(
-                provider="GitLabMCP",
-                message=f"Tool '{tool_name}' returned error: {error_detail}",
-                retryable=False,
-            )
+            if result.isError:
+                error_detail = self._extract_text(result) or "No detail"
+                span.set_attribute("error", True)
+                MCP_CALLS_TOTAL.labels(provider="gitlab", tool=tool_name, outcome="error").inc()
+                logger.error(
+                    "MCP tool returned error",
+                    processing_status="ERROR",
+                    error_type="McpToolError",
+                    error_details=error_detail,
+                    error_retryable=False,
+                    source_system="GitLabMCP",
+                    tags=["mcp-error"],
+                )
+                raise ProviderError(
+                    provider="GitLabMCP",
+                    message=f"Tool '{tool_name}' returned error: {error_detail}",
+                    retryable=False,
+                )
 
-        return result
+            MCP_CALLS_TOTAL.labels(provider="gitlab", tool=tool_name, outcome="success").inc()
+            logger.info("MCP tool completed", tool_name=tool_name, source_system="GitLabMCP")
+            return result
 
     @staticmethod
     def _extract_text(result: Any) -> str:
@@ -133,7 +175,7 @@ class GitlabMcpClient(VcsTool):
     # ── Scaffolding Flow Operations ──
 
     async def validate_branch_existence(self, branch_name: str) -> bool:
-        logger.info("[GitLabMCP] Checking branch existence: '%s'", branch_name)
+        logger.info("Checking branch existence", branch=branch_name, source_system="GitLabMCP")
         try:
             await self._invoke_tool(
                 "gitlab_get_branch",
@@ -144,7 +186,7 @@ class GitlabMcpClient(VcsTool):
             return False
 
     async def create_branch(self, branch_name: str, ref: str = "main") -> str:
-        logger.info("[GitLabMCP] Creating branch '%s' from '%s'", branch_name, ref)
+        logger.info("Creating branch", branch=branch_name, ref=ref, source_system="GitLabMCP")
         result = await self._invoke_tool(
             "gitlab_create_branch",
             {"project_id": self._project_id, "branch": branch_name, "ref": ref},
@@ -158,7 +200,12 @@ class GitlabMcpClient(VcsTool):
     async def create_merge_request(
         self, source_branch: str, target_branch: str, title: str, description: str
     ) -> str:
-        logger.info("[GitLabMCP] Creating MR: '%s' → '%s'", source_branch, target_branch)
+        logger.info(
+            "Creating merge request",
+            source_branch=source_branch,
+            target_branch=target_branch,
+            source_system="GitLabMCP",
+        )
         result = await self._invoke_tool(
             "gitlab_create_merge_request",
             {
@@ -205,7 +252,7 @@ class GitlabMcpClient(VcsTool):
 
     async def validate_merge_request_existence(self, mr_iid: str) -> bool:
         """Check if the MR exists and is open via MCP."""
-        logger.info("[GitLabMCP] Validating MR existence: iid=%s", mr_iid)
+        logger.info("Validating MR existence", mr_iid=mr_iid, source_system="GitLabMCP")
         try:
             result = await self._invoke_tool(
                 "gitlab_get_merge_request",
@@ -219,7 +266,10 @@ class GitlabMcpClient(VcsTool):
     async def get_repository_tree(self, project_id: str, branch: str) -> str:
         """Return lightweight directory skeleton filtered of noise."""
         logger.info(
-            "[GitLabMCP] Fetching repository tree for '%s' (project=%s)", branch, project_id
+            "Fetching repository tree",
+            branch=branch,
+            project_id=project_id,
+            source_system="GitLabMCP",
         )
         entries = await self._list_tree_entries(project_id, branch)
         relevant = self._filter_relevant_paths(entries)
@@ -227,7 +277,9 @@ class GitlabMcpClient(VcsTool):
 
     async def get_original_branch_code(self, project_id: str, branch: str) -> list[FileContent]:
         """List repository tree and fetch content for relevant files."""
-        logger.info("[GitLabMCP] Fetching branch code for '%s' (project=%s)", branch, project_id)
+        logger.info(
+            "Fetching branch code", branch=branch, project_id=project_id, source_system="GitLabMCP"
+        )
         entries = await self._list_tree_entries(project_id, branch)
         relevant = self._filter_relevant_paths(entries)
         return await self._fetch_file_contents(project_id, branch, relevant)
@@ -303,7 +355,7 @@ class GitlabMcpClient(VcsTool):
                 content = self._extract_text(result)
                 files.append(FileContent(path=path, content=content, is_new=False))
             except ProviderError:
-                logger.debug("[GitLabMCP] Skipping unreadable file: %s", path)
+                logger.debug("Skipping unreadable file", file_path=path, source_system="GitLabMCP")
         return files
 
     # ── Diff Parsing Helpers ──
@@ -326,7 +378,9 @@ class GitlabMcpClient(VcsTool):
                 results.append(GitlabMcpClient._parse_single_change(change))
             except Exception:
                 path = change.get("new_path", change.get("old_path", "<unknown>"))
-                logger.warning("[GitLabMCP] Skipping unparseable diff for %s", path)
+                logger.warning(
+                    "Skipping unparseable diff", file_path=path, source_system="GitLabMCP"
+                )
         return results
 
     @staticmethod

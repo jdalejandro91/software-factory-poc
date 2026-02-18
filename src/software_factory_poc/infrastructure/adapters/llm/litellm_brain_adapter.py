@@ -1,16 +1,28 @@
+"""Implements BrainPort via ``litellm.acompletion`` with priority-based model fallback.
+
+Includes full prompt visibility (redacted) and token usage tracking for SRE.
+"""
+
 import json
-import logging
 import os
+import time
 from typing import Any, NoReturn
 
 import litellm
+import structlog
 from pydantic import ValidationError
 
 from software_factory_poc.core.application.ports import BrainPort, T
 from software_factory_poc.core.application.tools.common.exceptions import ProviderError
 from software_factory_poc.infrastructure.adapters.llm.config.llm_settings import LlmSettings
+from software_factory_poc.infrastructure.observability.metrics_service import (
+    LLM_LATENCY_SECONDS,
+    LLM_TOKENS_TOTAL,
+)
+from software_factory_poc.infrastructure.observability.redaction_service import redact_text
+from software_factory_poc.infrastructure.observability.tracing_setup import get_tracer
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class LiteLlmBrainAdapter(BrainPort):
@@ -34,15 +46,29 @@ class LiteLlmBrainAdapter(BrainPort):
         system_prompt: str = "",
     ) -> T:
         last_error: Exception | None = None
+        tracer = get_tracer()
 
         for model_id in priority_models:
             try:
                 messages = self._build_messages(prompt, system_prompt)
-                response = await litellm.acompletion(
-                    model=self._normalize_model_id(model_id),
-                    messages=messages,
-                    response_format=schema,
-                )
+                self._log_outgoing_payload(messages, model_id, "generate_structured")
+
+                with tracer.start_as_current_span("llm.completion") as span:
+                    span.set_attribute("llm.model", model_id)
+                    span.set_attribute("llm.method", "generate_structured")
+
+                    start = time.perf_counter()
+                    response = await litellm.acompletion(
+                        model=self._normalize_model_id(model_id),
+                        messages=messages,
+                        response_format=schema,
+                    )
+                    duration_ms = round((time.perf_counter() - start) * 1000, 2)
+
+                    self._log_inference_success(
+                        response, model_id, duration_ms, "generate_structured"
+                    )
+
                 raw_content: str | None = response.choices[0].message.content
                 return self._parse_structured_response(raw_content, schema, model_id)
 
@@ -50,7 +76,13 @@ class LiteLlmBrainAdapter(BrainPort):
                 raise
             except Exception as exc:
                 last_error = exc
-                logger.warning("Model %s failed (generate_structured): %s", model_id, exc)
+                logger.warning(
+                    "Model failed",
+                    llm_model=model_id,
+                    method="generate_structured",
+                    error_type=type(exc).__name__,
+                    error_details=str(exc),
+                )
 
         self._raise_all_failed("generate_structured", priority_models, last_error)
 
@@ -61,23 +93,82 @@ class LiteLlmBrainAdapter(BrainPort):
         priority_models: list[str],
     ) -> dict[str, Any]:
         last_error: Exception | None = None
+        tracer = get_tracer()
 
         for model_id in priority_models:
             try:
-                response = await litellm.acompletion(
-                    model=self._normalize_model_id(model_id),
-                    messages=messages,
-                    tools=tools,
-                )
+                self._log_outgoing_payload(messages, model_id, "generate_with_tools")
+
+                with tracer.start_as_current_span("llm.completion") as span:
+                    span.set_attribute("llm.model", model_id)
+                    span.set_attribute("llm.method", "generate_with_tools")
+
+                    start = time.perf_counter()
+                    response = await litellm.acompletion(
+                        model=self._normalize_model_id(model_id),
+                        messages=messages,
+                        tools=tools,
+                    )
+                    duration_ms = round((time.perf_counter() - start) * 1000, 2)
+
+                    self._log_inference_success(
+                        response, model_id, duration_ms, "generate_with_tools"
+                    )
+
                 return self._extract_tool_response(response)
 
             except ProviderError:
                 raise
             except Exception as exc:
                 last_error = exc
-                logger.warning("Model %s failed (generate_with_tools): %s", model_id, exc)
+                logger.warning(
+                    "Model failed",
+                    llm_model=model_id,
+                    method="generate_with_tools",
+                    error_type=type(exc).__name__,
+                    error_details=str(exc),
+                )
 
         self._raise_all_failed("generate_with_tools", priority_models, last_error)
+
+    # ── Observability helpers ─────────────────────────────────────
+
+    @staticmethod
+    def _log_outgoing_payload(messages: list[dict[str, Any]], model_id: str, method: str) -> None:
+        """Log the redacted prompt payload before sending to LLM."""
+        raw_prompt = json.dumps(messages, ensure_ascii=False, default=str)
+        redacted_prompt = redact_text(raw_prompt)
+        logger.info(
+            "Sending payload to LLM",
+            prompt_text=redacted_prompt,
+            llm_model=model_id,
+            method=method,
+            tags=["llm-prompt"],
+        )
+
+    @staticmethod
+    def _log_inference_success(
+        response: Any, model_id: str, duration_ms: float, method: str
+    ) -> None:
+        """Log successful inference with token usage and duration, and record Prometheus metrics."""
+        usage = getattr(response, "usage", None)
+        tokens_in = getattr(usage, "prompt_tokens", 0) if usage else 0
+        tokens_out = getattr(usage, "completion_tokens", 0) if usage else 0
+
+        LLM_TOKENS_TOTAL.labels(model=model_id, type="prompt").inc(tokens_in)
+        LLM_TOKENS_TOTAL.labels(model=model_id, type="completion").inc(tokens_out)
+        LLM_LATENCY_SECONDS.labels(model=model_id).observe(duration_ms / 1000)
+
+        logger.info(
+            "LLM inference completed",
+            llm_model=model_id,
+            method=method,
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+            processing_status="SUCCESS",
+            processing_duration_ms=duration_ms,
+            tags=["llm-response"],
+        )
 
     # ── Private helpers ──────────────────────────────────────────
 

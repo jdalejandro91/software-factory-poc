@@ -3,6 +3,7 @@ import os
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 from software_factory_poc.infrastructure.config.main_settings import Settings
 from software_factory_poc.infrastructure.entrypoints.api.code_review_router import (
@@ -14,14 +15,22 @@ from software_factory_poc.infrastructure.entrypoints.api.health_router import (
 from software_factory_poc.infrastructure.entrypoints.api.scaffolding_router import (
     router as scaffolding_router,
 )
-from software_factory_poc.infrastructure.observability.logger_factory_service import (
-    LoggerFactoryService,
+from software_factory_poc.infrastructure.observability import (
+    configure_logging,
+    get_logger,
 )
+from software_factory_poc.infrastructure.observability.logging import (
+    CorrelationMiddleware,
+)
+from software_factory_poc.infrastructure.observability.tracing_setup import configure_tracing
 
-logger = LoggerFactoryService.build_logger(__name__)
+configure_logging()
+configure_tracing()
+
+logger = get_logger(__name__)
 
 
-def boot_diagnostics():
+def boot_diagnostics() -> None:
     try:
         logger.info(">>> BOOT DIAGNOSTICS START <<<")
         critical_vars = [
@@ -34,31 +43,43 @@ def boot_diagnostics():
         ]
         for k in critical_vars:
             val = os.getenv(k)
-            status = "PRESENT" if val else "MISSING"
-            logger.info(f"ENV: {k:<30} = {status}")
+            env_status = "PRESENT" if val else "MISSING"
+            logger.info("ENV check", env_var=k, env_status=env_status)
         logger.info(">>> BOOT DIAGNOSTICS END <<<")
     except Exception as e:
-        logger.error(f"Error during boot diagnostics: {e}")
+        logger.error(
+            "Error during boot diagnostics", error_type=type(e).__name__, error_details=str(e)
+        )
 
 
 def create_app(settings: Settings) -> FastAPI:
-    # 1. CRITICAL: Configure Root Logger so INFO logs appear in Docker console
-    LoggerFactoryService.configure_root_logger()
+    configure_logging()
+    configure_tracing()
 
     boot_diagnostics()
 
-    logger.info(f"--- APP INITIALIZATION: {settings.app_name} ---")
+    logger.info("APP INITIALIZATION", app_name=settings.app_name)
 
     app = FastAPI(title=settings.app_name)
 
+    app.add_middleware(CorrelationMiddleware)
+
     @app.exception_handler(RequestValidationError)
-    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    async def validation_exception_handler(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
         error_details = exc.errors()
-        logger.error(f"Validation error: {error_details}")
+        logger.error(
+            "Validation error",
+            error_type="RequestValidationError",
+            error_details=str(error_details),
+        )
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={"detail": error_details, "body": str(exc.body)},
         )
+
+    FastAPIInstrumentor.instrument_app(app)
 
     app.include_router(health_router)
     app.include_router(scaffolding_router, prefix="/api/v1")

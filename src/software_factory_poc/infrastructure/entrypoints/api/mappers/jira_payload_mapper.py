@@ -1,15 +1,13 @@
 import re
 from typing import Any
 
+import structlog
 import yaml
 
 from software_factory_poc.core.domain.mission import Mission, TaskDescription, TaskUser
 from software_factory_poc.infrastructure.entrypoints.api.dtos.jira_webhook_dto import JiraWebhookDTO
-from software_factory_poc.infrastructure.observability.logger_factory_service import (
-    LoggerFactoryService,
-)
 
-logger = LoggerFactoryService.build_logger(__name__)
+logger = structlog.get_logger()
 
 
 class JiraPayloadMapper:
@@ -96,7 +94,11 @@ class JiraPayloadMapper:
             status = fields.get("status", {}).get("name", "unknown")
             issue_type = fields.get("issuetype", {}).get("name", "Task")
 
-        logger.info(f"Processing Issue {key}: Parsing Description ({len(description_text)} chars)")
+        logger.info(
+            "Parsing issue description",
+            issue_key=key,
+            description_length=len(description_text),
+        )
 
         # 2. Parse Description (Regex + YAML)
         parsing_result = cls._parse_description_config(description_text)
@@ -116,7 +118,9 @@ class JiraPayloadMapper:
         )
 
         logger.info(
-            f"✅ Domain Task Created: {task.key} | Config Found: {len(task.description.config) > 0}"
+            "Domain Mission created",
+            mission_key=task.key,
+            config_found=len(task.description.config) > 0,
         )
         return task
 
@@ -126,9 +130,9 @@ class JiraPayloadMapper:
         Extracts YAML config from text using robust Regex.
         Separates the config block from the human-readable text.
         """
-        logger.info(f"� Scanning Description ({len(text)} chars) for Config Block...")
+        logger.info("Scanning description for config block", text_length=len(text))
         match = cls.CODE_BLOCK_PATTERN.search(text)
-        logger.info(f"🧩 Match Found: {bool(match)}")
+        logger.info("Config block search result", match_found=bool(match))
 
         config: dict[str, Any] = {}
         clean_text = text
@@ -145,15 +149,18 @@ class JiraPayloadMapper:
                 if isinstance(parsed, dict):
                     config = parsed
                 else:
-                    logger.warning("Parsed YAML is not a dictionary. Ignoring.")
+                    logger.warning("Parsed YAML is not a dictionary — ignoring")
             except yaml.YAMLError as e:
-                logger.warning(f"Failed to parse YAML block in description: {e}")
+                logger.warning(
+                    "Failed to parse YAML block",
+                    error_type="YAMLError",
+                    error_details=str(e),
+                )
 
             # Remove the config block from the raw text
-            # We replace the *entire match* (delimiters + content) with empty string
             clean_text = text.replace(match.group(0), "").strip()
-            logger.info("✂️  Config Block STRIPPED successfully.")
+            logger.info("Config block stripped successfully")
         else:
-            logger.debug("No config block found in description.")
+            logger.debug("No config block found in description")
 
         return TaskDescription(raw_content=clean_text, config=config)

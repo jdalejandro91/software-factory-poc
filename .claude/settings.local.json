@@ -38,7 +38,15 @@
       "Bash(mypy:*)",
       "Bash(vulture:*)",
       "Bash(pytest:*)",
-      "Bash(.venv/bin/vulture:*)"
+      "Bash(.venv/bin/vulture:*)",
+      "Bash(git -C /Users/juancadena/projects/software-factory-poc status)",
+      "Bash(git -C /Users/juancadena/projects/software-factory-poc diff --stat)",
+      "Bash(export PATH=\"$HOME/.local/bin:$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH\")",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(uv sync:*)",
+      "Bash(export PATH=\"$HOME/.local/bin:$HOME/.cargo/bin:/opt/homebrew/bin:$PATH\")",
+      "Bash(.venv/bin/uv run ruff check:*)"
     ]
   }
 }

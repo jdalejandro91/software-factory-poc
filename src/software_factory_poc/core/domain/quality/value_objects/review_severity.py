@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class ReviewSeverity(str, Enum):
+class ReviewSeverity(StrEnum):
     CRITICAL = "CRITICAL"
     WARNING = "WARNING"
     SUGGESTION = "SUGGESTION"

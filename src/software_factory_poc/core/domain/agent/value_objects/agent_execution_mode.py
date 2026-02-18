@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class AgentExecutionMode(str, Enum):
+class AgentExecutionMode(StrEnum):
     """Defines how an agent executes its mission.
 
     * DETERMINISTIC: step-by-step pipeline with no LLM autonomy.
