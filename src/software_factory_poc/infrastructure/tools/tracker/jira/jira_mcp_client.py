@@ -155,12 +155,23 @@ class JiraMcpClient(TrackerTool):
             {"issue_key": ticket_id, "transition_name": status},
         )
 
-    async def update_task_description(self, ticket_id: str, description: str) -> None:
-        logger.info("[JiraMCP] Updating description of %s", ticket_id)
+    async def update_task_description(self, ticket_id: str, appended_text: str) -> None:
+        """Fetch current description and append new text (get-then-update via MCP)."""
+        logger.info("[JiraMCP] Appending to description of %s", ticket_id)
+        current = await self._fetch_current_description(ticket_id)
+        updated = current + appended_text
         await self._invoke_tool(
             "jira_update_issue",
-            {"issue_key": ticket_id, "fields": {"description": description}},
+            {"issue_key": ticket_id, "fields": {"description": updated}},
         )
+
+    async def _fetch_current_description(self, ticket_id: str) -> str:
+        """Retrieve the current Jira issue description via MCP."""
+        result = await self._invoke_tool("jira_get_issue", {"issue_key": ticket_id})
+        data = self._parse_json(
+            self._extract_text(result), context=f"fetch_description({ticket_id})"
+        )
+        return data.get("fields", {}).get("description", "") or ""
 
     async def post_review_summary(self, ticket_id: str, report: CodeReviewReport) -> None:
         logger.info("[JiraMCP] Posting review summary to %s", ticket_id)

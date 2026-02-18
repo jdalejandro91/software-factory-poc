@@ -373,19 +373,36 @@ class TestUpdateStatus:
 
 
 class TestUpdateTaskDescription:
-    async def test_calls_jira_update_issue(self, mock_mcp: AsyncMock) -> None:
-        mock_mcp.call_tool.return_value = _text_result("ok")
+    async def test_fetches_current_then_appends(self, mock_mcp: AsyncMock) -> None:
+        issue_json = _jira_issue_json(description="Existing content.")
+        mock_mcp.call_tool.side_effect = [
+            _text_result(issue_json),  # jira_get_issue
+            _text_result("ok"),  # jira_update_issue
+        ]
         client = _build_client()
 
-        await client.update_task_description("PROJ-1", "New description content")
+        await client.update_task_description("PROJ-1", "\n\nAppended text")
 
-        mock_mcp.call_tool.assert_called_once_with(
-            "jira_update_issue",
-            arguments={
-                "issue_key": "PROJ-1",
-                "fields": {"description": "New description content"},
-            },
-        )
+        calls = mock_mcp.call_tool.call_args_list
+        assert len(calls) == 2
+        assert calls[0][0][0] == "jira_get_issue"
+        assert calls[1][0][0] == "jira_update_issue"
+        updated_desc = calls[1][1]["arguments"]["fields"]["description"]
+        assert updated_desc == "Existing content.\n\nAppended text"
+
+    async def test_handles_empty_current_description(self, mock_mcp: AsyncMock) -> None:
+        issue_json = _jira_issue_json(description="")
+        mock_mcp.call_tool.side_effect = [
+            _text_result(issue_json),  # jira_get_issue
+            _text_result("ok"),  # jira_update_issue
+        ]
+        client = _build_client()
+
+        await client.update_task_description("PROJ-1", "New content")
+
+        calls = mock_mcp.call_tool.call_args_list
+        updated_desc = calls[1][1]["arguments"]["fields"]["description"]
+        assert updated_desc == "New content"
 
 
 # ══════════════════════════════════════════════════════════════════════

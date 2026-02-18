@@ -2,6 +2,7 @@
 
 import logging
 import re
+from datetime import UTC, datetime
 
 from software_factory_poc.core.application.exceptions import (
     WorkflowExecutionError,
@@ -32,12 +33,14 @@ class ScaffoldingDeterministicWorkflow(BaseWorkflow):
         docs: DocsTool,
         generate_plan: GenerateScaffoldPlanSkill,
         priority_models: list[str],
+        architecture_doc_page_id: str,
     ) -> None:
         self._vcs = vcs
         self._tracker = tracker
         self._docs = docs
         self._generate_plan = generate_plan
         self._priority_models = priority_models
+        self._architecture_doc_page_id = architecture_doc_page_id
 
     async def execute(self, mission: Mission) -> None:
         """Orchestrate the full scaffolding pipeline."""
@@ -45,7 +48,7 @@ class ScaffoldingDeterministicWorkflow(BaseWorkflow):
             parsed = self._parse_mission(mission)
             await self._step_1_report_start(mission)
             await self._step_2_check_idempotency(mission, parsed["branch_name"])
-            context = await self._step_3_fetch_context(parsed["service_name"] or mission.key)
+            context = await self._step_3_fetch_context()
             plan = await self._step_4_generate_plan(mission, context)
             commit_hash, mr_url = await self._step_5_create_and_commit(mission, parsed, plan)
             await self._step_6_report_success(mission, parsed, commit_hash, mr_url, len(plan.files))
@@ -93,10 +96,12 @@ class ScaffoldingDeterministicWorkflow(BaseWorkflow):
             await self._tracker.update_status(mission.key, "In Review")
             raise WorkflowHaltedException(msg, context={"branch": branch_name})
 
-    async def _step_3_fetch_context(self, service_name: str) -> str:
-        """Retrieve architectural context from Confluence via DocsTool."""
-        logger.info("[Scaffold] Fetching architecture context for '%s'", service_name)
-        return await self._docs.get_architecture_context(service_name)
+    async def _step_3_fetch_context(self) -> str:
+        """Retrieve architectural context from Confluence via explicit page ID."""
+        logger.info(
+            "[Scaffold] Fetching architecture context (page_id=%s)", self._architecture_doc_page_id
+        )
+        return await self._docs.get_architecture_context(page_id=self._architecture_doc_page_id)
 
     async def _step_4_generate_plan(
         self, mission: Mission, arch_context: str
@@ -154,14 +159,19 @@ class ScaffoldingDeterministicWorkflow(BaseWorkflow):
     async def _update_task_description(
         self, mission: Mission, mr_url: str, project_id: str, branch_name: str
     ) -> None:
-        yaml_block = (
-            f"\n\n---\ncode_review_params:\n"
+        yaml_block = self._build_code_review_params_yaml(project_id, branch_name, mr_url)
+        await self._tracker.update_task_description(mission.key, yaml_block)
+
+    @staticmethod
+    def _build_code_review_params_yaml(project_id: str, branch_name: str, mr_url: str) -> str:
+        """Build YAML automation state block for the subsequent Code Review agent."""
+        timestamp = datetime.now(UTC).isoformat()
+        return (
+            "\n\n---\ncode_review_params:\n"
             f'  gitlab_project_id: "{project_id}"\n'
             f'  source_branch_name: "{branch_name}"\n'
             f'  review_request_url: "{mr_url}"\n'
-        )
-        await self._tracker.update_task_description(
-            mission.key, mission.description.raw_content + yaml_block
+            f'  generated_at: "{timestamp}"\n'
         )
 
     async def _post_success_comment(

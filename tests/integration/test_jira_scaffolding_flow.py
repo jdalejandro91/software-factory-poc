@@ -84,6 +84,7 @@ async def test_scaffolder_agent_flow():
         docs=mock_docs,
         generate_plan=generate_plan_skill,
         priority_models=priority_models,
+        architecture_doc_page_id="3571713",
     )
 
     # 4. Instantiate Agent

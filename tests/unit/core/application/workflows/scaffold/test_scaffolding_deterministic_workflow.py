@@ -57,6 +57,7 @@ def workflow(
         docs=mock_docs,
         generate_plan=mock_generate_plan,
         priority_models=["openai:gpt-4o"],
+        architecture_doc_page_id="3571713",
     )
 
 
@@ -121,7 +122,7 @@ class TestFullPipeline:
         await workflow.execute(mission)
 
         mock_vcs.validate_branch_existence.assert_awaited_once()
-        mock_docs.get_architecture_context.assert_awaited_once_with("my-service")
+        mock_docs.get_architecture_context.assert_awaited_once_with(page_id="3571713")
         mock_generate_plan.execute.assert_awaited_once()
         mock_vcs.create_branch.assert_awaited_once()
         mock_vcs.commit_changes.assert_awaited_once()
@@ -222,6 +223,9 @@ class TestFullPipeline:
         desc_arg = mock_tracker.update_task_description.call_args[0][1]
         assert "code_review_params:" in desc_arg
         assert 'gitlab_project_id: "42"' in desc_arg
+        assert 'source_branch_name: "feature/proj-100-my-service"' in desc_arg
+        assert 'review_request_url: "https://gitlab.com/mr/1"' in desc_arg
+        assert "generated_at:" in desc_arg
         last_comment = mock_tracker.add_comment.call_args_list[-1][0][1]
         assert "abc123" in last_comment
         assert "https://gitlab.com/mr/1" in last_comment
@@ -317,14 +321,14 @@ class TestStepMethods:
             await workflow._step_4_generate_plan(mission, "ctx")
 
     @pytest.mark.asyncio
-    async def test_fetch_context_delegates_to_docs(
+    async def test_fetch_context_uses_explicit_page_id(
         self,
         workflow: ScaffoldingDeterministicWorkflow,
         mock_docs: AsyncMock,
     ) -> None:
         mock_docs.get_architecture_context.return_value = "arch ctx"
 
-        result = await workflow._step_3_fetch_context("my-service")
+        result = await workflow._step_3_fetch_context()
 
         assert result == "arch ctx"
-        mock_docs.get_architecture_context.assert_awaited_once_with("my-service")
+        mock_docs.get_architecture_context.assert_awaited_once_with(page_id="3571713")

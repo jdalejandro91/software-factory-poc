@@ -11,6 +11,7 @@ from software_factory_poc.core.application.skills.review.analyze_code_review_ski
 from software_factory_poc.core.application.workflows.review.code_review_deterministic_workflow import (
     CodeReviewDeterministicWorkflow,
 )
+from software_factory_poc.core.domain.delivery import FileChangesDTO
 from software_factory_poc.core.domain.mission import Mission, TaskDescription
 from software_factory_poc.core.domain.quality import CodeReviewReport
 
@@ -76,6 +77,19 @@ def mission() -> Mission:
 
 
 @pytest.fixture()
+def sample_file_changes() -> list[FileChangesDTO]:
+    return [
+        FileChangesDTO(
+            old_path="src/auth.py",
+            new_path="src/auth.py",
+            hunks=["@@ -1 +1,3 @@\n import os\n+import json\n+import yaml"],
+            added_lines=[2, 3],
+            removed_lines=[],
+        ),
+    ]
+
+
+@pytest.fixture()
 def approved_report() -> CodeReviewReport:
     return CodeReviewReport(is_approved=True, summary="LGTM", comments=[])
 
@@ -83,6 +97,22 @@ def approved_report() -> CodeReviewReport:
 @pytest.fixture()
 def rejected_report() -> CodeReviewReport:
     return CodeReviewReport(is_approved=False, summary="Needs work", comments=[])
+
+
+def _setup_happy_path(
+    mock_vcs: AsyncMock,
+    mock_docs: AsyncMock,
+    mock_analyze: AsyncMock,
+    report: CodeReviewReport,
+    file_changes: list[FileChangesDTO],
+) -> None:
+    """Configure mocks for a successful full pipeline run."""
+    mock_vcs.validate_branch_existence.return_value = True
+    mock_vcs.validate_merge_request_existence.return_value = True
+    mock_vcs.get_original_branch_code.return_value = []
+    mock_vcs.get_updated_code_diff.return_value = file_changes
+    mock_docs.get_architecture_context.return_value = "conventions"
+    mock_analyze.execute.return_value = report
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -103,17 +133,15 @@ class TestFullPipeline:
         mock_analyze: AsyncMock,
         mission: Mission,
         approved_report: CodeReviewReport,
+        sample_file_changes: list[FileChangesDTO],
     ) -> None:
-        mock_vcs.validate_branch_existence.return_value = True
-        mock_vcs.get_original_branch_code.return_value = []
-        mock_vcs.get_updated_code_diff.return_value = "diff --git ..."
-        mock_docs.get_architecture_context.return_value = "conventions"
-        mock_analyze.execute.return_value = approved_report
+        _setup_happy_path(mock_vcs, mock_docs, mock_analyze, approved_report, sample_file_changes)
 
         await workflow.execute(mission)
 
         mock_tracker.add_comment.assert_awaited()
         mock_vcs.validate_branch_existence.assert_awaited_once_with("feature/proj-200-auth")
+        mock_vcs.validate_merge_request_existence.assert_awaited_once_with("55")
         mock_vcs.get_original_branch_code.assert_awaited_once_with("42", "feature/proj-200-auth")
         mock_vcs.get_updated_code_diff.assert_awaited_once_with("55")
         mock_docs.get_architecture_context.assert_awaited_once()
@@ -131,12 +159,9 @@ class TestFullPipeline:
         mock_analyze: AsyncMock,
         mission: Mission,
         rejected_report: CodeReviewReport,
+        sample_file_changes: list[FileChangesDTO],
     ) -> None:
-        mock_vcs.validate_branch_existence.return_value = True
-        mock_vcs.get_original_branch_code.return_value = []
-        mock_vcs.get_updated_code_diff.return_value = "diff"
-        mock_docs.get_architecture_context.return_value = "ctx"
-        mock_analyze.execute.return_value = rejected_report
+        _setup_happy_path(mock_vcs, mock_docs, mock_analyze, rejected_report, sample_file_changes)
 
         await workflow.execute(mission)
 
@@ -151,12 +176,10 @@ class TestFullPipeline:
         mock_analyze: AsyncMock,
         mission: Mission,
         approved_report: CodeReviewReport,
+        sample_file_changes: list[FileChangesDTO],
     ) -> None:
-        mock_vcs.validate_branch_existence.return_value = True
-        mock_vcs.get_original_branch_code.return_value = []
-        mock_vcs.get_updated_code_diff.return_value = "diff content"
+        _setup_happy_path(mock_vcs, mock_docs, mock_analyze, approved_report, sample_file_changes)
         mock_docs.get_architecture_context.return_value = "conventions text"
-        mock_analyze.execute.return_value = approved_report
 
         await workflow.execute(mission)
 
@@ -164,7 +187,7 @@ class TestFullPipeline:
         assert isinstance(call_args, AnalyzeCodeReviewInput)
         assert call_args.mission.summary == "Review MR for authentication module"
         assert call_args.mission.key == "PROJ-200"
-        assert call_args.mr_diff == "diff content"
+        assert "src/auth.py" in call_args.mr_diff
         assert call_args.conventions == "conventions text"
         assert call_args.priority_models == ["openai:gpt-4o"]
         assert (
@@ -199,18 +222,63 @@ class TestFullPipeline:
         mock_analyze: AsyncMock,
         mission: Mission,
         approved_report: CodeReviewReport,
+        sample_file_changes: list[FileChangesDTO],
     ) -> None:
-        mock_vcs.validate_branch_existence.return_value = True
-        mock_vcs.get_original_branch_code.return_value = []
-        mock_vcs.get_updated_code_diff.return_value = "diff"
-        mock_docs.get_architecture_context.return_value = "ctx"
-        mock_analyze.execute.return_value = approved_report
+        _setup_happy_path(mock_vcs, mock_docs, mock_analyze, approved_report, sample_file_changes)
 
         await workflow.execute(mission)
 
         success_comment = mock_tracker.add_comment.call_args_list[-1][0][1]
         assert "APPROVED" in success_comment
         assert "LGTM" in success_comment
+
+
+# ══════════════════════════════════════════════════════════════════════
+# MR Guardrail Tests
+# ══════════════════════════════════════════════════════════════════════
+
+
+class TestMrGuardrail:
+    """Verify the MR validation guardrail halts the workflow correctly."""
+
+    @pytest.mark.asyncio
+    async def test_halts_when_mr_not_found(
+        self,
+        workflow: CodeReviewDeterministicWorkflow,
+        mock_vcs: AsyncMock,
+        mock_tracker: AsyncMock,
+        mock_docs: AsyncMock,
+        mock_analyze: AsyncMock,
+        mission: Mission,
+    ) -> None:
+        mock_vcs.validate_branch_existence.return_value = True
+        mock_vcs.validate_merge_request_existence.return_value = False
+
+        await workflow.execute(mission)  # Should NOT raise (halted gracefully)
+
+        mock_tracker.add_comment.assert_awaited()
+        halt_comment = mock_tracker.add_comment.call_args_list[-1][0][1]
+        assert "no existe o esta cerrado" in halt_comment
+        mock_vcs.get_updated_code_diff.assert_not_awaited()
+        mock_analyze.execute.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_proceeds_when_mr_exists(
+        self,
+        workflow: CodeReviewDeterministicWorkflow,
+        mock_vcs: AsyncMock,
+        mock_docs: AsyncMock,
+        mock_analyze: AsyncMock,
+        mission: Mission,
+        approved_report: CodeReviewReport,
+        sample_file_changes: list[FileChangesDTO],
+    ) -> None:
+        _setup_happy_path(mock_vcs, mock_docs, mock_analyze, approved_report, sample_file_changes)
+
+        await workflow.execute(mission)
+
+        mock_vcs.get_updated_code_diff.assert_awaited_once()
+        mock_analyze.execute.assert_awaited_once()
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -296,7 +364,36 @@ class TestStepMethods:
     ) -> None:
         mock_docs.get_architecture_context.return_value = "arch ctx"
 
-        result = await workflow._step_4_fetch_context("my-service")
+        result = await workflow._step_5_fetch_context("my-service")
 
         assert result == "arch ctx"
-        mock_docs.get_architecture_context.assert_awaited_once_with("my-service")
+        mock_docs.get_architecture_context.assert_awaited_once_with(page_id="my-service")
+
+    def test_file_changes_to_diff_text(self) -> None:
+        changes = [
+            FileChangesDTO(
+                old_path="a.py",
+                new_path="a.py",
+                hunks=["@@ -1 +1,2 @@\n line1\n+line2"],
+                added_lines=[2],
+                removed_lines=[],
+            ),
+        ]
+        result = CodeReviewDeterministicWorkflow._file_changes_to_diff_text(changes)
+        assert "--- a.py" in result
+        assert "+++ a.py" in result
+        assert "+line2" in result
+
+    def test_file_changes_to_diff_text_new_file(self) -> None:
+        changes = [
+            FileChangesDTO(
+                old_path=None,
+                new_path="new.py",
+                hunks=["@@ -0 +1 @@\n+content"],
+                added_lines=[1],
+                removed_lines=[],
+            ),
+        ]
+        result = CodeReviewDeterministicWorkflow._file_changes_to_diff_text(changes)
+        assert "--- /dev/null" in result
+        assert "+++ new.py" in result

@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from typing import Any
 
-from software_factory_poc.core.domain.delivery import CommitIntent, FileContent
+from software_factory_poc.core.domain.delivery import CommitIntent, FileChangesDTO, FileContent
 from software_factory_poc.core.domain.quality import CodeReviewReport
 from software_factory_poc.core.domain.shared.base_tool import BaseTool
 from software_factory_poc.core.domain.shared.tool_type import ToolType
@@ -37,16 +37,20 @@ class VcsTool(BaseTool):
     # ── Deterministic Operations (Code Review Flow) ──
 
     @abstractmethod
-    async def get_original_branch_code(self, project_id: str, branch: str) -> list[FileContent]:
-        """Retrieve file contents from a branch before changes."""
+    async def validate_merge_request_existence(self, mr_iid: str) -> bool:
+        """Check if the MR exists and is open. Returns False if not found or closed."""
 
     @abstractmethod
-    async def get_updated_code_diff(self, mr_iid: str) -> str:
-        """Retrieve the unified diff for a Merge Request."""
+    async def get_original_branch_code(self, project_id: str, branch: str) -> list[FileContent]:
+        """Retrieve file contents from a branch (tree + content for relevant files)."""
+
+    @abstractmethod
+    async def get_updated_code_diff(self, mr_iid: str) -> list[FileChangesDTO]:
+        """Retrieve structured diff for a Merge Request with hunks and line numbers."""
 
     @abstractmethod
     async def get_merge_request_diff(self, mr_id: str) -> str:
-        """Extracts the diff procedurally via MCP."""
+        """Retrieve raw unified diff text for agentic/legacy use."""
 
     @abstractmethod
     async def publish_review(self, mr_id: str, report: CodeReviewReport) -> None:

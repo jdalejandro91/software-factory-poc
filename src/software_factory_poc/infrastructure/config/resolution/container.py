@@ -98,6 +98,7 @@ async def build_scaffolding_agent(mcp_manager: McpConnectionManager) -> Scaffold
         docs=docs,
         generate_plan=generate_plan,
         priority_models=priority_models,
+        architecture_doc_page_id=config.confluence.architecture_doc_page_id,
     )
 
     return ScaffolderAgent(

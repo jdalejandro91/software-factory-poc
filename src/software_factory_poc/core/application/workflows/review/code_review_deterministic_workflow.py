@@ -3,7 +3,10 @@
 import logging
 import re
 
-from software_factory_poc.core.application.exceptions import WorkflowExecutionError
+from software_factory_poc.core.application.exceptions import (
+    WorkflowExecutionError,
+    WorkflowHaltedException,
+)
 from software_factory_poc.core.application.skills.review.analyze_code_review_skill import (
     AnalyzeCodeReviewInput,
     AnalyzeCodeReviewSkill,
@@ -11,7 +14,7 @@ from software_factory_poc.core.application.skills.review.analyze_code_review_ski
 from software_factory_poc.core.application.tools import DocsTool, TrackerTool, VcsTool
 from software_factory_poc.core.application.tools.common.exceptions import ProviderError
 from software_factory_poc.core.application.workflows.base_workflow import BaseWorkflow
-from software_factory_poc.core.domain.delivery import FileContent
+from software_factory_poc.core.domain.delivery import FileChangesDTO, FileContent
 from software_factory_poc.core.domain.mission import Mission
 from software_factory_poc.core.domain.quality import CodeReviewReport
 
@@ -40,10 +43,14 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
         try:
             parsed = self._step_1_validate_metadata(mission)
             await self._step_2_report_start(mission)
-            _, diffs = await self._step_3_fetch_code_and_diffs(parsed)
-            context = await self._step_4_fetch_context(mission.summary)
-            report = await self._step_5_analyze(mission, diffs, context, parsed)
-            await self._step_6_publish_and_transition(mission, parsed, report)
+            await self._step_3_validate_mr(mission, parsed)
+            branch_code, file_changes = await self._step_4_fetch_code_and_diffs(parsed)
+            context = await self._step_5_fetch_context(mission.summary)
+            diffs_text = self._file_changes_to_diff_text(file_changes)
+            report = await self._step_6_analyze(mission, diffs_text, context, parsed)
+            await self._step_7_publish_and_transition(mission, parsed, report)
+        except WorkflowHaltedException:
+            logger.info("[Reviewer] Workflow halted gracefully for %s", mission.key)
         except WorkflowExecutionError as wfe:
             await self._handle_error(mission, wfe)
             raise
@@ -79,22 +86,31 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
             mission.key, "Iniciando analisis de codigo (BrahMAS Code Review)..."
         )
 
-    async def _step_3_fetch_code_and_diffs(
-        self, parsed: dict[str, str]
-    ) -> tuple[list[FileContent], str]:
-        """Validate branch existence, fetch source code and MR diff."""
-        branch, project_id, mr_iid = parsed["branch"], parsed["project_id"], parsed["mr_iid"]
-        await self._validate_branch(branch, parsed["mr_url"])
-        branch_code = await self._vcs.get_original_branch_code(project_id, branch)
-        diffs = await self._vcs.get_updated_code_diff(mr_iid)
-        return branch_code, diffs
+    async def _step_3_validate_mr(self, mission: Mission, parsed: dict[str, str]) -> None:
+        """Guardrail: validate both branch and MR existence before fetching diffs."""
+        await self._validate_branch(parsed["branch"], parsed["mr_url"])
+        mr_exists = await self._vcs.validate_merge_request_existence(parsed["mr_iid"])
+        if not mr_exists:
+            msg = f"El MR {parsed['mr_url']} no existe o esta cerrado."
+            logger.warning("[Reviewer] %s", msg)
+            await self._tracker.add_comment(mission.key, msg)
+            raise WorkflowHaltedException(msg, context={"mr_iid": parsed["mr_iid"]})
 
-    async def _step_4_fetch_context(self, service_name: str) -> str:
+    async def _step_4_fetch_code_and_diffs(
+        self, parsed: dict[str, str]
+    ) -> tuple[list[FileContent], list[FileChangesDTO]]:
+        """Fetch source code and structured MR diff."""
+        branch, project_id, mr_iid = parsed["branch"], parsed["project_id"], parsed["mr_iid"]
+        branch_code = await self._vcs.get_original_branch_code(project_id, branch)
+        file_changes = await self._vcs.get_updated_code_diff(mr_iid)
+        return branch_code, file_changes
+
+    async def _step_5_fetch_context(self, service_name: str) -> str:
         """Retrieve architectural conventions from Confluence via Docs tool."""
         logger.info("[Reviewer] Fetching docs context for '%s'", service_name)
-        return await self._docs.get_architecture_context(service_name)
+        return await self._docs.get_architecture_context(page_id=service_name)
 
-    async def _step_5_analyze(
+    async def _step_6_analyze(
         self, mission: Mission, diffs: str, context: str, parsed: dict[str, str]
     ) -> CodeReviewReport:
         """Delegate LLM analysis to the AnalyzeCodeReviewSkill."""
@@ -108,7 +124,7 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
             ),
         )
 
-    async def _step_6_publish_and_transition(
+    async def _step_7_publish_and_transition(
         self, mission: Mission, parsed: dict[str, str], report: CodeReviewReport
     ) -> None:
         """Publish review to VCS, post summary to tracker, transition status."""
@@ -146,6 +162,15 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
         )
         await self._tracker.add_comment(mission.key, comment)
         logger.info("[Reviewer] %s completed — %s", mission.key, verdict)
+
+    @staticmethod
+    def _file_changes_to_diff_text(file_changes: list[FileChangesDTO]) -> str:
+        """Reconstruct unified diff text from structured FileChangesDTO list."""
+        sections: list[str] = []
+        for fc in file_changes:
+            header = f"--- {fc.old_path or '/dev/null'}\n+++ {fc.new_path}"
+            sections.append(header + "\n" + "\n".join(fc.hunks))
+        return "\n".join(sections)
 
     async def _handle_error(self, mission: Mission, error: Exception) -> None:
         """Log failure and notify Jira. Handles ProviderError for unsupported VCS."""

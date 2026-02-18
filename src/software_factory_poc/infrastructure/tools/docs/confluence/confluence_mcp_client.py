@@ -90,11 +90,11 @@ class ConfluenceMcpClient(DocsTool):
         )
         return self._extract_text(result)
 
-    async def get_architecture_context(self, project_context_id: str) -> str:
-        logger.info("[ConfluenceMCP] Fetching architecture page '%s'", project_context_id)
+    async def get_architecture_context(self, page_id: str) -> str:
+        logger.info("[ConfluenceMCP] Fetching architecture page '%s'", page_id)
         result = await self._invoke_tool(
             "confluence_get_page",
-            {"page_id": project_context_id},
+            {"page_id": page_id},
         )
         raw = self._extract_text(result)
         try:
