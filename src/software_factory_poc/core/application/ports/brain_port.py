@@ -25,6 +25,7 @@ class BrainPort(ABC):
         prompt: str,
         schema: type[T],
         priority_models: list[str],
+        system_prompt: str = "",
     ) -> T:
         """Request the LLM to return output validated against *schema*."""
 

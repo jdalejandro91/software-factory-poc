@@ -31,14 +31,16 @@ class LiteLlmBrainAdapter(BrainPort):
         prompt: str,
         schema: type[T],
         priority_models: list[str],
+        system_prompt: str = "",
     ) -> T:
         last_error: Exception | None = None
 
         for model_id in priority_models:
             try:
+                messages = self._build_messages(prompt, system_prompt)
                 response = await litellm.acompletion(
                     model=self._normalize_model_id(model_id),
-                    messages=[{"role": "user", "content": prompt}],
+                    messages=messages,
                     response_format=schema,
                 )
                 raw_content: str | None = response.choices[0].message.content
@@ -148,6 +150,15 @@ class LiteLlmBrainAdapter(BrainPort):
                 for tc in message.tool_calls
             ]
         return result
+
+    @staticmethod
+    def _build_messages(user_prompt: str, system_prompt: str = "") -> list[dict[str, str]]:
+        """Construct the messages array, optionally prepending a system message."""
+        messages: list[dict[str, str]] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": user_prompt})
+        return messages
 
     @staticmethod
     def _raise_all_failed(

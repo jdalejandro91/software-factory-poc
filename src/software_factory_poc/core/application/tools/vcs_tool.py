@@ -41,6 +41,14 @@ class VcsTool(BaseTool):
         """Check if the MR exists and is open. Returns False if not found or closed."""
 
     @abstractmethod
+    async def get_repository_tree(self, project_id: str, branch: str) -> str:
+        """Return a filtered directory skeleton (no file content) as a formatted string.
+
+        The LLM uses this lightweight listing as a mental map of the project
+        structure without consuming tokens on full file contents.
+        """
+
+    @abstractmethod
     async def get_original_branch_code(self, project_id: str, branch: str) -> list[FileContent]:
         """Retrieve file contents from a branch (tree + content for relevant files)."""
 

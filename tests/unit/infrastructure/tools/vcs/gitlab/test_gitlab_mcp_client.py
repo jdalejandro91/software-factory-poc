@@ -264,6 +264,87 @@ class TestCommitChanges:
 # ══════════════════════════════════════════════════════════════════════
 
 
+class TestGetRepositoryTree:
+    async def test_returns_formatted_tree_string(self, mock_mcp: AsyncMock) -> None:
+        tree_entries = [
+            {"path": "src/main.py", "type": "blob"},
+            {"path": "src/utils/helper.py", "type": "blob"},
+            {"path": "README.md", "type": "blob"},
+        ]
+        mock_mcp.call_tool.return_value = _text_result(json.dumps(tree_entries))
+        client = _build_client()
+
+        result = await client.get_repository_tree("42", "main")
+
+        assert "README.md" in result
+        assert "main.py" in result
+        assert "helper.py" in result
+        mock_mcp.call_tool.assert_called_once_with(
+            "gitlab_list_repository_tree",
+            arguments={"project_id": "42", "ref": "main", "recursive": True},
+        )
+
+    async def test_filters_ignored_dirs_and_binaries(self, mock_mcp: AsyncMock) -> None:
+        tree_entries = [
+            {"path": "src/main.py", "type": "blob"},
+            {"path": "node_modules/lib/index.js", "type": "blob"},
+            {"path": "assets/logo.png", "type": "blob"},
+        ]
+        mock_mcp.call_tool.return_value = _text_result(json.dumps(tree_entries))
+        client = _build_client()
+
+        result = await client.get_repository_tree("42", "main")
+
+        assert "main.py" in result
+        assert "node_modules" not in result
+        assert "logo.png" not in result
+
+    async def test_empty_tree_returns_fallback(self, mock_mcp: AsyncMock) -> None:
+        mock_mcp.call_tool.return_value = _text_result("[]")
+        client = _build_client()
+
+        result = await client.get_repository_tree("42", "main")
+
+        assert result == "(empty repository)"
+
+
+class TestFormatTree:
+    def test_formats_flat_paths_into_indented_tree(self) -> None:
+        paths = ["README.md", "src/main.py", "src/utils/helper.py"]
+        result = GitlabMcpClient._format_tree(paths)
+
+        assert "README.md" in result
+        assert "  main.py" in result
+        assert "    helper.py" in result
+
+    def test_empty_list_returns_fallback(self) -> None:
+        assert GitlabMcpClient._format_tree([]) == "(empty repository)"
+
+
+class TestDiffParsingResilience:
+    def test_malformed_change_is_skipped(self) -> None:
+        """A change that raises during parsing must be skipped, not crash the flow."""
+        raw = json.dumps(
+            {
+                "changes": [
+                    {"new_path": "good.py", "old_path": "good.py", "diff": "@@ -1 +1 @@\n+ok"},
+                    {"new_path": "bad.py"},  # missing diff key is ok, but we test resilience
+                ]
+            }
+        )
+        results = GitlabMcpClient._parse_mr_changes(raw)
+
+        assert len(results) == 2
+        assert results[0].new_path == "good.py"
+        assert results[1].new_path == "bad.py"
+
+    def test_invalid_json_returns_empty(self) -> None:
+        assert GitlabMcpClient._parse_mr_changes("not json") == []
+
+    def test_non_list_changes_returns_empty(self) -> None:
+        assert GitlabMcpClient._parse_mr_changes(json.dumps({"changes": "oops"})) == []
+
+
 class TestGetMergeRequestDiff:
     async def test_returns_diff_text(self, mock_mcp: AsyncMock) -> None:
         mock_mcp.call_tool.return_value = _text_result("diff --git a/f.py b/f.py")
@@ -314,6 +395,58 @@ class TestPublishReview:
         discussion_args = calls[1][1]["arguments"]
         assert discussion_args["file_path"] == "src/bad.py"
         assert discussion_args["line"] == 42
+
+
+class TestReviewSummaryFormatting:
+    """Verify severity-grouped Markdown in the main note."""
+
+    def test_summary_contains_verdict(self) -> None:
+        report = CodeReviewReport(is_approved=True, summary="LGTM", comments=[])
+        body = GitlabMcpClient._build_review_summary(report)
+        assert "APPROVED" in body
+        assert "LGTM" in body
+
+    def test_summary_groups_by_severity(self) -> None:
+        comments = [
+            ReviewComment(
+                file_path="a.py",
+                description="SQL injection",
+                suggestion="parameterize",
+                severity=ReviewSeverity.CRITICAL,
+                line_number=10,
+            ),
+            ReviewComment(
+                file_path="b.py",
+                description="Missing null check",
+                suggestion="add check",
+                severity=ReviewSeverity.WARNING,
+                line_number=20,
+            ),
+        ]
+        report = CodeReviewReport(is_approved=False, summary="Issues", comments=comments)
+        body = GitlabMcpClient._build_review_summary(report)
+        assert "### CRITICAL (1)" in body
+        assert "### WARNING (1)" in body
+        assert "a.py" in body
+        assert "b.py" in body
+
+    def test_summary_shows_no_issues_for_clean_report(self) -> None:
+        report = CodeReviewReport(is_approved=True, summary="Clean", comments=[])
+        body = GitlabMcpClient._build_review_summary(report)
+        assert "No issues found" in body
+
+    def test_inline_comment_format(self) -> None:
+        comment = ReviewComment(
+            file_path="x.py",
+            description="Bad pattern",
+            suggestion="Use factory",
+            severity=ReviewSeverity.SUGGESTION,
+            line_number=5,
+        )
+        body = GitlabMcpClient._format_inline_comment(comment)
+        assert "[SUGGESTION]" in body
+        assert "Bad pattern" in body
+        assert "Use factory" in body
 
 
 # ══════════════════════════════════════════════════════════════════════

@@ -45,15 +45,16 @@ class GenerateScaffoldPlanSkill(
         logger.info("[GenerateScaffoldPlan] Building prompt for %s", input_data.mission.key)
         ctx = {"skill": "generate_scaffold_plan", "mission_key": input_data.mission.key}
         try:
-            prompt = self._prompt_builder.build_prompt_from_mission(
+            system_prompt, user_prompt = self._prompt_builder.build_prompt_from_mission(
                 input_data.mission,
                 input_data.arch_context,
             )
 
             scaffold_plan: ScaffoldingResponseSchema = await self._brain.generate_structured(
-                prompt=prompt,
+                prompt=user_prompt,
                 schema=ScaffoldingResponseSchema,
                 priority_models=input_data.priority_models,
+                system_prompt=system_prompt,
             )
 
             if not scaffold_plan.files:

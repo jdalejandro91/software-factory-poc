@@ -14,7 +14,7 @@ from software_factory_poc.core.application.skills.review.analyze_code_review_ski
 from software_factory_poc.core.application.tools import DocsTool, TrackerTool, VcsTool
 from software_factory_poc.core.application.tools.common.exceptions import ProviderError
 from software_factory_poc.core.application.workflows.base_workflow import BaseWorkflow
-from software_factory_poc.core.domain.delivery import FileChangesDTO, FileContent
+from software_factory_poc.core.domain.delivery import FileChangesDTO
 from software_factory_poc.core.domain.mission import Mission
 from software_factory_poc.core.domain.quality import CodeReviewReport
 
@@ -44,10 +44,10 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
             parsed = self._step_1_validate_metadata(mission)
             await self._step_2_report_start(mission)
             await self._step_3_validate_mr(mission, parsed)
-            branch_code, file_changes = await self._step_4_fetch_code_and_diffs(parsed)
+            repo_tree, file_changes = await self._step_4_fetch_tree_and_diffs(parsed)
             context = await self._step_5_fetch_context(mission.summary)
             diffs_text = self._file_changes_to_diff_text(file_changes)
-            report = await self._step_6_analyze(mission, diffs_text, context, parsed)
+            report = await self._step_6_analyze(mission, diffs_text, context, parsed, repo_tree)
             await self._step_7_publish_and_transition(mission, parsed, report)
         except WorkflowHaltedException:
             logger.info("[Reviewer] Workflow halted gracefully for %s", mission.key)
@@ -96,14 +96,14 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
             await self._tracker.add_comment(mission.key, msg)
             raise WorkflowHaltedException(msg, context={"mr_iid": parsed["mr_iid"]})
 
-    async def _step_4_fetch_code_and_diffs(
+    async def _step_4_fetch_tree_and_diffs(
         self, parsed: dict[str, str]
-    ) -> tuple[list[FileContent], list[FileChangesDTO]]:
-        """Fetch source code and structured MR diff."""
+    ) -> tuple[str, list[FileChangesDTO]]:
+        """Fetch lightweight directory tree and structured MR diff."""
         branch, project_id, mr_iid = parsed["branch"], parsed["project_id"], parsed["mr_iid"]
-        branch_code = await self._vcs.get_original_branch_code(project_id, branch)
+        repo_tree = await self._vcs.get_repository_tree(project_id, branch)
         file_changes = await self._vcs.get_updated_code_diff(mr_iid)
-        return branch_code, file_changes
+        return repo_tree, file_changes
 
     async def _step_5_fetch_context(self, service_name: str) -> str:
         """Retrieve architectural conventions from Confluence via Docs tool."""
@@ -111,7 +111,12 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
         return await self._docs.get_architecture_context(page_id=service_name)
 
     async def _step_6_analyze(
-        self, mission: Mission, diffs: str, context: str, parsed: dict[str, str]
+        self,
+        mission: Mission,
+        diffs: str,
+        context: str,
+        parsed: dict[str, str],
+        repo_tree: str = "",
     ) -> CodeReviewReport:
         """Delegate LLM analysis to the AnalyzeCodeReviewSkill."""
         return await self._analyze.execute(
@@ -120,6 +125,7 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
                 mr_diff=diffs,
                 conventions=context,
                 priority_models=self._priority_models,
+                repository_tree=repo_tree,
                 code_review_params=parsed,
             ),
         )
@@ -127,13 +133,29 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
     async def _step_7_publish_and_transition(
         self, mission: Mission, parsed: dict[str, str], report: CodeReviewReport
     ) -> None:
-        """Publish review to VCS, post summary to tracker, transition status."""
-        await self._vcs.publish_review(parsed["mr_iid"], report)
+        """Publish review to VCS (tolerant), post summary to tracker, transition status."""
+        await self._safe_publish_review(mission, parsed["mr_iid"], report)
         await self._post_success_comment(mission, parsed["mr_url"], report)
         status = "Done" if report.is_approved else "Changes Requested"
         await self._tracker.update_status(mission.key, status)
 
     # ── Private Helpers (max 14 lines each) ──────────────────────────
+
+    async def _safe_publish_review(
+        self, mission: Mission, mr_iid: str, report: CodeReviewReport
+    ) -> None:
+        """Attempt to publish review to VCS; degrade gracefully on ProviderError."""
+        try:
+            await self._vcs.publish_review(mr_iid, report)
+        except ProviderError as exc:
+            logger.warning(
+                "[Reviewer] VCS publish failed for %s (non-fatal): %s", mission.key, exc.message
+            )
+            await self._tracker.add_comment(
+                mission.key,
+                f"Advertencia: No se pudo publicar el review en GitLab ({exc.message}). "
+                "El analisis se completo correctamente.",
+            )
 
     async def _validate_branch(self, branch: str, mr_url: str) -> None:
         """Fail fast if the source branch does not exist."""

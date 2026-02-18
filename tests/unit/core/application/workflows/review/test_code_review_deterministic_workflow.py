@@ -8,6 +8,7 @@ from software_factory_poc.core.application.exceptions import WorkflowExecutionEr
 from software_factory_poc.core.application.skills.review.analyze_code_review_skill import (
     AnalyzeCodeReviewInput,
 )
+from software_factory_poc.core.application.tools.common.exceptions import ProviderError
 from software_factory_poc.core.application.workflows.review.code_review_deterministic_workflow import (
     CodeReviewDeterministicWorkflow,
 )
@@ -99,6 +100,9 @@ def rejected_report() -> CodeReviewReport:
     return CodeReviewReport(is_approved=False, summary="Needs work", comments=[])
 
 
+_SAMPLE_TREE = "src/\n  auth.py\n  main.py"
+
+
 def _setup_happy_path(
     mock_vcs: AsyncMock,
     mock_docs: AsyncMock,
@@ -109,7 +113,7 @@ def _setup_happy_path(
     """Configure mocks for a successful full pipeline run."""
     mock_vcs.validate_branch_existence.return_value = True
     mock_vcs.validate_merge_request_existence.return_value = True
-    mock_vcs.get_original_branch_code.return_value = []
+    mock_vcs.get_repository_tree.return_value = _SAMPLE_TREE
     mock_vcs.get_updated_code_diff.return_value = file_changes
     mock_docs.get_architecture_context.return_value = "conventions"
     mock_analyze.execute.return_value = report
@@ -142,7 +146,7 @@ class TestFullPipeline:
         mock_tracker.add_comment.assert_awaited()
         mock_vcs.validate_branch_existence.assert_awaited_once_with("feature/proj-200-auth")
         mock_vcs.validate_merge_request_existence.assert_awaited_once_with("55")
-        mock_vcs.get_original_branch_code.assert_awaited_once_with("42", "feature/proj-200-auth")
+        mock_vcs.get_repository_tree.assert_awaited_once_with("42", "feature/proj-200-auth")
         mock_vcs.get_updated_code_diff.assert_awaited_once_with("55")
         mock_docs.get_architecture_context.assert_awaited_once()
         mock_analyze.execute.assert_awaited_once()
@@ -195,6 +199,7 @@ class TestFullPipeline:
         )
         assert call_args.code_review_params["project_id"] == "42"
         assert call_args.code_review_params["branch"] == "feature/proj-200-auth"
+        assert call_args.repository_tree == _SAMPLE_TREE
 
     @pytest.mark.asyncio
     async def test_error_wraps_in_workflow_execution_error(
@@ -397,3 +402,76 @@ class TestStepMethods:
         result = CodeReviewDeterministicWorkflow._file_changes_to_diff_text(changes)
         assert "--- /dev/null" in result
         assert "+++ new.py" in result
+
+
+# ══════════════════════════════════════════════════════════════════════
+# ProviderError Tolerance in step_7
+# ══════════════════════════════════════════════════════════════════════
+
+
+class TestPublishReviewTolerance:
+    """Verify graceful degradation when VCS publish_review fails."""
+
+    @pytest.mark.asyncio
+    async def test_provider_error_does_not_crash_pipeline(
+        self,
+        workflow: CodeReviewDeterministicWorkflow,
+        mock_vcs: AsyncMock,
+        mock_tracker: AsyncMock,
+        mock_docs: AsyncMock,
+        mock_analyze: AsyncMock,
+        mission: Mission,
+        approved_report: CodeReviewReport,
+        sample_file_changes: list[FileChangesDTO],
+    ) -> None:
+        _setup_happy_path(mock_vcs, mock_docs, mock_analyze, approved_report, sample_file_changes)
+        mock_vcs.publish_review.side_effect = ProviderError(
+            provider="GitLabMCP", message="Connection refused", retryable=True
+        )
+
+        await workflow.execute(mission)  # Should NOT raise
+
+        mock_tracker.update_status.assert_awaited_once_with("PROJ-200", "Done")
+
+    @pytest.mark.asyncio
+    async def test_provider_error_posts_warning_to_tracker(
+        self,
+        workflow: CodeReviewDeterministicWorkflow,
+        mock_vcs: AsyncMock,
+        mock_tracker: AsyncMock,
+        mock_docs: AsyncMock,
+        mock_analyze: AsyncMock,
+        mission: Mission,
+        approved_report: CodeReviewReport,
+        sample_file_changes: list[FileChangesDTO],
+    ) -> None:
+        _setup_happy_path(mock_vcs, mock_docs, mock_analyze, approved_report, sample_file_changes)
+        mock_vcs.publish_review.side_effect = ProviderError(
+            provider="GitLabMCP", message="Connection refused", retryable=True
+        )
+
+        await workflow.execute(mission)
+
+        warning_calls = [
+            c for c in mock_tracker.add_comment.call_args_list if "Advertencia" in str(c)
+        ]
+        assert len(warning_calls) == 1
+        assert "Connection refused" in str(warning_calls[0])
+
+    @pytest.mark.asyncio
+    async def test_non_provider_error_still_propagates(
+        self,
+        workflow: CodeReviewDeterministicWorkflow,
+        mock_vcs: AsyncMock,
+        mock_tracker: AsyncMock,
+        mock_docs: AsyncMock,
+        mock_analyze: AsyncMock,
+        mission: Mission,
+        approved_report: CodeReviewReport,
+        sample_file_changes: list[FileChangesDTO],
+    ) -> None:
+        _setup_happy_path(mock_vcs, mock_docs, mock_analyze, approved_report, sample_file_changes)
+        mock_vcs.publish_review.side_effect = RuntimeError("Unexpected crash")
+
+        with pytest.raises(WorkflowExecutionError):
+            await workflow.execute(mission)

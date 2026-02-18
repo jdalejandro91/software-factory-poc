@@ -8,98 +8,62 @@ logger = logging.getLogger(__name__)
 
 
 class ScaffoldingPromptBuilder:
-    """Builds a hardened scaffolding prompt with XML-delimited user data."""
+    """Builds a hardened scaffolding prompt split into system + user messages.
 
-    def build_prompt_from_mission(self, mission: Mission, knowledge_context: str) -> str:
-        """Builds prompt using the Domain Mission Entity."""
+    Returns ``(system_prompt, user_prompt)`` with XML-delimited sections
+    to prevent prompt injection and maximise LLM compliance.
+    """
+
+    def build_prompt_from_mission(
+        self, mission: Mission, knowledge_context: str
+    ) -> tuple[str, str]:
+        """Build the (system_prompt, user_prompt) pair from a Domain Mission."""
         knowledge_context = self._validate_context(knowledge_context)
-
         config = mission.description.config
         tech_stack = config.get("technology_stack", "unknown")
-        service_name = config.get("parameters", {}).get("service_name", mission.key)
 
-        sections = [
-            self._role_section(tech_stack),
-            self._goal_section(mission, service_name),
-            self._input_data_section(mission),
-            self._architecture_context_section(knowledge_context),
-            self._hard_constraints_section(),
-            self._output_schema_section(),
-            self._anti_examples_section(),
-        ]
+        system_prompt = self._build_system_prompt(tech_stack)
+        user_prompt = self._build_user_prompt(mission, knowledge_context, tech_stack)
 
-        prompt = "\n\n".join(sections)
         logger.info("Prompt generated for mission %s, stack: %s", mission.key, tech_stack)
-        return prompt
+        return system_prompt, user_prompt
 
-    # ── Private Composed Methods (each <=14 lines) ────────────────────
-
-    @staticmethod
-    def _validate_context(context: str) -> str:
-        if not context or not context.strip():
-            return "No specific documentation provided. Follow standard best practices."
-        return context
+    # ── System Prompt Sections (each <=14 lines) ──────────────────
 
     @staticmethod
-    def _role_section(tech_stack: str) -> str:
+    def _build_system_prompt(tech_stack: str) -> str:
+        """Compose the full system prompt from identity, rules, schema, and anti-examples."""
+        sections = [
+            ScaffoldingPromptBuilder._system_role_section(tech_stack),
+            ScaffoldingPromptBuilder._strict_rules_section(),
+            ScaffoldingPromptBuilder._output_schema_section(),
+            ScaffoldingPromptBuilder._anti_examples_section(),
+        ]
+        return "\n\n".join(sections)
+
+    @staticmethod
+    def _system_role_section(tech_stack: str) -> str:
         return (
-            "## ROLE\n"
-            f"You are a Principal Software Architect specializing in **{tech_stack}**.\n"
-            "You generate production-ready project scaffolding that strictly follows "
-            "the architecture standards provided."
+            "<system_role>\n"
+            "You are BrahMAS Sovereign Scaffolder, an Elite Enterprise Software Architect "
+            f"specializing in {tech_stack}. Your SOLE purpose is to generate deterministic, "
+            "production-ready bootstrapping source code.\n"
+            "</system_role>"
         )
 
     @staticmethod
-    def _goal_section(mission: Mission, service_name: str) -> str:
-        target = mission.description.config.get("target", {})
-        project_path = target.get("gitlab_project_path", "N/A")
+    def _strict_rules_section() -> str:
         return (
-            "## GOAL\n"
-            f"Generate the complete file structure for service **{service_name}** "
-            f"(ticket {mission.key}, project {mission.project_key}, "
-            f"type {mission.issue_type}).\n"
-            f"Target repository: `{project_path}`."
-        )
-
-    @staticmethod
-    def _input_data_section(mission: Mission) -> str:
-        config = mission.description.config
-        tech_stack = config.get("technology_stack", "unknown")
-        params = config.get("parameters", {})
-        target = config.get("target", {})
-
-        config_payload: dict[str, Any] = {
-            "technology_stack": tech_stack,
-            "parameters": params,
-            "target": target,
-        }
-
-        return (
-            "## INPUT DATA\n"
-            f"<jira_summary>{mission.summary}</jira_summary>\n\n"
-            f"<jira_description>{mission.description.raw_content}</jira_description>\n\n"
-            f"<mission_config>{json.dumps(config_payload, indent=2)}</mission_config>"
-        )
-
-    @staticmethod
-    def _architecture_context_section(knowledge_context: str) -> str:
-        return (
-            "## ARCHITECTURE CONTEXT\n"
-            "The text below defines the MANDATORY architecture standards.\n"
-            "You MUST extract the folder structure defined here.\n\n"
-            f"<architecture_context>{knowledge_context}</architecture_context>"
-        )
-
-    @staticmethod
-    def _hard_constraints_section() -> str:
-        return (
-            "## HARD CONSTRAINTS\n"
-            "1. Every generated file MUST have non-empty content.\n"
-            "2. Paths MUST be relative to the repository root (no leading `/`).\n"
-            "3. Do NOT include secrets, tokens, or real credentials.\n"
-            "4. File extensions and config files MUST match the technology stack.\n"
-            "5. Follow Conventional Commits for the commit message.\n"
-            "6. The branch name MUST start with `feature/` followed by the ticket key."
+            "<strict_rules>\n"
+            "1. OUTPUT FORMAT: Return ONLY a valid JSON object that matches the requested "
+            "Pydantic schema. No prose, no explanations.\n"
+            "2. ZERO MARKDOWN: Do NOT wrap JSON in markdown code blocks.\n"
+            "3. ZERO PLACEHOLDERS: Generate complete, functional code — no TODO comments.\n"
+            "4. SECURITY: Never generate hardcoded credentials, tokens, or secrets.\n"
+            "5. RELATIVE PATHS: All paths MUST be relative to the repository root.\n"
+            "6. BRANCH NAMING: Branch name MUST start with `feature/` followed by the ticket key.\n"
+            "7. CONVENTIONAL COMMITS: Commit message MUST follow Conventional Commits format.\n"
+            "</strict_rules>"
         )
 
     @staticmethod
@@ -141,3 +105,62 @@ class ScaffoldingPromptBuilder:
             "- Do NOT include absolute paths (e.g. `/home/user/project/src/main.py`).\n"
             "- Do NOT invent a technology stack different from the one specified."
         )
+
+    # ── User Prompt Sections (each <=14 lines) ───────────────────
+
+    @staticmethod
+    def _build_user_prompt(mission: Mission, knowledge_context: str, tech_stack: str) -> str:
+        """Compose the full user prompt from mission intent, tech stack, and architecture."""
+        sections = [
+            ScaffoldingPromptBuilder._mission_intent_section(mission),
+            ScaffoldingPromptBuilder._technology_stack_section(mission, tech_stack),
+            ScaffoldingPromptBuilder._architecture_standards_section(knowledge_context),
+        ]
+        return "\n\n".join(sections)
+
+    @staticmethod
+    def _mission_intent_section(mission: Mission) -> str:
+        service_name = mission.description.config.get("parameters", {}).get(
+            "service_name", mission.key
+        )
+        target = mission.description.config.get("target", {})
+        project_path = target.get("gitlab_project_path", "N/A")
+        return (
+            "<mission_intent>\n"
+            f"Ticket: {mission.key} | Project: {mission.project_key} | "
+            f"Type: {mission.issue_type}\n"
+            f"Service: {service_name} | Repository: {project_path}\n\n"
+            f"<jira_summary>{mission.summary}</jira_summary>\n\n"
+            f"<jira_description>{mission.description.raw_content}</jira_description>\n"
+            "</mission_intent>"
+        )
+
+    @staticmethod
+    def _technology_stack_section(mission: Mission, tech_stack: str) -> str:
+        config = mission.description.config
+        params = config.get("parameters", {})
+        target = config.get("target", {})
+        config_payload: dict[str, Any] = {
+            "technology_stack": tech_stack,
+            "parameters": params,
+            "target": target,
+        }
+        return f"<technology_stack>\n{json.dumps(config_payload, indent=2)}\n</technology_stack>"
+
+    @staticmethod
+    def _architecture_standards_section(knowledge_context: str) -> str:
+        return (
+            "<architecture_standards>\n"
+            "The text below defines the MANDATORY architecture standards.\n"
+            "You MUST extract the folder structure defined here.\n\n"
+            f"<architecture_context>{knowledge_context}</architecture_context>\n"
+            "</architecture_standards>"
+        )
+
+    # ── Shared Helpers ────────────────────────────────────────────
+
+    @staticmethod
+    def _validate_context(context: str) -> str:
+        if not context or not context.strip():
+            return "No specific documentation provided. Follow standard best practices."
+        return context

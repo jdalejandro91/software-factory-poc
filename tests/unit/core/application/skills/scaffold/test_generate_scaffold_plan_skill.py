@@ -44,7 +44,7 @@ class TestGenerateScaffoldPlanSkill:
     async def test_returns_scaffold_plan_from_brain(self) -> None:
         brain = AsyncMock()
         prompt_builder = MagicMock()
-        prompt_builder.build_prompt_from_mission.return_value = "full prompt"
+        prompt_builder.build_prompt_from_mission.return_value = ("system msg", "user msg")
         plan = _make_plan()
         brain.generate_structured.return_value = plan
 
@@ -63,15 +63,16 @@ class TestGenerateScaffoldPlanSkill:
         assert len(result.files) == 2
         prompt_builder.build_prompt_from_mission.assert_called_once_with(mission, "arch")
         brain.generate_structured.assert_awaited_once_with(
-            prompt="full prompt",
+            prompt="user msg",
             schema=ScaffoldingResponseSchema,
             priority_models=["openai:gpt-4o"],
+            system_prompt="system msg",
         )
 
     async def test_raises_skill_execution_error_when_zero_files(self) -> None:
         brain = AsyncMock()
         prompt_builder = MagicMock()
-        prompt_builder.build_prompt_from_mission.return_value = "prompt"
+        prompt_builder.build_prompt_from_mission.return_value = ("sys", "usr")
         brain.generate_structured.return_value = _make_plan(file_count=0)
 
         skill = GenerateScaffoldPlanSkill(brain=brain, prompt_builder=prompt_builder)

@@ -11,7 +11,7 @@ from mcp.client.stdio import StdioServerParameters, stdio_client
 from software_factory_poc.core.application.tools import VcsTool
 from software_factory_poc.core.application.tools.common.exceptions import ProviderError
 from software_factory_poc.core.domain.delivery import CommitIntent, FileChangesDTO, FileContent
-from software_factory_poc.core.domain.quality import CodeReviewReport
+from software_factory_poc.core.domain.quality import CodeReviewReport, ReviewComment, ReviewSeverity
 from software_factory_poc.infrastructure.observability.redaction_service import RedactionService
 from software_factory_poc.infrastructure.tools.vcs.gitlab.config.gitlab_settings import (
     GitLabSettings,
@@ -216,6 +216,15 @@ class GitlabMcpClient(VcsTool):
         except ProviderError:
             return False
 
+    async def get_repository_tree(self, project_id: str, branch: str) -> str:
+        """Return lightweight directory skeleton filtered of noise."""
+        logger.info(
+            "[GitLabMCP] Fetching repository tree for '%s' (project=%s)", branch, project_id
+        )
+        entries = await self._list_tree_entries(project_id, branch)
+        relevant = self._filter_relevant_paths(entries)
+        return self._format_tree(relevant)
+
     async def get_original_branch_code(self, project_id: str, branch: str) -> list[FileContent]:
         """List repository tree and fetch content for relevant files."""
         logger.info("[GitLabMCP] Fetching branch code for '%s' (project=%s)", branch, project_id)
@@ -268,6 +277,18 @@ class GitlabMcpClient(VcsTool):
             paths.append(path)
         return paths[:_MAX_BRANCH_FILES]
 
+    @staticmethod
+    def _format_tree(paths: list[str]) -> str:
+        """Format a flat list of file paths into an indented directory skeleton."""
+        if not paths:
+            return "(empty repository)"
+        lines: list[str] = []
+        for path in sorted(paths):
+            depth = path.count("/")
+            name = path.rsplit("/", 1)[-1]
+            lines.append(f"{'  ' * depth}{name}")
+        return "\n".join(lines)
+
     async def _fetch_file_contents(
         self, project_id: str, branch: str, paths: list[str]
     ) -> list[FileContent]:
@@ -297,11 +318,16 @@ class GitlabMcpClient(VcsTool):
         changes = data.get("changes", data) if isinstance(data, dict) else data
         if not isinstance(changes, list):
             return []
-        return [
-            GitlabMcpClient._parse_single_change(change)
-            for change in changes
-            if isinstance(change, dict)
-        ]
+        results: list[FileChangesDTO] = []
+        for change in changes:
+            if not isinstance(change, dict):
+                continue
+            try:
+                results.append(GitlabMcpClient._parse_single_change(change))
+            except Exception:
+                path = change.get("new_path", change.get("old_path", "<unknown>"))
+                logger.warning("[GitLabMCP] Skipping unparseable diff for %s", path)
+        return results
 
     @staticmethod
     def _parse_single_change(change: dict[str, str]) -> FileChangesDTO:
@@ -357,9 +383,8 @@ class GitlabMcpClient(VcsTool):
                 new_line += 1
 
     async def publish_review(self, mr_id: str, report: CodeReviewReport) -> None:
-        status_label = "APPROVED" if report.is_approved else "CHANGES REQUESTED"
-        main_note = f"### BrahMAS Code Review: {status_label}\n\n{report.summary}"
-
+        """Publish a severity-grouped Markdown summary and per-issue inline discussions."""
+        main_note = self._build_review_summary(report)
         await self._invoke_tool(
             "gitlab_create_merge_request_note",
             {
@@ -370,10 +395,7 @@ class GitlabMcpClient(VcsTool):
         )
 
         for issue in report.comments:
-            body = (
-                f"**[{issue.severity.value}]** {issue.description}"
-                f"\n\n*Suggestion:* `{issue.suggestion}`"
-            )
+            body = self._format_inline_comment(issue)
             await self._invoke_tool(
                 "gitlab_create_merge_request_discussion",
                 {
@@ -390,6 +412,54 @@ class GitlabMcpClient(VcsTool):
                 "gitlab_approve_merge_request",
                 {"project_id": self._project_id, "merge_request_iid": str(mr_id)},
             )
+
+    # ── Review Formatting Helpers ──
+
+    @staticmethod
+    def _build_review_summary(report: CodeReviewReport) -> str:
+        """Build severity-grouped Markdown summary note."""
+        verdict = "APPROVED" if report.is_approved else "CHANGES REQUESTED"
+        header = f"## BrahMAS Code Review: {verdict}\n\n{report.summary}\n"
+        if not report.comments:
+            return f"{header}\n> No issues found."
+        grouped = GitlabMcpClient._group_by_severity(report.comments)
+        sections = [header]
+        for severity in (
+            ReviewSeverity.CRITICAL,
+            ReviewSeverity.WARNING,
+            ReviewSeverity.SUGGESTION,
+        ):
+            items = grouped.get(severity, [])
+            if items:
+                sections.append(GitlabMcpClient._format_severity_group(severity, items))
+        return "\n".join(sections)
+
+    @staticmethod
+    def _group_by_severity(
+        comments: list[ReviewComment],
+    ) -> dict[ReviewSeverity, list[ReviewComment]]:
+        """Group comments by severity level."""
+        grouped: dict[ReviewSeverity, list[ReviewComment]] = {}
+        for c in comments:
+            grouped.setdefault(c.severity, []).append(c)
+        return grouped
+
+    @staticmethod
+    def _format_severity_group(severity: ReviewSeverity, items: list[ReviewComment]) -> str:
+        """Format a single severity group as a Markdown section."""
+        lines = [f"### {severity.value} ({len(items)})"]
+        for item in items:
+            loc = f":`{item.line_number}`" if item.line_number else ""
+            lines.append(f"- **`{item.file_path}`{loc}** — {item.description}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _format_inline_comment(issue: ReviewComment) -> str:
+        """Format a single inline discussion body."""
+        return (
+            f"**[{issue.severity.value}]** {issue.description}"
+            f"\n\n**Suggestion:** `{issue.suggestion}`"
+        )
 
     # ── Agentic Operations ──
 

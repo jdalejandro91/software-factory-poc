@@ -25,6 +25,7 @@ class AnalyzeCodeReviewInput:
     mr_diff: str
     conventions: str
     priority_models: list[str]
+    repository_tree: str = ""
     code_review_params: dict[str, str] = field(default_factory=dict)
 
 
@@ -47,20 +48,20 @@ class AnalyzeCodeReviewSkill(BaseSkill[AnalyzeCodeReviewInput, CodeReviewReport]
         logger.info("[AnalyzeCodeReview] Building prompt and calling LLM")
         ctx = {"skill": "analyze_code_review"}
         try:
-            sys_prompt = self._prompt_builder.build_system_prompt()
+            system_prompt = self._prompt_builder.build_system_prompt()
             user_prompt = self._prompt_builder.build_analysis_prompt(
                 mission=input_data.mission,
                 mr_diff=input_data.mr_diff,
                 conventions=input_data.conventions,
                 code_review_params=input_data.code_review_params or None,
+                repository_tree=input_data.repository_tree,
             )
 
-            full_prompt = f"{sys_prompt}\n\n{user_prompt}"
-
             review_schema: CodeReviewResponseSchema = await self._brain.generate_structured(
-                prompt=full_prompt,
+                prompt=user_prompt,
                 schema=CodeReviewResponseSchema,
                 priority_models=input_data.priority_models,
+                system_prompt=system_prompt,
             )
 
             report = self._to_domain_report(review_schema)

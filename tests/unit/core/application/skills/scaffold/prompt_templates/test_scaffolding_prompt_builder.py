@@ -1,4 +1,4 @@
-"""Unit tests — ScaffoldingPromptBuilder (hardened prompt with XML delimiters)."""
+"""Unit tests — ScaffoldingPromptBuilder (system + user prompt with XML delimiters)."""
 
 import json
 
@@ -38,83 +38,105 @@ BUILDER = ScaffoldingPromptBuilder()
 CONTEXT = "Hexagonal architecture with src/domain, src/application, src/infrastructure."
 
 
-class TestMandatorySections:
-    """All 7 mandatory sections must be present in the generated prompt."""
+def _build() -> tuple[str, str]:
+    return BUILDER.build_prompt_from_mission(_make_mission(), CONTEXT)
 
-    def test_role_section_present(self) -> None:
-        prompt = BUILDER.build_prompt_from_mission(_make_mission(), CONTEXT)
-        assert "## ROLE" in prompt
 
-    def test_goal_section_present(self) -> None:
-        prompt = BUILDER.build_prompt_from_mission(_make_mission(), CONTEXT)
-        assert "## GOAL" in prompt
+class TestReturnType:
+    """build_prompt_from_mission must return a (system, user) tuple."""
 
-    def test_input_data_section_present(self) -> None:
-        prompt = BUILDER.build_prompt_from_mission(_make_mission(), CONTEXT)
-        assert "## INPUT DATA" in prompt
+    def test_returns_tuple_of_two_strings(self) -> None:
+        result = _build()
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        assert isinstance(result[0], str)
+        assert isinstance(result[1], str)
 
-    def test_architecture_context_section_present(self) -> None:
-        prompt = BUILDER.build_prompt_from_mission(_make_mission(), CONTEXT)
-        assert "## ARCHITECTURE CONTEXT" in prompt
 
-    def test_hard_constraints_section_present(self) -> None:
-        prompt = BUILDER.build_prompt_from_mission(_make_mission(), CONTEXT)
-        assert "## HARD CONSTRAINTS" in prompt
+class TestSystemPromptSections:
+    """System prompt must contain role, rules, schema, and anti-examples."""
+
+    def test_system_role_section_present(self) -> None:
+        system, _ = _build()
+        assert "<system_role>" in system
+        assert "</system_role>" in system
+        assert "BrahMAS Sovereign Scaffolder" in system
+
+    def test_strict_rules_section_present(self) -> None:
+        system, _ = _build()
+        assert "<strict_rules>" in system
+        assert "</strict_rules>" in system
 
     def test_output_schema_section_present(self) -> None:
-        prompt = BUILDER.build_prompt_from_mission(_make_mission(), CONTEXT)
-        assert "## OUTPUT SCHEMA" in prompt
+        system, _ = _build()
+        assert "## OUTPUT SCHEMA" in system
 
     def test_anti_examples_section_present(self) -> None:
-        prompt = BUILDER.build_prompt_from_mission(_make_mission(), CONTEXT)
-        assert "## ANTI-EXAMPLES" in prompt
+        system, _ = _build()
+        assert "## ANTI-EXAMPLES" in system
+
+    def test_tech_stack_in_system_role(self) -> None:
+        system, _ = _build()
+        assert "Python/FastAPI" in system
+
+
+class TestUserPromptSections:
+    """User prompt must contain mission intent, tech stack, and architecture."""
+
+    def test_mission_intent_section_present(self) -> None:
+        _, user = _build()
+        assert "<mission_intent>" in user
+        assert "</mission_intent>" in user
+
+    def test_technology_stack_section_present(self) -> None:
+        _, user = _build()
+        assert "<technology_stack>" in user
+        assert "</technology_stack>" in user
+
+    def test_architecture_standards_section_present(self) -> None:
+        _, user = _build()
+        assert "<architecture_standards>" in user
+        assert "</architecture_standards>" in user
 
 
 class TestXmlDelimiters:
     """User-supplied data must be wrapped in XML delimiters."""
 
     def test_jira_summary_delimiter(self) -> None:
-        prompt = BUILDER.build_prompt_from_mission(_make_mission(), CONTEXT)
-        assert "<jira_summary>" in prompt
-        assert "</jira_summary>" in prompt
-        assert "<jira_summary>Create payment microservice</jira_summary>" in prompt
+        _, user = _build()
+        assert "<jira_summary>Create payment microservice</jira_summary>" in user
 
     def test_jira_description_delimiter(self) -> None:
-        prompt = BUILDER.build_prompt_from_mission(_make_mission(), CONTEXT)
-        assert "<jira_description>" in prompt
-        assert "</jira_description>" in prompt
-
-    def test_mission_config_delimiter(self) -> None:
-        prompt = BUILDER.build_prompt_from_mission(_make_mission(), CONTEXT)
-        assert "<mission_config>" in prompt
-        assert "</mission_config>" in prompt
+        _, user = _build()
+        assert "<jira_description>" in user
+        assert "</jira_description>" in user
 
     def test_architecture_context_delimiter(self) -> None:
-        prompt = BUILDER.build_prompt_from_mission(_make_mission(), CONTEXT)
-        assert "<architecture_context>" in prompt
-        assert "</architecture_context>" in prompt
-        assert f"<architecture_context>{CONTEXT}</architecture_context>" in prompt
+        _, user = _build()
+        assert "<architecture_context>" in user
+        assert "</architecture_context>" in user
+        assert f"<architecture_context>{CONTEXT}</architecture_context>" in user
 
 
 class TestSchemaReference:
-    """Prompt must reference ScaffoldingResponseSchema with parseable example."""
+    """System prompt must reference ScaffoldingResponseSchema with parseable example."""
 
     def test_schema_name_referenced(self) -> None:
-        prompt = BUILDER.build_prompt_from_mission(_make_mission(), CONTEXT)
-        assert "ScaffoldingResponseSchema" in prompt
+        system, _ = _build()
+        assert "ScaffoldingResponseSchema" in system
 
     def test_schema_fields_mentioned(self) -> None:
-        prompt = BUILDER.build_prompt_from_mission(_make_mission(), CONTEXT)
-        assert "branch_name" in prompt
-        assert "commit_message" in prompt
-        assert "files" in prompt
-        assert "FileSchemaDTO" in prompt
+        system, _ = _build()
+        assert "branch_name" in system
+        assert "commit_message" in system
+        assert "files" in system
+        assert "FileSchemaDTO" in system
 
     def test_json_example_is_parseable(self) -> None:
-        prompt = BUILDER.build_prompt_from_mission(_make_mission(), CONTEXT)
-        start = prompt.index("```json\n") + len("```json\n")
-        end = prompt.index("\n```", start)
-        example_json = prompt[start:end]
+        system, _ = _build()
+        start = system.index("```json\n") + len("```json\n")
+        end = system.index("\n```", start)
+        example_json = system[start:end]
         parsed = json.loads(example_json)
         assert "branch_name" in parsed
         assert "commit_message" in parsed
@@ -122,34 +144,34 @@ class TestSchemaReference:
 
 
 class TestMissionFieldsIncluded:
-    """Prompt must include key Mission fields beyond just summary."""
+    """User prompt must include key Mission fields beyond just summary."""
 
     def test_mission_key_included(self) -> None:
-        prompt = BUILDER.build_prompt_from_mission(_make_mission(), CONTEXT)
-        assert "PROJ-101" in prompt
+        _, user = _build()
+        assert "PROJ-101" in user
 
     def test_project_key_included(self) -> None:
-        prompt = BUILDER.build_prompt_from_mission(_make_mission(), CONTEXT)
-        assert "PROJ" in prompt
+        _, user = _build()
+        assert "PROJ" in user
 
     def test_issue_type_included(self) -> None:
-        prompt = BUILDER.build_prompt_from_mission(_make_mission(), CONTEXT)
-        assert "Story" in prompt
+        _, user = _build()
+        assert "Story" in user
 
     def test_tech_stack_included(self) -> None:
-        prompt = BUILDER.build_prompt_from_mission(_make_mission(), CONTEXT)
-        assert "Python/FastAPI" in prompt
+        _, user = _build()
+        assert "Python/FastAPI" in user
 
     def test_service_name_included(self) -> None:
-        prompt = BUILDER.build_prompt_from_mission(_make_mission(), CONTEXT)
-        assert "payment-service" in prompt
+        _, user = _build()
+        assert "payment-service" in user
 
     def test_fallback_service_name_uses_key(self) -> None:
         mission = _make_mission()
         mission.description.config["parameters"] = {}
-        prompt = BUILDER.build_prompt_from_mission(mission, CONTEXT)
-        assert "PROJ-101" in prompt
+        _, user = BUILDER.build_prompt_from_mission(mission, CONTEXT)
+        assert "PROJ-101" in user
 
     def test_empty_context_uses_fallback(self) -> None:
-        prompt = BUILDER.build_prompt_from_mission(_make_mission(), "")
-        assert "No specific documentation provided" in prompt
+        _, user = BUILDER.build_prompt_from_mission(_make_mission(), "")
+        assert "No specific documentation provided" in user

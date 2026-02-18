@@ -94,7 +94,7 @@ class TestAnalyzeCodeReviewSkill:
         assert len(report.comments) == 1
         assert report.comments[0].severity == ReviewSeverity.CRITICAL
 
-    async def test_calls_brain_with_combined_prompt(self) -> None:
+    async def test_calls_brain_with_separate_system_prompt(self) -> None:
         brain = AsyncMock()
         prompt_builder = MagicMock()
         prompt_builder.build_system_prompt.return_value = "SYS"
@@ -108,8 +108,8 @@ class TestAnalyzeCodeReviewSkill:
 
         brain.generate_structured.assert_awaited_once()
         call_kwargs = brain.generate_structured.call_args[1]
-        assert "SYS" in call_kwargs["prompt"]
-        assert "USR" in call_kwargs["prompt"]
+        assert call_kwargs["prompt"] == "USR"
+        assert call_kwargs["system_prompt"] == "SYS"
 
     async def test_builder_receives_mission_object(self) -> None:
         brain = AsyncMock()
@@ -127,3 +127,4 @@ class TestAnalyzeCodeReviewSkill:
         call_kwargs = prompt_builder.build_analysis_prompt.call_args[1]
         assert isinstance(call_kwargs["mission"], Mission)
         assert call_kwargs["mission"].key == "PROJ-100"
+        assert call_kwargs["repository_tree"] == ""

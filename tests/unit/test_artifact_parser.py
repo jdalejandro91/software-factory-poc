@@ -31,26 +31,26 @@ class TestScaffoldingPromptBuilder:
     def test_build_prompt_basic_flow(self, prompt_builder, sample_mission):
         """Test that prompt is generated with all sections."""
         context = "Use modular structure."
-        prompt = prompt_builder.build_prompt_from_mission(sample_mission, context)
+        system, user = prompt_builder.build_prompt_from_mission(sample_mission, context)
 
-        assert "## ROLE" in prompt
-        assert "Principal Software Architect" in prompt
-        assert "## ARCHITECTURE CONTEXT" in prompt
-        assert "Use modular structure" in prompt
-        assert "Python/FastAPI" in prompt
+        assert "<system_role>" in system
+        assert "BrahMAS Sovereign Scaffolder" in system
+        assert "<architecture_standards>" in user
+        assert "Use modular structure" in user
+        assert "Python/FastAPI" in system
 
     def test_build_prompt_empty_context(self, prompt_builder, sample_mission):
         """Test prompt generation fallback when context is missing."""
-        prompt = prompt_builder.build_prompt_from_mission(sample_mission, "")
+        _, user = prompt_builder.build_prompt_from_mission(sample_mission, "")
 
-        assert "No specific documentation provided" in prompt
+        assert "No specific documentation provided" in user
 
     def test_json_example_is_parseable(self, prompt_builder, sample_mission):
         """Test that the example JSON in the output schema is valid."""
-        prompt = prompt_builder.build_prompt_from_mission(sample_mission, "some context")
-        start = prompt.index("```json\n") + len("```json\n")
-        end = prompt.index("\n```", start)
-        example_json = prompt[start:end]
+        system, _ = prompt_builder.build_prompt_from_mission(sample_mission, "some context")
+        start = system.index("```json\n") + len("```json\n")
+        end = system.index("\n```", start)
+        example_json = system[start:end]
         parsed = json.loads(example_json)
         assert "branch_name" in parsed
         assert "files" in parsed

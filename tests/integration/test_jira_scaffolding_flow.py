@@ -45,7 +45,7 @@ async def test_scaffolder_agent_flow():
     )
 
     mock_prompt_builder = MagicMock()
-    mock_prompt_builder.build_prompt_from_mission.return_value = "Prompt..."
+    mock_prompt_builder.build_prompt_from_mission.return_value = ("System...", "User...")
 
     # 2. Setup Mission
     description = TaskDescription(

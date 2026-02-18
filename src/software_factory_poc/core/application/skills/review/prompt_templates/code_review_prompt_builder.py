@@ -1,16 +1,30 @@
+import json
+from typing import Any
+
 from software_factory_poc.core.domain.mission import Mission
 
 
 class CodeReviewPromptBuilder:
-    """Builds hardened code review prompts with XML-delimited user data."""
+    """Builds hardened code review prompts split into system + user messages.
+
+    Returns separate system and user prompts with XML-delimited sections
+    to prevent prompt injection and maximise LLM compliance.
+    """
+
+    # ── System Prompt ──────────────────────────────────────────────
 
     @staticmethod
     def build_system_prompt() -> str:
-        return (
-            "You are a Senior Software Architect and strict Code Reviewer for BrahMAS.\n"
-            "Audit the Merge Request using the five evaluation dimensions below.\n"
-            "Be rigorous with architecture, but constructive with suggestions."
-        )
+        """Compose the full system prompt from role, rules, schema, and anti-examples."""
+        sections = [
+            _system_role_section(),
+            _strict_rules_section(),
+            _output_schema_section(),
+            _anti_examples_section(),
+        ]
+        return "\n\n".join(sections)
+
+    # ── User Prompt ────────────────────────────────────────────────
 
     @staticmethod
     def build_analysis_prompt(
@@ -18,70 +32,46 @@ class CodeReviewPromptBuilder:
         mr_diff: str,
         conventions: str,
         code_review_params: dict[str, str] | None = None,
+        repository_tree: str = "",
     ) -> str:
-        """Build the user prompt with XML-delimited inputs.
-
-        Args:
-            mission: Full domain Mission entity.
-            mr_diff: Raw git diff of the merge request.
-            conventions: Architecture/conventions context from docs.
-            code_review_params: Optional parsed YAML params (mr_url, branch, etc.).
-        """
+        """Build the user prompt with XML-delimited inputs."""
         sections = [
-            _goal_section(mission, code_review_params),
-            _input_data_section(mission, mr_diff, conventions),
-            _evaluation_dimensions_section(),
-            _constraints_section(),
-            _output_schema_section(),
-            _anti_examples_section(),
+            _mission_requirements_section(mission, code_review_params),
+            _architecture_standards_section(conventions),
         ]
+        if repository_tree:
+            sections.append(_repository_tree_section(repository_tree))
+        sections.append(_merge_request_diffs_section(mr_diff))
+        sections.append(_final_instruction_section())
         return "\n\n".join(sections)
 
 
-# ── Module-level helpers (each <=14 lines) ────────────────────────────
+# ── System Prompt Helpers (each <=14 lines) ──────────────────────────
 
 
-def _goal_section(mission: Mission, params: dict[str, str] | None) -> str:
-    mr_url = (params or {}).get("mr_url", "N/A")
-    branch = (params or {}).get("branch", "N/A")
+def _system_role_section() -> str:
     return (
-        "## GOAL\n"
-        f"Review the Merge Request for ticket **{mission.key}** "
-        f"(project {mission.project_key}, type {mission.issue_type}).\n"
-        f"MR URL: `{mr_url}` | Branch: `{branch}`"
+        "<system_role>\n"
+        "Eres BrahMAS Quality Gatekeeper, un implacable Staff DevSecOps Engineer. "
+        "Tu objetivo es auditar un Merge Request con precision quirurgica.\n"
+        "</system_role>"
     )
 
 
-def _input_data_section(mission: Mission, mr_diff: str, conventions: str) -> str:
+def _strict_rules_section() -> str:
     return (
-        "## INPUT DATA\n"
-        f"<jira_summary>{mission.summary}</jira_summary>\n\n"
-        f"<jira_description>{mission.description.raw_content}</jira_description>\n\n"
-        f"<conventions>{conventions}</conventions>\n\n"
-        f"<mr_diff>\n{mr_diff}\n</mr_diff>"
-    )
-
-
-def _evaluation_dimensions_section() -> str:
-    return (
-        "## EVALUATION DIMENSIONS\n"
-        "Evaluate the code across these five dimensions:\n"
-        "1. **Correctness**: Does the code satisfy the Jira requirement?\n"
-        "2. **Security (OWASP)**: SQL injection, XSS, secrets in code, insecure deserialization.\n"
-        "3. **SOLID / Clean Code**: SRP, OCP, DIP, naming, method size, cyclomatic complexity.\n"
-        "4. **API Usage**: Correct use of frameworks, libraries, and external service contracts.\n"
-        "5. **Tests & Documentation**: Test coverage for new logic, updated docstrings/READMEs."
-    )
-
-
-def _constraints_section() -> str:
-    return (
-        "## CONSTRAINTS\n"
-        "1. Set `is_approved` to false if ANY critical issue is found.\n"
-        "2. Each issue MUST reference the exact file path and line number when possible.\n"
-        "3. Suggestions must be actionable — include corrected code snippets.\n"
-        "4. Do NOT invent files or lines not present in the diff.\n"
-        "5. The summary must be concise (max 3 sentences)."
+        "<strict_rules>\n"
+        "1. FORMATO: Retorna UNICAMENTE un JSON valido que cumpla con el esquema "
+        "CodeReviewResponseSchema. Cero wrappers de markdown.\n"
+        "2. ENFOQUE: Ignora estilos de formateo (eso lo hace el linter). Enfocate en "
+        "violaciones a los estandares de arquitectura, principios SOLID, inyecciones "
+        "de seguridad (OWASP) y acoplamiento.\n"
+        "3. PRECISION ABSOLUTA: Tienes ESTRICTAMENTE PROHIBIDO alucinar errores o lineas. "
+        "Cada hallazgo debe anclarse a un `file_path` y `line_number` que exista "
+        "EXPLICITAMENTE dentro de los `<merge_request_diffs>`.\n"
+        "4. SEVERIDAD: Usa unicamente CRITICAL, WARNING, SUGGESTION. Fugas de secretos "
+        "o inyeccion SQL son CRITICAL.\n"
+        "</strict_rules>"
     )
 
 
@@ -89,19 +79,19 @@ def _output_schema_section() -> str:
     return (
         "## OUTPUT SCHEMA\n"
         "You MUST respond with a JSON object matching `CodeReviewResponseSchema`:\n\n"
-        "| Field       | Type                | Description                               |\n"
-        "|-------------|---------------------|-------------------------------------------|\n"
-        "| is_approved | bool                | true if publishable, false if not          |\n"
-        "| summary     | str                 | Executive summary of the analysis          |\n"
-        "| issues      | list[CodeIssueSchema]| List of findings                          |\n\n"
+        "| Field       | Type                 | Description                               |\n"
+        "|-------------|----------------------|-------------------------------------------|\n"
+        "| is_approved | bool                 | true if publishable, false if not          |\n"
+        "| summary     | str                  | Executive summary of the analysis          |\n"
+        "| issues      | list[CodeIssueSchema]| List of findings                           |\n\n"
         "Each `CodeIssueSchema`:\n\n"
-        "| Field       | Type                          | Description                    |\n"
-        "|-------------|-------------------------------|--------------------------------|\n"
-        "| file_path   | str                           | Analyzed file path             |\n"
-        "| line_number | int or null                   | Line of the issue              |\n"
-        '| severity    | "CRITICAL"|"WARNING"|"SUGGESTION" | Finding severity            |\n'
-        "| description | str                           | Technical explanation          |\n"
-        "| suggestion  | str                           | Suggested fix or action        |\n\n"
+        "| Field       | Type                              | Description                    |\n"
+        "|-------------|-----------------------------------|--------------------------------|\n"
+        "| file_path   | str                               | Analyzed file path             |\n"
+        "| line_number | int or null                       | Line of the issue              |\n"
+        '| severity    | "CRITICAL"|"WARNING"|"SUGGESTION" | Finding severity               |\n'
+        "| description | str                               | Technical explanation          |\n"
+        "| suggestion  | str                               | Suggested fix or action        |\n\n"
         "### Valid JSON example\n"
         "```json\n"
         "{\n"
@@ -127,5 +117,47 @@ def _anti_examples_section() -> str:
         "- Do NOT set `is_approved: true` when critical issues exist.\n"
         "- Do NOT reference files or lines not present in the diff.\n"
         "- Do NOT provide vague suggestions like 'improve this code'.\n"
-        "- Do NOT return an empty issues list when problems are visible in the diff."
+        "- Do NOT return an empty issues list when problems are visible in the diff.\n"
+        "- Do NOT wrap JSON in markdown code blocks."
+    )
+
+
+# ── User Prompt Helpers (each <=14 lines) ────────────────────────────
+
+
+def _mission_requirements_section(mission: Mission, params: dict[str, str] | None) -> str:
+    mr_url = (params or {}).get("mr_url", "N/A")
+    branch = (params or {}).get("branch", "N/A")
+    config: dict[str, Any] = {
+        "ticket": mission.key,
+        "project": mission.project_key,
+        "type": mission.issue_type,
+        "mr_url": mr_url,
+        "branch": branch,
+    }
+    return (
+        "<mission_requirements>\n"
+        f"{json.dumps(config, indent=2)}\n\n"
+        f"<jira_summary>{mission.summary}</jira_summary>\n\n"
+        f"<jira_description>{mission.description.raw_content}</jira_description>\n"
+        "</mission_requirements>"
+    )
+
+
+def _architecture_standards_section(conventions: str) -> str:
+    return f"<architecture_standards>\n{conventions}\n</architecture_standards>"
+
+
+def _repository_tree_section(repo_tree: str) -> str:
+    return f"<repository_tree>\n{repo_tree}\n</repository_tree>"
+
+
+def _merge_request_diffs_section(mr_diff: str) -> str:
+    return f"<merge_request_diffs>\n{mr_diff}\n</merge_request_diffs>"
+
+
+def _final_instruction_section() -> str:
+    return (
+        "INSTRUCCION: Realiza la revision estructurada. Si el diff cumple "
+        "perfectamente con todo, retorna una lista de hallazgos vacia y aprueba."
     )
