@@ -26,6 +26,16 @@ def _build_root_fields(event_dict: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _safe_float(value: Any) -> float | None:
+    """Cast a value to float, returning None on failure."""
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _build_processing(event_dict: dict[str, Any]) -> dict[str, Any] | None:
     """Extract processing metrics block."""
     status = event_dict.pop("processing_status", None)
@@ -33,7 +43,7 @@ def _build_processing(event_dict: dict[str, Any]) -> dict[str, Any] | None:
         return None
     return {
         "status": status,
-        "duration_ms": event_dict.pop("processing_duration_ms", None),
+        "duration_ms": _safe_float(event_dict.pop("processing_duration_ms", None)),
         "retries": event_dict.pop("processing_retries", None),
     }
 
@@ -85,6 +95,11 @@ def _build_metadata(event_dict: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def _hex_to_uuid(hex_str: str) -> str:
+    """Convert a 32-char hex string to UUID format 8-4-4-4-12."""
+    return f"{hex_str[:8]}-{hex_str[8:12]}-{hex_str[12:16]}-{hex_str[16:20]}-{hex_str[20:]}"
+
+
 def _inject_otel_ids(event_dict: dict[str, Any]) -> None:
     """Overwrite trace_id and span_id from the current OTel span if recording."""
     try:
@@ -93,7 +108,7 @@ def _inject_otel_ids(event_dict: dict[str, Any]) -> None:
         span = trace.get_current_span()
         if span.is_recording():
             ctx = span.get_span_context()
-            event_dict["trace_id"] = format(ctx.trace_id, "032x")
+            event_dict["trace_id"] = _hex_to_uuid(format(ctx.trace_id, "032x"))
             event_dict["span_id"] = format(ctx.span_id, "016x")
     except Exception:  # noqa: BLE001
         pass  # OTel not available or not configured — keep existing values

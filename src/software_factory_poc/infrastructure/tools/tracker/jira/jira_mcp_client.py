@@ -169,17 +169,17 @@ class JiraMcpClient(TrackerTool):
         result = await self._invoke_tool("jira_get_issue", {"issue_key": ticket_id})
         data = self._parse_json(self._extract_text(result), context=f"get_task({ticket_id})")
 
-        fields = data.get("fields", {})
-        description_text = fields.get("description", "") or ""
+        fields = data.get("fields") or {}
+        description_text = fields.get("description") or ""
         task_description = self._parse_description(description_text)
 
         return Mission(
             id=data.get("id", ticket_id),
             key=data.get("key", ticket_id),
-            summary=fields.get("summary", ""),
-            status=fields.get("status", {}).get("name", "OPEN"),
-            project_key=fields.get("project", {}).get("key", ""),
-            issue_type=fields.get("issuetype", {}).get("name", "Task"),
+            summary=fields.get("summary") or "",
+            status=(fields.get("status") or {}).get("name", "OPEN"),
+            project_key=(fields.get("project") or {}).get("key", ""),
+            issue_type=(fields.get("issuetype") or {}).get("name", "Task"),
             description=task_description,
         )
 
@@ -218,7 +218,7 @@ class JiraMcpClient(TrackerTool):
         data = self._parse_json(
             self._extract_text(result), context=f"fetch_description({ticket_id})"
         )
-        return data.get("fields", {}).get("description", "") or ""
+        return (data.get("fields") or {}).get("description") or ""
 
     async def post_review_summary(self, ticket_id: str, report: CodeReviewReport) -> None:
         logger.info("Posting review summary", ticket_id=ticket_id, source_system="JiraMCP")
@@ -253,10 +253,23 @@ class JiraMcpClient(TrackerTool):
     # ── Agentic Operations ──
 
     async def get_mcp_tools(self) -> list[dict[str, Any]]:
-        async with stdio_client(self._server_params()) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                response = await session.list_tools()
+        try:
+            async with stdio_client(self._server_params()) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    response = await session.list_tools()
+        except McpError as exc:
+            raise ProviderError(
+                provider="JiraMCP",
+                message=f"Failed to list MCP tools: {exc}",
+                retryable=True,
+            ) from exc
+        except Exception as exc:
+            raise ProviderError(
+                provider="JiraMCP",
+                message=f"Connection failure listing MCP tools: {exc}",
+                retryable=True,
+            ) from exc
 
         return [
             {

@@ -19,7 +19,6 @@ from software_factory_poc.core.application.workflows.base_workflow import BaseWo
 from software_factory_poc.core.domain.delivery import FileChangesDTO
 from software_factory_poc.core.domain.mission import Mission
 from software_factory_poc.core.domain.quality import CodeReviewReport
-from software_factory_poc.infrastructure.observability.tracing_setup import trace_operation
 
 logger = structlog.get_logger()
 
@@ -41,7 +40,6 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
         self._analyze = analyze
         self._priority_models = priority_models
 
-    @trace_operation("workflow.code_review")
     async def execute(self, mission: Mission) -> None:
         """Orchestrate the full code review pipeline."""
         bind_contextvars(mission_id=mission.id, event_type="workflow.code_review")

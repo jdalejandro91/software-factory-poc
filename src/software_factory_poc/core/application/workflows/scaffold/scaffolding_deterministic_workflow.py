@@ -21,7 +21,6 @@ from software_factory_poc.core.application.tools import DocsTool, TrackerTool, V
 from software_factory_poc.core.application.workflows.base_workflow import BaseWorkflow
 from software_factory_poc.core.domain.delivery import BranchName, CommitIntent, FileContent
 from software_factory_poc.core.domain.mission import Mission
-from software_factory_poc.infrastructure.observability.tracing_setup import trace_operation
 
 logger = structlog.get_logger()
 
@@ -45,7 +44,6 @@ class ScaffoldingDeterministicWorkflow(BaseWorkflow):
         self._priority_models = priority_models
         self._architecture_doc_page_id = architecture_doc_page_id
 
-    @trace_operation("workflow.scaffold")
     async def execute(self, mission: Mission) -> None:
         """Orchestrate the full scaffolding pipeline."""
         bind_contextvars(mission_id=mission.id, event_type="workflow.scaffold")

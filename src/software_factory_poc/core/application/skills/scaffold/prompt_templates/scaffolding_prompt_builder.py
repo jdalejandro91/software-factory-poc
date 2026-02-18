@@ -69,7 +69,7 @@ class ScaffoldingPromptBuilder:
     @staticmethod
     def _output_schema_section() -> str:
         return (
-            "## OUTPUT SCHEMA\n"
+            "<output_schema>\n"
             "You MUST respond with a JSON object matching `ScaffoldingResponseSchema`:\n\n"
             "| Field           | Type               | Description                          |\n"
             "|-----------------|--------------------|------------------------------------- |\n"
@@ -82,7 +82,7 @@ class ScaffoldingPromptBuilder:
             "| path    | str  | Relative file path (e.g. src/main.py)    |\n"
             "| content | str  | Full generated file content              |\n"
             "| is_new  | bool | Always true for scaffolding               |\n\n"
-            "### Valid JSON example\n"
+            "Valid JSON example:\n"
             "```json\n"
             "{\n"
             '  "branch_name": "feature/PROJ-123-my-service",\n'
@@ -93,17 +93,19 @@ class ScaffoldingPromptBuilder:
             ' "is_new": true}\n'
             "  ]\n"
             "}\n"
-            "```"
+            "```\n"
+            "</output_schema>"
         )
 
     @staticmethod
     def _anti_examples_section() -> str:
         return (
-            "## ANTI-EXAMPLES (do NOT do this)\n"
+            "<anti_examples>\n"
             "- Do NOT return a bare JSON array `[{...}]` — return the full schema object.\n"
             "- Do NOT leave `content` empty or use placeholder text like `// TODO`.\n"
             "- Do NOT include absolute paths (e.g. `/home/user/project/src/main.py`).\n"
-            "- Do NOT invent a technology stack different from the one specified."
+            "- Do NOT invent a technology stack different from the one specified.\n"
+            "</anti_examples>"
         )
 
     # ── User Prompt Sections (each <=14 lines) ───────────────────

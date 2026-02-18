@@ -19,6 +19,7 @@ Before analyzing, refactoring, or writing ANY code, you MUST `cat` and internali
 6. `cat .agents/rules/32_code_reviewer_agent_dual_flow.md` (CodeReviewerAgent: step-by-step flow guardrail).
 7. `cat .agents/rules/40_mcp_coexistence_litellm.md` (MANDATORY: `litellm`, `mcp`, Coexistence Routing).
 8. `cat .agents/rules/50_safety_and_dod.md` (Policies, Idempotency, Redaction).
+9. `cat .agents/rules/60_observability_and_sre.md` (MANDATORY: SRE Logging, Structlog, OTel, Prometheus, Puntored JSON Schema).
 
 ### Flow-Safety Clause (NON-NEGOTIABLE)
 Whenever you are asked to change ANY class (domain/application/infrastructure), you MUST determine whether it touches or supports any agent step in:
@@ -30,15 +31,15 @@ If it does, you MUST:
 2) preserve the exact step ordering and invariants,
 3) if a change would alter behavior, explicitly call it out and update the rule and implementation together (never update code alone).
 
-
 ## 🧰 Antigravity Skills (Progressive Disclosure)
-This workspace utilizes the **Antigravity Skills Standard** located in `.agent/skills/`.
-You do not need to read all skills at once. Based on the task at hand, review the available skill descriptions and **automatically apply the relevant skills** (e.g., `mcp-integration`, `domain-auditor`, `agentic-orchestration`).
+This workspace utilizes the **Antigravity Skills Standard** located in `.agents/skills/`.
+You do not need to read all skills at once. Based on the task at hand, review the available skill descriptions and **automatically apply the relevant skills** (e.g., `mcp-integration`, `domain-auditor`, `agentic-orchestration`, `observability-sre`).
 
 ## 🛑 Zero-Tolerance Directives
 - **NO REST APIs:** You MUST use the `mcp` SDK for Jira/GitLab/Confluence.
 - **NO MANUAL LLM GATEWAYS:** You MUST use `litellm`.
 - **DEPENDENCY RULE:** `core/domain` knows NOTHING. `core/application` knows `domain`. `infrastructure` implements `ports`.
+- **OBSERVABILITY COMPLIANCE:** NO `import logging`. NO dynamic IDs in Prometheus labels. ALL logs must comply with the Puntored corporate JSON schema.
 
 ## ⚡ Execution Protocols (QUALITY GATES)
 You act as an autonomous CI/CD quality pipeline. Every time you add, modify, or delete code, you MUST execute the following Quality Gates before ending your turn:

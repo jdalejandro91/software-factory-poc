@@ -6,7 +6,7 @@
 Dependencies ONLY point inwards: `infrastructure` -> `core/application` -> `core/domain`.
 
 ```text
-software_factory_poc/                              # Raíz del proyecto. Agrupa todas las capas bajo un mismo bounded context.
+software_factory_poc/                          # Raíz del proyecto. Agrupa todas las capas bajo un mismo bounded context.
 ├── core/                                      # 🟢 NÚCLEO LIMPIO: dominio + aplicación. No depende de frameworks ni I/O concreto.
 │   ├── domain/                                # MODELO DEL NEGOCIO: invariantes, VOs, entidades y agregados. Sin APIs/DBs.
 │   │   ├── mission/                           # Subdominio de intención: Mission (AR), Intent/Constraints/ContextRefs/Status.
@@ -50,10 +50,8 @@ software_factory_poc/                              # Raíz del proyecto. Agrupa 
     │       └── confluence/                    # Confluence tool driver.
     │           └── config/                    # Confluence config files.
     │
-    ├── persistence/                           # PERSISTENCIA CONCRETA: DBs y storage.
-    │   ├── run_store/                         # Almacén durable de Runs/steps (Mongo/Postgres/etc.).
-    │   ├── artifact_store/                    # Almacén de artefactos/evidencias (S3/FS/etc.).
-    │   └── skill_store/                       # Almacén/registro versionado de skills (file/db).
-    │
-    └── adapters/                              # ADAPTADORES DE TRANSFORMACIÓN.
-        └── mappers/                           # Mappers específicos (MCP JSON ↔ Domain VOs) y normalización. Aisla la suciedad.
+    └── persistence/                           # PERSISTENCIA CONCRETA: DBs y storage.
+        ├── run_store/                         # Almacén durable de Runs/steps (Mongo/Postgres/etc.).
+        ├── artifact_store/                    # Almacén de artefactos/evidencias (S3/FS/etc.).
+        └── skill_store/                       # Almacén/registro versionado de skills (file/db).
+```

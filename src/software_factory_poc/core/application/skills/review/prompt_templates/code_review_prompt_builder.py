@@ -77,7 +77,7 @@ def _strict_rules_section() -> str:
 
 def _output_schema_section() -> str:
     return (
-        "## OUTPUT SCHEMA\n"
+        "<output_schema>\n"
         "You MUST respond with a JSON object matching `CodeReviewResponseSchema`:\n\n"
         "| Field       | Type                 | Description                               |\n"
         "|-------------|----------------------|-------------------------------------------|\n"
@@ -92,7 +92,7 @@ def _output_schema_section() -> str:
         '| severity    | "CRITICAL"|"WARNING"|"SUGGESTION" | Finding severity               |\n'
         "| description | str                               | Technical explanation          |\n"
         "| suggestion  | str                               | Suggested fix or action        |\n\n"
-        "### Valid JSON example\n"
+        "Valid JSON example:\n"
         "```json\n"
         "{\n"
         '  "is_approved": false,\n'
@@ -107,18 +107,20 @@ def _output_schema_section() -> str:
         "    }\n"
         "  ]\n"
         "}\n"
-        "```"
+        "```\n"
+        "</output_schema>"
     )
 
 
 def _anti_examples_section() -> str:
     return (
-        "## ANTI-EXAMPLES (do NOT do this)\n"
+        "<anti_examples>\n"
         "- Do NOT set `is_approved: true` when critical issues exist.\n"
         "- Do NOT reference files or lines not present in the diff.\n"
         "- Do NOT provide vague suggestions like 'improve this code'.\n"
         "- Do NOT return an empty issues list when problems are visible in the diff.\n"
-        "- Do NOT wrap JSON in markdown code blocks."
+        "- Do NOT wrap JSON in markdown code blocks.\n"
+        "</anti_examples>"
     )
 
 

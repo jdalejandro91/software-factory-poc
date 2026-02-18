@@ -1,9 +1,11 @@
 import time
 from functools import lru_cache
+from typing import Any
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from fastapi.responses import JSONResponse
+from structlog.contextvars import bind_contextvars, clear_contextvars, get_contextvars
 
 from software_factory_poc.core.application.agents.scaffolder.scaffolder_agent import ScaffolderAgent
 from software_factory_poc.core.domain.mission import Mission
@@ -21,6 +23,7 @@ from software_factory_poc.infrastructure.observability.metrics_service import (
     MISSIONS_INFLIGHT,
     MISSIONS_TOTAL,
 )
+from software_factory_poc.infrastructure.observability.tracing_setup import get_tracer
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -56,7 +59,8 @@ async def trigger_scaffold(
         if isinstance(task_entity, JSONResponse):
             return task_entity
 
-        background_tasks.add_task(_run_with_metrics, agent, task_entity)
+        ctx_snapshot = get_contextvars()
+        background_tasks.add_task(_run_with_metrics, agent, task_entity, ctx_snapshot)
 
         return {
             "status": "accepted",
@@ -78,13 +82,20 @@ async def trigger_scaffold(
         )
 
 
-async def _run_with_metrics(agent: ScaffolderAgent, mission: Mission) -> None:
-    """Wrap agent.run with Prometheus metrics tracking."""
+async def _run_with_metrics(
+    agent: ScaffolderAgent, mission: Mission, ctx_snapshot: dict[str, Any]
+) -> None:
+    """Wrap agent.run with Prometheus metrics tracking and context propagation."""
+    clear_contextvars()
+    bind_contextvars(**ctx_snapshot)
+
+    tracer = get_tracer()
     MISSIONS_INFLIGHT.labels(agent=_AGENT_LABEL).inc()
     start = time.perf_counter()
     outcome = "success"
     try:
-        await agent.run(mission)
+        with tracer.start_as_current_span("workflow.scaffold"):
+            await agent.run(mission)
     except Exception:
         outcome = "failure"
         raise

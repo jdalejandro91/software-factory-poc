@@ -518,10 +518,23 @@ class GitlabMcpClient(VcsTool):
     # ── Agentic Operations ──
 
     async def get_mcp_tools(self) -> list[dict[str, Any]]:
-        async with stdio_client(self._server_params()) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                response = await session.list_tools()
+        try:
+            async with stdio_client(self._server_params()) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    response = await session.list_tools()
+        except McpError as exc:
+            raise ProviderError(
+                provider="GitLabMCP",
+                message=f"Failed to list MCP tools: {exc}",
+                retryable=True,
+            ) from exc
+        except Exception as exc:
+            raise ProviderError(
+                provider="GitLabMCP",
+                message=f"Connection failure listing MCP tools: {exc}",
+                retryable=True,
+            ) from exc
 
         return [
             {

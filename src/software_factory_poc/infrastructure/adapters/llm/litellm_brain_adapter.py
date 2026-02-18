@@ -24,6 +24,8 @@ from software_factory_poc.infrastructure.observability.tracing_setup import get_
 
 logger = structlog.get_logger()
 
+_MAX_LOG_PROMPT_LENGTH = 10_000
+
 
 class LiteLlmBrainAdapter(BrainPort):
     """Implements BrainPort via ``litellm.acompletion`` with priority-based model fallback.
@@ -138,6 +140,8 @@ class LiteLlmBrainAdapter(BrainPort):
         """Log the redacted prompt payload before sending to LLM."""
         raw_prompt = json.dumps(messages, ensure_ascii=False, default=str)
         redacted_prompt = redact_text(raw_prompt)
+        if len(redacted_prompt) > _MAX_LOG_PROMPT_LENGTH:
+            redacted_prompt = redacted_prompt[:_MAX_LOG_PROMPT_LENGTH] + "... [TRUNCATED]"
         logger.info(
             "Sending payload to LLM",
             prompt_text=redacted_prompt,
