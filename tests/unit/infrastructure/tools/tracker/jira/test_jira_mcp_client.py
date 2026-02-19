@@ -373,7 +373,7 @@ class TestUpdateStatus:
 
 
 class TestUpdateTaskDescription:
-    async def test_fetches_current_then_appends(self, mock_mcp: AsyncMock) -> None:
+    async def test_fetches_current_then_appends_yaml_block(self, mock_mcp: AsyncMock) -> None:
         issue_json = _jira_issue_json(description="Existing content.")
         mock_mcp.call_tool.side_effect = [
             _text_result(issue_json),  # jira_get_issue
@@ -381,14 +381,14 @@ class TestUpdateTaskDescription:
         ]
         client = _build_client()
 
-        await client.update_task_description("PROJ-1", "\n\nAppended text")
+        await client.update_task_description("PROJ-1", "key: value")
 
         calls = mock_mcp.call_tool.call_args_list
         assert len(calls) == 2
         assert calls[0][0][0] == "jira_get_issue"
         assert calls[1][0][0] == "jira_update_issue"
         updated_desc = calls[1][1]["arguments"]["fields"]["description"]
-        assert updated_desc == "Existing content.\n\nAppended text"
+        assert updated_desc == "Existing content.\n\n```yaml\nkey: value\n```"
 
     async def test_handles_empty_current_description(self, mock_mcp: AsyncMock) -> None:
         issue_json = _jira_issue_json(description="")
@@ -402,7 +402,105 @@ class TestUpdateTaskDescription:
 
         calls = mock_mcp.call_tool.call_args_list
         updated_desc = calls[1][1]["arguments"]["fields"]["description"]
-        assert updated_desc == "New content"
+        assert updated_desc == "\n\n```yaml\nNew content\n```"
+
+    async def test_handles_null_description_as_empty(self, mock_mcp: AsyncMock) -> None:
+        raw = json.dumps({"id": "1", "key": "X-1", "fields": {"description": None}})
+        mock_mcp.call_tool.side_effect = [
+            _text_result(raw),
+            _text_result("ok"),
+        ]
+        client = _build_client()
+
+        await client.update_task_description("X-1", "appended")
+
+        calls = mock_mcp.call_tool.call_args_list
+        updated_desc = calls[1][1]["arguments"]["fields"]["description"]
+        assert updated_desc == "\n\n```yaml\nappended\n```"
+
+    async def test_handles_adf_dict_description(self, mock_mcp: AsyncMock) -> None:
+        adf_doc: dict[str, Any] = {
+            "type": "doc",
+            "version": 1,
+            "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Hello"}]}],
+        }
+        raw = json.dumps({"id": "1", "key": "A-1", "fields": {"description": adf_doc}})
+        mock_mcp.call_tool.side_effect = [
+            _text_result(raw),
+            _text_result("ok"),
+        ]
+        client = _build_client()
+
+        await client.update_task_description("A-1", "service: my-svc")
+
+        calls = mock_mcp.call_tool.call_args_list
+        updated = calls[1][1]["arguments"]["fields"]["description"]
+        assert isinstance(updated, dict)
+        assert updated["type"] == "doc"
+        # Original paragraph preserved
+        assert updated["content"][0]["type"] == "paragraph"
+        # codeBlock appended
+        code_block = updated["content"][-1]
+        assert code_block["type"] == "codeBlock"
+        assert code_block["attrs"]["language"] == "yaml"
+        assert code_block["content"][0]["text"] == "service: my-svc"
+
+
+# ══════════════════════════════════════════════════════════════════════
+# _build_updated_description / _append_to_adf — ADF-safe helpers
+# ══════════════════════════════════════════════════════════════════════
+
+
+class TestBuildUpdatedDescription:
+    def test_plain_string_wraps_in_yaml_block(self) -> None:
+        result = JiraMcpClient._build_updated_description("Existing.", "key: val")
+        assert result == "Existing.\n\n```yaml\nkey: val\n```"
+
+    def test_none_produces_yaml_block(self) -> None:
+        result = JiraMcpClient._build_updated_description(None, "text")
+        assert result == "\n\n```yaml\ntext\n```"
+
+    def test_adf_dict_returns_dict_with_code_block(self) -> None:
+        adf: dict[str, Any] = {"type": "doc", "content": []}
+        result = JiraMcpClient._build_updated_description(adf, "hello")
+        assert isinstance(result, dict)
+        assert result["content"][-1]["type"] == "codeBlock"
+
+    def test_adf_dict_is_not_mutated(self) -> None:
+        adf: dict[str, Any] = {"type": "doc", "content": [{"type": "paragraph"}]}
+        original_len = len(adf["content"])
+        JiraMcpClient._build_updated_description(adf, "text")
+        assert len(adf["content"]) == original_len
+
+
+class TestAppendToAdf:
+    def test_appends_code_block_to_existing_content(self) -> None:
+        adf: dict[str, Any] = {
+            "type": "doc",
+            "content": [{"type": "paragraph", "content": []}],
+        }
+        result = JiraMcpClient._append_to_adf(adf, "service: x")
+        assert len(result["content"]) == 2
+        block = result["content"][1]
+        assert block["type"] == "codeBlock"
+        assert block["attrs"]["language"] == "yaml"
+        assert block["content"][0]["text"] == "service: x"
+
+    def test_creates_content_list_when_missing(self) -> None:
+        adf: dict[str, Any] = {"type": "doc", "version": 1}
+        result = JiraMcpClient._append_to_adf(adf, "data")
+        assert len(result["content"]) == 1
+        assert result["content"][0]["type"] == "codeBlock"
+
+    def test_deep_copies_input(self) -> None:
+        inner = {"type": "text", "text": "original"}
+        adf: dict[str, Any] = {
+            "type": "doc",
+            "content": [{"type": "paragraph", "content": [inner]}],
+        }
+        result = JiraMcpClient._append_to_adf(adf, "new")
+        result["content"][0]["content"][0]["text"] = "mutated"
+        assert inner["text"] == "original"
 
 
 # ══════════════════════════════════════════════════════════════════════

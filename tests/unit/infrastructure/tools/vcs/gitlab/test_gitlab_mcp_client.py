@@ -490,6 +490,73 @@ class TestExecuteTool:
 # ══════════════════════════════════════════════════════════════════════
 
 
+class TestExtractIid:
+    """Verify _extract_iid parses MR URLs and plain numbers correctly."""
+
+    def test_extracts_iid_from_full_url(self) -> None:
+        url = "https://gitlab.com/grupo/repo/-/merge_requests/25"
+        assert GitlabMcpClient._extract_iid(url) == "25"
+
+    def test_extracts_iid_from_url_with_query_params(self) -> None:
+        url = "https://gitlab.com/repo/-/merge_requests/99?tab=overview"
+        assert GitlabMcpClient._extract_iid(url) == "99"
+
+    def test_returns_plain_number_unchanged(self) -> None:
+        assert GitlabMcpClient._extract_iid("42") == "42"
+
+    def test_strips_whitespace_from_plain_number(self) -> None:
+        assert GitlabMcpClient._extract_iid("  7  ") == "7"
+
+
+class TestContentTruncation:
+    """Verify _truncate_content enforces the _MAX_FILE_CHARS limit."""
+
+    def test_short_content_passes_through(self) -> None:
+        content = "x" * 100
+        result = GitlabMcpClient._truncate_content(content, "short.py")
+        assert result == content
+
+    def test_content_at_limit_passes_through(self) -> None:
+        content = "x" * GitlabMcpClient._MAX_FILE_CHARS
+        result = GitlabMcpClient._truncate_content(content, "exact.py")
+        assert result == content
+
+    def test_oversized_content_is_truncated(self) -> None:
+        content = "x" * 30_000
+        result = GitlabMcpClient._truncate_content(content, "big.py")
+        assert len(result) < 30_000
+        assert result.startswith("x" * 100)
+        assert "CONTENIDO TRUNCADO" in result
+
+    def test_excluded_dirs_include_coverage_and_ide(self) -> None:
+        assert "coverage" in GitlabMcpClient.EXCLUDED_DIRS
+        assert ".idea" in GitlabMcpClient.EXCLUDED_DIRS
+        assert ".vscode" in GitlabMcpClient.EXCLUDED_DIRS
+
+
+class TestFilterRelevantPaths:
+    """Verify _filter_relevant_paths uses class-level exclusion constants."""
+
+    def test_filters_excluded_dirs(self) -> None:
+        entries = [
+            {"path": "src/main.py", "type": "blob"},
+            {"path": "coverage/lcov.info", "type": "blob"},
+            {"path": ".idea/workspace.xml", "type": "blob"},
+            {"path": ".vscode/settings.json", "type": "blob"},
+        ]
+        paths = GitlabMcpClient._filter_relevant_paths(entries)
+        assert paths == ["src/main.py"]
+
+    def test_filters_excluded_extensions(self) -> None:
+        entries = [
+            {"path": "src/app.py", "type": "blob"},
+            {"path": "assets/logo.png", "type": "blob"},
+            {"path": "vendor/lib.so", "type": "blob"},
+        ]
+        paths = GitlabMcpClient._filter_relevant_paths(entries)
+        assert paths == ["src/app.py"]
+
+
 class TestErrorHandling:
     async def test_mcp_error_becomes_provider_error(self, mock_mcp: AsyncMock) -> None:
         mock_mcp.call_tool.side_effect = McpError(ErrorData(code=-32600, message="Invalid request"))

@@ -23,57 +23,61 @@ logger = structlog.get_logger()
 
 _HUNK_HEADER_RE = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@", re.MULTILINE)
 
-_IGNORED_DIRS = frozenset(
-    {
-        "node_modules",
-        ".git",
-        "__pycache__",
-        ".mypy_cache",
-        ".ruff_cache",
-        "dist",
-        "build",
-        ".venv",
-        "venv",
-        ".tox",
-        ".eggs",
-        ".pytest_cache",
-    }
-)
-_BINARY_EXTENSIONS = frozenset(
-    {
-        ".png",
-        ".jpg",
-        ".jpeg",
-        ".gif",
-        ".ico",
-        ".svg",
-        ".webp",
-        ".woff",
-        ".woff2",
-        ".ttf",
-        ".eot",
-        ".otf",
-        ".pdf",
-        ".zip",
-        ".gz",
-        ".tar",
-        ".jar",
-        ".war",
-        ".class",
-        ".pyc",
-        ".so",
-        ".dll",
-        ".exe",
-        ".bin",
-        ".lock",
-        ".map",
-    }
-)
-_MAX_BRANCH_FILES = 50
-
 
 class GitlabMcpClient(VcsTool):
     """MCP-stdio client that translates Domain intent into GitLab MCP tool calls."""
+
+    EXCLUDED_DIRS: frozenset[str] = frozenset(
+        {
+            ".git",
+            "node_modules",
+            "dist",
+            "build",
+            "coverage",
+            "__pycache__",
+            ".mypy_cache",
+            ".ruff_cache",
+            ".venv",
+            "venv",
+            ".tox",
+            ".eggs",
+            ".pytest_cache",
+            ".idea",
+            ".vscode",
+        }
+    )
+    EXCLUDED_EXTS: frozenset[str] = frozenset(
+        {
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".gif",
+            ".ico",
+            ".svg",
+            ".webp",
+            ".woff",
+            ".woff2",
+            ".ttf",
+            ".eot",
+            ".otf",
+            ".pdf",
+            ".zip",
+            ".gz",
+            ".tar",
+            ".jar",
+            ".war",
+            ".class",
+            ".pyc",
+            ".so",
+            ".dll",
+            ".exe",
+            ".bin",
+            ".lock",
+            ".map",
+        }
+    )
+    _MAX_BRANCH_FILES: int = 50
+    _MAX_FILE_CHARS: int = 25_000
 
     def __init__(self, settings: GitLabSettings) -> None:
         self._settings = settings
@@ -172,6 +176,13 @@ class GitlabMcpClient(VcsTool):
             return getattr(first, "text", str(first))
         return ""
 
+    @staticmethod
+    def _extract_iid(mr_url_or_id: str) -> str:
+        """Extract the MR IID from a URL or return a plain number."""
+        if "merge_requests/" in mr_url_or_id:
+            return mr_url_or_id.split("merge_requests/")[-1].split("/")[0].split("?")[0]
+        return mr_url_or_id.strip()
+
     # ── Scaffolding Flow Operations ──
 
     async def validate_branch_existence(self, branch_name: str) -> bool:
@@ -252,11 +263,12 @@ class GitlabMcpClient(VcsTool):
 
     async def validate_merge_request_existence(self, mr_iid: str) -> bool:
         """Check if the MR exists and is open via MCP."""
+        mr_iid = self._extract_iid(mr_iid)
         logger.info("Validating MR existence", mr_iid=mr_iid, source_system="GitLabMCP")
         try:
             result = await self._invoke_tool(
                 "gitlab_get_merge_request",
-                {"project_id": self._project_id, "merge_request_iid": str(mr_iid)},
+                {"project_id": self._project_id, "merge_request_iid": mr_iid},
             )
             data = json.loads(self._extract_text(result))
             return data.get("state", "") in {"opened", "open"}
@@ -286,18 +298,20 @@ class GitlabMcpClient(VcsTool):
 
     async def get_updated_code_diff(self, mr_iid: str) -> list[FileChangesDTO]:
         """Retrieve structured diff with parsed hunks and line numbers."""
+        mr_iid = self._extract_iid(mr_iid)
         result = await self._invoke_tool(
             "gitlab_get_merge_request_changes",
-            {"project_id": self._project_id, "merge_request_iid": str(mr_iid)},
+            {"project_id": self._project_id, "merge_request_iid": mr_iid},
         )
         raw = self._extract_text(result)
         return self._parse_mr_changes(raw)
 
     async def get_merge_request_diff(self, mr_id: str) -> str:
         """Retrieve raw unified diff text (agentic / legacy use)."""
+        mr_id = self._extract_iid(mr_id)
         result = await self._invoke_tool(
             "gitlab_get_merge_request_changes",
-            {"project_id": self._project_id, "merge_request_iid": str(mr_id)},
+            {"project_id": self._project_id, "merge_request_iid": mr_id},
         )
         return self._extract_text(result)
 
@@ -322,12 +336,12 @@ class GitlabMcpClient(VcsTool):
         paths: list[str] = []
         for entry in entries:
             path = entry.get("path", "")
-            if any(segment in _IGNORED_DIRS for segment in path.split("/")):
+            if any(seg in GitlabMcpClient.EXCLUDED_DIRS for seg in path.split("/")):
                 continue
-            if any(path.endswith(ext) for ext in _BINARY_EXTENSIONS):
+            if any(path.endswith(ext) for ext in GitlabMcpClient.EXCLUDED_EXTS):
                 continue
             paths.append(path)
-        return paths[:_MAX_BRANCH_FILES]
+        return paths[: GitlabMcpClient._MAX_BRANCH_FILES]
 
     @staticmethod
     def _format_tree(paths: list[str]) -> str:
@@ -344,7 +358,7 @@ class GitlabMcpClient(VcsTool):
     async def _fetch_file_contents(
         self, project_id: str, branch: str, paths: list[str]
     ) -> list[FileContent]:
-        """Fetch actual content for each file path via MCP."""
+        """Fetch actual content for each file path via MCP, truncating oversized files."""
         files: list[FileContent] = []
         for path in paths:
             try:
@@ -353,10 +367,27 @@ class GitlabMcpClient(VcsTool):
                     {"project_id": project_id, "file_path": path, "ref": branch},
                 )
                 content = self._extract_text(result)
+                content = self._truncate_content(content, path)
                 files.append(FileContent(path=path, content=content, is_new=False))
             except ProviderError:
                 logger.debug("Skipping unreadable file", file_path=path, source_system="GitLabMCP")
         return files
+
+    @classmethod
+    def _truncate_content(cls, content: str, path: str) -> str:
+        """Truncate file content exceeding _MAX_FILE_CHARS to prevent token overflow."""
+        if len(content) <= cls._MAX_FILE_CHARS:
+            return content
+        logger.warning(
+            "File content truncated",
+            file_path=path,
+            original_chars=len(content),
+            max_chars=cls._MAX_FILE_CHARS,
+            source_system="GitLabMCP",
+        )
+        return content[: cls._MAX_FILE_CHARS] + (
+            "\n\n...[CONTENIDO TRUNCADO POR SEGURIDAD DE VENTANA DE CONTEXTO]"
+        )
 
     # ── Diff Parsing Helpers ──
 
@@ -438,12 +469,13 @@ class GitlabMcpClient(VcsTool):
 
     async def publish_review(self, mr_id: str, report: CodeReviewReport) -> None:
         """Publish a severity-grouped Markdown summary and per-issue inline discussions."""
+        mr_id = self._extract_iid(mr_id)
         main_note = self._build_review_summary(report)
         await self._invoke_tool(
             "gitlab_create_merge_request_note",
             {
                 "project_id": self._project_id,
-                "merge_request_iid": str(mr_id),
+                "merge_request_iid": mr_id,
                 "body": main_note,
             },
         )
@@ -455,7 +487,7 @@ class GitlabMcpClient(VcsTool):
         if report.is_approved:
             await self._invoke_tool(
                 "gitlab_approve_merge_request",
-                {"project_id": self._project_id, "merge_request_iid": str(mr_id)},
+                {"project_id": self._project_id, "merge_request_iid": mr_id},
             )
 
     async def _publish_inline_comments(

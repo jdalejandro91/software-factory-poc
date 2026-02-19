@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 import re
@@ -203,22 +204,43 @@ class JiraMcpClient(TrackerTool):
         )
 
     async def update_task_description(self, ticket_id: str, appended_text: str) -> None:
-        """Fetch current description and append new text (get-then-update via MCP)."""
+        """Fetch current description and append new text (ADF-safe, get-then-update via MCP)."""
         logger.info("Appending to description", ticket_id=ticket_id, source_system="JiraMCP")
         current = await self._fetch_current_description(ticket_id)
-        updated = current + appended_text
+        updated = self._build_updated_description(current, appended_text)
         await self._invoke_tool(
             "jira_update_issue",
             {"issue_key": ticket_id, "fields": {"description": updated}},
         )
 
-    async def _fetch_current_description(self, ticket_id: str) -> str:
-        """Retrieve the current Jira issue description via MCP."""
+    @staticmethod
+    def _build_updated_description(
+        current: str | dict[str, Any] | None, appended_text: str
+    ) -> str | dict[str, Any]:
+        """Build updated description handling both ADF (dict) and plain-text formats."""
+        if isinstance(current, dict):
+            return JiraMcpClient._append_to_adf(current, appended_text)
+        return f"{current or ''}\n\n```yaml\n{appended_text}\n```"
+
+    @staticmethod
+    def _append_to_adf(adf_doc: dict[str, Any], text: str) -> dict[str, Any]:
+        """Deep-copy an ADF document and append a YAML codeBlock node."""
+        doc = copy.deepcopy(adf_doc)
+        code_block: dict[str, Any] = {
+            "type": "codeBlock",
+            "attrs": {"language": "yaml"},
+            "content": [{"type": "text", "text": text}],
+        }
+        doc.setdefault("content", []).append(code_block)
+        return doc
+
+    async def _fetch_current_description(self, ticket_id: str) -> str | dict[str, Any] | None:
+        """Retrieve the current Jira issue description via MCP (may be ADF dict)."""
         result = await self._invoke_tool("jira_get_issue", {"issue_key": ticket_id})
         data = self._parse_json(
             self._extract_text(result), context=f"fetch_description({ticket_id})"
         )
-        return (data.get("fields") or {}).get("description") or ""
+        return (data.get("fields") or {}).get("description")
 
     async def post_review_summary(self, ticket_id: str, report: CodeReviewReport) -> None:
         logger.info("Posting review summary", ticket_id=ticket_id, source_system="JiraMCP")
