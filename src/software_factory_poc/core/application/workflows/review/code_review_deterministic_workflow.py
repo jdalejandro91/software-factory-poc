@@ -33,12 +33,14 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
         docs: DocsTool,
         analyze: AnalyzeCodeReviewSkill,
         priority_models: list[str],
+        architecture_doc_page_id: str = "",
     ) -> None:
         self._vcs = vcs
         self._tracker = tracker
         self._docs = docs
         self._analyze = analyze
         self._priority_models = priority_models
+        self._architecture_doc_page_id = architecture_doc_page_id
 
     async def execute(self, mission: Mission) -> None:
         """Orchestrate the full code review pipeline."""
@@ -49,12 +51,12 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
             await self._step_2_report_start(mission)
             await self._step_3_validate_mr(mission, parsed)
             repo_tree, file_changes, original_code = await self._step_4_fetch_tree_and_diffs(parsed)
-            context = await self._step_5_fetch_context(mission.summary)
+            context = await self._step_5_fetch_context(mission)
             diffs_text = self._file_changes_to_diff_text(file_changes)
             report = await self._step_6_analyze(
                 mission, diffs_text, context, parsed, repo_tree, original_code
             )
-            await self._step_7_publish_and_transition(mission, parsed, report)
+            await self._step_7_publish_and_report(mission, parsed, report)
             logger.info("Code review workflow completed", mission_key=mission.key)
         except WorkflowHaltedException:
             logger.info("Code review workflow halted gracefully", mission_key=mission.key)
@@ -124,11 +126,20 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
         )
         return repo_tree, file_changes, original_code
 
-    async def _step_5_fetch_context(self, service_name: str) -> str:
-        """Retrieve architectural conventions from Confluence via Docs tool."""
-        logger.info("Step 5: Fetching architecture context", service_name=service_name)
-        context = await self._docs.get_architecture_context(page_id=service_name)
-        logger.info("Architecture context fetched", context_length=len(context))
+    async def _step_5_fetch_context(self, mission: Mission) -> str:
+        """Retrieve project + architecture context from Confluence."""
+        service_name = mission.description.config.get("parameters", {}).get(
+            "service_name", mission.project_key
+        )
+        logger.info(
+            "Step 5: Fetching knowledge context",
+            service_name=service_name,
+            page_id=self._architecture_doc_page_id,
+        )
+        project_ctx = await self._docs.get_project_context(service_name)
+        arch_ctx = await self._docs.get_architecture_context(page_id=self._architecture_doc_page_id)
+        context = f"{project_ctx}\n\n{arch_ctx}"
+        logger.info("Knowledge context fetched", context_length=len(context))
         return context
 
     async def _step_6_analyze(
@@ -160,15 +171,13 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
         )
         return report
 
-    async def _step_7_publish_and_transition(
+    async def _step_7_publish_and_report(
         self, mission: Mission, parsed: dict[str, str], report: CodeReviewReport
     ) -> None:
-        """Publish review to VCS (tolerant), post summary to tracker, transition status."""
-        logger.info("Step 7: Publishing review and transitioning status")
+        """Publish review to VCS (tolerant), post summary to tracker. No status transition."""
+        logger.info("Step 7: Publishing review and reporting to tracker")
         await self._safe_publish_review(mission, parsed["mr_iid"], report)
         await self._post_success_comment(mission, parsed["mr_url"], report)
-        status = "Done" if report.is_approved else "Changes Requested"
-        await self._tracker.update_status(mission.key, status)
 
     # ── Private Helpers (max 14 lines each) ──────────────────────────
 

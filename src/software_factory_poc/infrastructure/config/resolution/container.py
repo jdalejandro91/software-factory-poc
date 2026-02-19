@@ -99,6 +99,7 @@ async def build_scaffolding_agent(mcp_manager: McpConnectionManager) -> Scaffold
         generate_plan=generate_plan,
         priority_models=priority_models,
         architecture_doc_page_id=config.confluence.architecture_doc_page_id,
+        workflow_state_success=config.jira.workflow_state_success,
     )
 
     return ScaffolderAgent(
@@ -127,6 +128,7 @@ async def build_code_review_agent(mcp_manager: McpConnectionManager) -> CodeRevi
         docs=docs,
         analyze=analyze,
         priority_models=priority_models,
+        architecture_doc_page_id=config.confluence.architecture_doc_page_id,
     )
 
     return CodeReviewerAgent(

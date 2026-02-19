@@ -79,6 +79,10 @@ def _error_result(text: str) -> FakeCallToolResult:
     return FakeCallToolResult(content=[FakeTextContent(text=text)], isError=True)
 
 
+def _search_result(results: list[dict[str, Any]]) -> FakeCallToolResult:
+    return _text_result(json.dumps({"results": results}))
+
+
 # ── Fixture: mock the entire MCP stdio stack ──
 
 
@@ -158,40 +162,13 @@ class TestServerParams:
 
 
 # ══════════════════════════════════════════════════════════════════════
-# get_project_context
-# ══════════════════════════════════════════════════════════════════════
-
-
-class TestGetProjectContext:
-    async def test_searches_confluence_and_returns_text(self, mock_mcp: AsyncMock) -> None:
-        mock_mcp.call_tool.return_value = _text_result("BrahMAS architecture overview...")
-        client = _build_client()
-
-        result = await client.get_project_context("BrahMAS")
-
-        assert result == "BrahMAS architecture overview..."
-        mock_mcp.call_tool.assert_called_once_with(
-            "confluence_search",
-            arguments={"query": "BrahMAS"},
-        )
-
-    async def test_returns_empty_on_no_content(self, mock_mcp: AsyncMock) -> None:
-        mock_mcp.call_tool.return_value = FakeCallToolResult(content=[])
-        client = _build_client()
-
-        result = await client.get_project_context("unknown-service")
-        assert result == ""
-
-
-# ══════════════════════════════════════════════════════════════════════
 # get_architecture_context
 # ══════════════════════════════════════════════════════════════════════
 
 
 class TestGetArchitectureContext:
-    async def test_fetches_page_and_extracts_body(self, mock_mcp: AsyncMock) -> None:
-        page_data = {"body": {"storage": {"value": "<h1>Clean Architecture</h1>"}}}
-        mock_mcp.call_tool.return_value = _text_result(json.dumps(page_data))
+    async def test_fetches_page_and_returns_text(self, mock_mcp: AsyncMock) -> None:
+        mock_mcp.call_tool.return_value = _text_result("<h1>Clean Architecture</h1>")
         client = _build_client()
 
         result = await client.get_architecture_context("3571713")
@@ -202,19 +179,128 @@ class TestGetArchitectureContext:
             arguments={"page_id": "3571713"},
         )
 
-    async def test_returns_raw_text_on_non_json(self, mock_mcp: AsyncMock) -> None:
-        mock_mcp.call_tool.return_value = _text_result("Plain text page content")
+    async def test_returns_empty_on_no_content(self, mock_mcp: AsyncMock) -> None:
+        mock_mcp.call_tool.return_value = FakeCallToolResult(content=[])
         client = _build_client()
 
         result = await client.get_architecture_context("1234")
-        assert result == "Plain text page content"
+        assert result == ""
 
-    async def test_returns_raw_when_body_key_missing(self, mock_mcp: AsyncMock) -> None:
-        mock_mcp.call_tool.return_value = _text_result(json.dumps({"title": "My Page"}))
+
+# ══════════════════════════════════════════════════════════════════════
+# get_project_context — hierarchical CQL search
+# ══════════════════════════════════════════════════════════════════════
+
+
+class TestGetProjectContext:
+    async def test_happy_path_fetches_parent_then_children(self, mock_mcp: AsyncMock) -> None:
+        """Full flow: find parent by title → find children → fetch each child page."""
+        parent_search = _search_result([{"id": "100", "title": "shopping-cart"}])
+        children_search = _search_result(
+            [
+                {"id": "201", "title": "HLD"},
+                {"id": "202", "title": "ADR-001"},
+            ]
+        )
+        child_page_1 = _text_result("High Level Design content")
+        child_page_2 = _text_result("ADR decision record")
+
+        mock_mcp.call_tool.side_effect = [
+            parent_search,
+            children_search,
+            child_page_1,
+            child_page_2,
+        ]
         client = _build_client()
 
-        result = await client.get_architecture_context("5678")
-        assert result == json.dumps({"title": "My Page"})
+        result = await client.get_project_context("shopping-cart")
+
+        assert "--- Document: HLD ---" in result
+        assert "High Level Design content" in result
+        assert "--- Document: ADR-001 ---" in result
+        assert "ADR decision record" in result
+
+        calls = mock_mcp.call_tool.call_args_list
+        assert calls[0][0][0] == "confluence_search"
+        assert calls[0][1]["arguments"]["cql"] == 'title="shopping-cart"'
+        assert calls[1][0][0] == "confluence_search"
+        assert calls[1][1]["arguments"]["cql"] == 'ancestor="100"'
+        assert calls[2][0][0] == "confluence_get_page"
+        assert calls[3][0][0] == "confluence_get_page"
+
+    async def test_returns_fallback_when_no_parent_found(self, mock_mcp: AsyncMock) -> None:
+        mock_mcp.call_tool.return_value = _search_result([])
+        client = _build_client()
+
+        result = await client.get_project_context("unknown-service")
+
+        assert "No project documentation found" in result
+        assert "unknown-service" in result
+
+    async def test_returns_fallback_when_parent_has_no_children(self, mock_mcp: AsyncMock) -> None:
+        parent_search = _search_result([{"id": "100", "title": "empty-project"}])
+        children_search = _search_result([])
+
+        mock_mcp.call_tool.side_effect = [parent_search, children_search]
+        client = _build_client()
+
+        result = await client.get_project_context("empty-project")
+
+        assert "no child documents" in result
+
+    async def test_returns_fallback_on_non_json_search_result(self, mock_mcp: AsyncMock) -> None:
+        mock_mcp.call_tool.return_value = _text_result("not valid json")
+        client = _build_client()
+
+        result = await client.get_project_context("bad-format")
+
+        assert "No project documentation found" in result
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Static helper methods
+# ══════════════════════════════════════════════════════════════════════
+
+
+class TestExtractFirstPageId:
+    def test_extracts_id_from_results_list(self) -> None:
+        raw = json.dumps({"results": [{"id": "42", "title": "Page"}]})
+        assert ConfluenceMcpClient._extract_first_page_id(raw) == "42"
+
+    def test_returns_none_on_empty_results(self) -> None:
+        raw = json.dumps({"results": []})
+        assert ConfluenceMcpClient._extract_first_page_id(raw) is None
+
+    def test_returns_none_on_invalid_json(self) -> None:
+        assert ConfluenceMcpClient._extract_first_page_id("not json") is None
+
+    def test_handles_flat_list_format(self) -> None:
+        raw = json.dumps([{"id": "99", "title": "Flat"}])
+        assert ConfluenceMcpClient._extract_first_page_id(raw) == "99"
+
+
+class TestExtractPageList:
+    def test_extracts_list_of_dicts(self) -> None:
+        raw = json.dumps(
+            {
+                "results": [
+                    {"id": "1", "title": "A"},
+                    {"id": "2", "title": "B"},
+                ]
+            }
+        )
+        pages = ConfluenceMcpClient._extract_page_list(raw)
+        assert len(pages) == 2
+        assert pages[0] == {"id": "1", "title": "A"}
+
+    def test_returns_empty_on_invalid_json(self) -> None:
+        assert ConfluenceMcpClient._extract_page_list("not json") == []
+
+    def test_skips_entries_without_id(self) -> None:
+        raw = json.dumps({"results": [{"title": "No ID"}, {"id": "5", "title": "Has ID"}]})
+        pages = ConfluenceMcpClient._extract_page_list(raw)
+        assert len(pages) == 1
+        assert pages[0]["id"] == "5"
 
 
 # ══════════════════════════════════════════════════════════════════════

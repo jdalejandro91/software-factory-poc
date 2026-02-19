@@ -114,6 +114,7 @@ class TestFullPipeline:
         scaffold_plan: ScaffoldingResponseSchema,
     ) -> None:
         mock_vcs.validate_branch_existence.return_value = False
+        mock_docs.get_project_context.return_value = "project ctx"
         mock_docs.get_architecture_context.return_value = "arch context"
         mock_generate_plan.execute.return_value = scaffold_plan
         mock_vcs.commit_changes.return_value = "abc123"
@@ -122,6 +123,7 @@ class TestFullPipeline:
         await workflow.execute(mission)
 
         mock_vcs.validate_branch_existence.assert_awaited_once()
+        mock_docs.get_project_context.assert_awaited_once_with("my-service")
         mock_docs.get_architecture_context.assert_awaited_once_with(page_id="3571713")
         mock_generate_plan.execute.assert_awaited_once()
         mock_vcs.create_branch.assert_awaited_once()
@@ -136,6 +138,7 @@ class TestFullPipeline:
         self,
         workflow: ScaffoldingDeterministicWorkflow,
         mock_vcs: AsyncMock,
+        mock_tracker: AsyncMock,
         mock_docs: AsyncMock,
         mock_generate_plan: AsyncMock,
         mission: Mission,
@@ -144,6 +147,8 @@ class TestFullPipeline:
 
         await workflow.execute(mission)  # Should NOT raise
 
+        mock_tracker.update_status.assert_not_awaited()
+        mock_docs.get_project_context.assert_not_awaited()
         mock_docs.get_architecture_context.assert_not_awaited()
         mock_generate_plan.execute.assert_not_awaited()
         mock_vcs.create_branch.assert_not_awaited()
@@ -159,6 +164,7 @@ class TestFullPipeline:
         scaffold_plan: ScaffoldingResponseSchema,
     ) -> None:
         mock_vcs.validate_branch_existence.return_value = False
+        mock_docs.get_project_context.return_value = "project ctx"
         mock_docs.get_architecture_context.return_value = "arch context"
         mock_generate_plan.execute.return_value = scaffold_plan
         mock_vcs.commit_changes.return_value = "abc123"
@@ -169,7 +175,8 @@ class TestFullPipeline:
         call_args = mock_generate_plan.execute.call_args[0][0]
         assert isinstance(call_args, GenerateScaffoldPlanInput)
         assert call_args.mission is mission
-        assert call_args.arch_context == "arch context"
+        assert "project ctx" in call_args.arch_context
+        assert "arch context" in call_args.arch_context
         assert call_args.priority_models == ["openai:gpt-4o"]
 
     @pytest.mark.asyncio
@@ -183,6 +190,7 @@ class TestFullPipeline:
         scaffold_plan: ScaffoldingResponseSchema,
     ) -> None:
         mock_vcs.validate_branch_existence.return_value = False
+        mock_docs.get_project_context.return_value = "project ctx"
         mock_docs.get_architecture_context.return_value = "arch"
         mock_generate_plan.execute.return_value = scaffold_plan
         mock_vcs.commit_changes.return_value = "abc123"
@@ -213,6 +221,7 @@ class TestFullPipeline:
         scaffold_plan: ScaffoldingResponseSchema,
     ) -> None:
         mock_vcs.validate_branch_existence.return_value = False
+        mock_docs.get_project_context.return_value = "project ctx"
         mock_docs.get_architecture_context.return_value = "arch"
         mock_generate_plan.execute.return_value = scaffold_plan
         mock_vcs.commit_changes.return_value = "abc123"
@@ -240,6 +249,7 @@ class TestFullPipeline:
         mission: Mission,
     ) -> None:
         mock_vcs.validate_branch_existence.return_value = False
+        mock_docs.get_project_context.return_value = "project ctx"
         mock_docs.get_architecture_context.side_effect = RuntimeError("Confluence down")
 
         with pytest.raises(WorkflowExecutionError):
@@ -260,6 +270,7 @@ class TestFullPipeline:
     ) -> None:
         """If update_task_description fails, status must NOT transition to In Review."""
         mock_vcs.validate_branch_existence.return_value = False
+        mock_docs.get_project_context.return_value = "project ctx"
         mock_docs.get_architecture_context.return_value = "arch"
         mock_generate_plan.execute.return_value = scaffold_plan
         mock_vcs.commit_changes.return_value = "abc123"
@@ -306,6 +317,33 @@ class TestStepMethods:
         assert parsed["target_branch"] == "main"
         assert parsed["branch_name"] == "feature/proj-100-my-service"
 
+    def test_parse_mission_uses_branch_slug_when_present(
+        self,
+        workflow: ScaffoldingDeterministicWorkflow,
+    ) -> None:
+        mission = Mission(
+            id="10002",
+            key="PROJ-200",
+            summary="Scaffolding with slug",
+            status="To Do",
+            project_key="PROJ",
+            issue_type="Task",
+            description=TaskDescription(
+                raw_content="Create scaffolding",
+                config={
+                    "parameters": {"service_name": "my-service"},
+                    "target": {
+                        "gitlab_project_id": "42",
+                        "default_branch": "main",
+                        "branch_slug": "feature/custom-branch-name",
+                    },
+                },
+            ),
+        )
+        parsed = workflow._parse_mission(mission)
+
+        assert parsed["branch_name"] == "feature/custom-branch-name"
+
     @pytest.mark.asyncio
     async def test_check_idempotency_halts_when_branch_exists(
         self,
@@ -319,7 +357,8 @@ class TestStepMethods:
         with pytest.raises(WorkflowHaltedException):
             await workflow._step_2_check_idempotency(mission, "feature/proj-100-my-service")
 
-        mock_tracker.update_status.assert_awaited_once_with("PROJ-100", "In Review")
+        mock_tracker.add_comment.assert_awaited_once()
+        mock_tracker.update_status.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_check_idempotency_passes_when_no_branch(
@@ -347,14 +386,17 @@ class TestStepMethods:
             await workflow._step_4_generate_plan(mission, "ctx")
 
     @pytest.mark.asyncio
-    async def test_fetch_context_uses_explicit_page_id(
+    async def test_fetch_context_calls_both_docs_methods(
         self,
         workflow: ScaffoldingDeterministicWorkflow,
         mock_docs: AsyncMock,
     ) -> None:
+        mock_docs.get_project_context.return_value = "project ctx"
         mock_docs.get_architecture_context.return_value = "arch ctx"
 
-        result = await workflow._step_3_fetch_context()
+        result = await workflow._step_3_fetch_context("my-service")
 
-        assert result == "arch ctx"
+        assert "project ctx" in result
+        assert "arch ctx" in result
+        mock_docs.get_project_context.assert_awaited_once_with("my-service")
         mock_docs.get_architecture_context.assert_awaited_once_with(page_id="3571713")

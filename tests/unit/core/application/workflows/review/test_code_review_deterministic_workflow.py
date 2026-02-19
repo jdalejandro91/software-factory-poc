@@ -52,6 +52,7 @@ def workflow(
         docs=mock_docs,
         analyze=mock_analyze,
         priority_models=["openai:gpt-4o"],
+        architecture_doc_page_id="3571713",
     )
 
 
@@ -119,7 +120,8 @@ def _setup_happy_path(
     mock_vcs.get_repository_tree.return_value = _SAMPLE_TREE
     mock_vcs.get_updated_code_diff.return_value = file_changes
     mock_vcs.get_original_branch_code.return_value = _SAMPLE_ORIGINAL_CODE
-    mock_docs.get_architecture_context.return_value = "conventions"
+    mock_docs.get_project_context.return_value = "project conventions"
+    mock_docs.get_architecture_context.return_value = "arch conventions"
     mock_analyze.execute.return_value = report
 
 
@@ -153,13 +155,14 @@ class TestFullPipeline:
         mock_vcs.get_repository_tree.assert_awaited_once_with("42", "feature/proj-200-auth")
         mock_vcs.get_updated_code_diff.assert_awaited_once_with("55")
         mock_vcs.get_original_branch_code.assert_awaited_once_with("42", "feature/proj-200-auth")
-        mock_docs.get_architecture_context.assert_awaited_once()
+        mock_docs.get_project_context.assert_awaited_once_with("PROJ")
+        mock_docs.get_architecture_context.assert_awaited_once_with(page_id="3571713")
         mock_analyze.execute.assert_awaited_once()
         mock_vcs.publish_review.assert_awaited_once_with("55", approved_report)
-        mock_tracker.update_status.assert_awaited_once_with("PROJ-200", "Done")
+        mock_tracker.update_status.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_rejected_report_transitions_to_changes_requested(
+    async def test_rejected_report_does_not_transition_status(
         self,
         workflow: CodeReviewDeterministicWorkflow,
         mock_vcs: AsyncMock,
@@ -174,7 +177,7 @@ class TestFullPipeline:
 
         await workflow.execute(mission)
 
-        mock_tracker.update_status.assert_awaited_once_with("PROJ-200", "Changes Requested")
+        mock_tracker.update_status.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_analyze_skill_receives_correct_input(
@@ -188,7 +191,6 @@ class TestFullPipeline:
         sample_file_changes: list[FileChangesDTO],
     ) -> None:
         _setup_happy_path(mock_vcs, mock_docs, mock_analyze, approved_report, sample_file_changes)
-        mock_docs.get_architecture_context.return_value = "conventions text"
 
         await workflow.execute(mission)
 
@@ -197,7 +199,8 @@ class TestFullPipeline:
         assert call_args.mission.summary == "Review MR for authentication module"
         assert call_args.mission.key == "PROJ-200"
         assert "src/auth.py" in call_args.mr_diff
-        assert call_args.conventions == "conventions text"
+        assert "project conventions" in call_args.conventions
+        assert "arch conventions" in call_args.conventions
         assert call_args.priority_models == ["openai:gpt-4o"]
         assert (
             call_args.code_review_params["mr_url"] == "https://gitlab.example.com/merge_requests/55"
@@ -368,17 +371,21 @@ class TestStepMethods:
             CodeReviewDeterministicWorkflow._extract_mr_iid("not-a-url")
 
     @pytest.mark.asyncio
-    async def test_fetch_context_delegates_to_docs(
+    async def test_fetch_context_calls_both_docs_methods(
         self,
         workflow: CodeReviewDeterministicWorkflow,
         mock_docs: AsyncMock,
+        mission: Mission,
     ) -> None:
+        mock_docs.get_project_context.return_value = "project ctx"
         mock_docs.get_architecture_context.return_value = "arch ctx"
 
-        result = await workflow._step_5_fetch_context("my-service")
+        result = await workflow._step_5_fetch_context(mission)
 
-        assert result == "arch ctx"
-        mock_docs.get_architecture_context.assert_awaited_once_with(page_id="my-service")
+        assert "project ctx" in result
+        assert "arch ctx" in result
+        mock_docs.get_project_context.assert_awaited_once_with("PROJ")
+        mock_docs.get_architecture_context.assert_awaited_once_with(page_id="3571713")
 
     def test_file_changes_to_diff_text(self) -> None:
         changes = [
@@ -437,7 +444,7 @@ class TestPublishReviewTolerance:
 
         await workflow.execute(mission)  # Should NOT raise
 
-        mock_tracker.update_status.assert_awaited_once_with("PROJ-200", "Done")
+        mock_tracker.update_status.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_provider_error_posts_warning_to_tracker(

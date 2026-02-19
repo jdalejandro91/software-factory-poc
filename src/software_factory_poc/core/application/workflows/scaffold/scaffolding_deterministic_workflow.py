@@ -36,6 +36,7 @@ class ScaffoldingDeterministicWorkflow(BaseWorkflow):
         generate_plan: GenerateScaffoldPlanSkill,
         priority_models: list[str],
         architecture_doc_page_id: str,
+        workflow_state_success: str = "In Review",
     ) -> None:
         self._vcs = vcs
         self._tracker = tracker
@@ -43,6 +44,7 @@ class ScaffoldingDeterministicWorkflow(BaseWorkflow):
         self._generate_plan = generate_plan
         self._priority_models = priority_models
         self._architecture_doc_page_id = architecture_doc_page_id
+        self._workflow_state_success = workflow_state_success
 
     async def execute(self, mission: Mission) -> None:
         """Orchestrate the full scaffolding pipeline."""
@@ -52,7 +54,7 @@ class ScaffoldingDeterministicWorkflow(BaseWorkflow):
             parsed = self._parse_mission(mission)
             await self._step_1_report_start(mission)
             await self._step_2_check_idempotency(mission, parsed["branch_name"])
-            context = await self._step_3_fetch_context()
+            context = await self._step_3_fetch_context(parsed["service_name"])
             plan = await self._step_4_generate_plan(mission, context)
             commit_hash, mr_url = await self._step_5_create_and_commit(mission, parsed, plan)
             await self._step_6_report_success(mission, parsed, commit_hash, mr_url, len(plan.files))
@@ -73,11 +75,11 @@ class ScaffoldingDeterministicWorkflow(BaseWorkflow):
         logger.info("Parsing mission config", mission_key=mission.key)
         cfg = mission.description.config
         service_name = cfg.get("parameters", {}).get("service_name", "")
-        project_id = cfg.get("target", {}).get("gitlab_project_id", "") or cfg.get(
-            "target", {}
-        ).get("gitlab_project_path", "")
-        target_branch = cfg.get("target", {}).get("default_branch", "main")
-        branch_name = self._build_branch_name(mission.key, service_name)
+        target = cfg.get("target", {})
+        project_id = target.get("gitlab_project_id", "") or target.get("gitlab_project_path", "")
+        target_branch = target.get("default_branch", "main")
+        branch_slug = target.get("branch_slug", "")
+        branch_name = branch_slug or self._build_branch_name(mission.key, service_name)
         logger.info(
             "Mission parsed",
             service_name=service_name,
@@ -103,18 +105,23 @@ class ScaffoldingDeterministicWorkflow(BaseWorkflow):
         logger.info("Step 2: Checking branch idempotency", branch=branch_name)
         branch_exists = await self._vcs.validate_branch_existence(branch_name)
         if branch_exists:
-            msg = f"La rama '{branch_name}' ya existe. Deteniendo ejecucion."
+            msg = "La rama ya existe. Deteniendo flujo por idempotencia."
             logger.warning("Branch already exists — halting", branch=branch_name)
             await self._tracker.add_comment(mission.key, msg)
-            await self._tracker.update_status(mission.key, "In Review")
             raise WorkflowHaltedException(msg, context={"branch": branch_name})
         logger.info("Branch does not exist — proceeding", branch=branch_name)
 
-    async def _step_3_fetch_context(self) -> str:
-        """Retrieve architectural context from Confluence via explicit page ID."""
-        logger.info("Step 3: Fetching architecture context", page_id=self._architecture_doc_page_id)
-        context = await self._docs.get_architecture_context(page_id=self._architecture_doc_page_id)
-        logger.info("Architecture context fetched", context_length=len(context))
+    async def _step_3_fetch_context(self, service_name: str) -> str:
+        """Retrieve project + architecture context from Confluence."""
+        logger.info(
+            "Step 3: Fetching knowledge context",
+            service_name=service_name,
+            page_id=self._architecture_doc_page_id,
+        )
+        project_ctx = await self._docs.get_project_context(service_name)
+        arch_ctx = await self._docs.get_architecture_context(page_id=self._architecture_doc_page_id)
+        context = f"{project_ctx}\n\n{arch_ctx}"
+        logger.info("Knowledge context fetched", context_length=len(context))
         return context
 
     async def _step_4_generate_plan(
@@ -171,7 +178,7 @@ class ScaffoldingDeterministicWorkflow(BaseWorkflow):
         await self._post_success_comment(
             mission, mr_url, parsed["branch_name"], commit_hash, files_count
         )
-        await self._tracker.update_status(mission.key, "In Review")
+        await self._tracker.update_status(mission.key, self._workflow_state_success)
 
     # ── Private Helpers (max 14 lines each) ──────────────────────────
 

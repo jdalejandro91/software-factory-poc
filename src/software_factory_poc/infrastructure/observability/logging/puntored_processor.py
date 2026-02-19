@@ -116,7 +116,7 @@ def _inject_otel_ids(event_dict: dict[str, Any]) -> None:
 
 def puntored_schema_processor(
     logger: Any,  # noqa: ARG001
-    method_name: str,  # noqa: ARG001
+    _method_name: str,  # noqa: ARG001
     event_dict: dict[str, Any],
 ) -> dict[str, Any]:
     """Structlog processor that reshapes flat event_dict into Puntored schema."""
