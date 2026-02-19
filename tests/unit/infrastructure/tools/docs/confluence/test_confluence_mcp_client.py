@@ -167,13 +167,13 @@ class TestServerParams:
 
 
 class TestGetArchitectureContext:
-    async def test_fetches_page_and_returns_text(self, mock_mcp: AsyncMock) -> None:
+    async def test_fetches_page_and_strips_html(self, mock_mcp: AsyncMock) -> None:
         mock_mcp.call_tool.return_value = _text_result("<h1>Clean Architecture</h1>")
         client = _build_client()
 
         result = await client.get_architecture_context("3571713")
 
-        assert result == "<h1>Clean Architecture</h1>"
+        assert result == "Clean Architecture"
         mock_mcp.call_tool.assert_called_once_with(
             "confluence_get_page",
             arguments={"page_id": "3571713"},
@@ -202,8 +202,8 @@ class TestGetProjectContext:
                 {"id": "202", "title": "ADR-001"},
             ]
         )
-        child_page_1 = _text_result("High Level Design content")
-        child_page_2 = _text_result("ADR decision record")
+        child_page_1 = _text_result("<p>High Level Design content</p>")
+        child_page_2 = _text_result("<p>ADR decision record</p>")
 
         mock_mcp.call_tool.side_effect = [
             parent_search,
@@ -219,6 +219,7 @@ class TestGetProjectContext:
         assert "High Level Design content" in result
         assert "--- Document: ADR-001 ---" in result
         assert "ADR decision record" in result
+        assert "<p>" not in result
 
         calls = mock_mcp.call_tool.call_args_list
         assert calls[0][0][0] == "confluence_search"
@@ -301,6 +302,57 @@ class TestExtractPageList:
         pages = ConfluenceMcpClient._extract_page_list(raw)
         assert len(pages) == 1
         assert pages[0]["id"] == "5"
+
+
+# ══════════════════════════════════════════════════════════════════════
+# _clean_html_and_truncate — HTML stripping + context pruning
+# ══════════════════════════════════════════════════════════════════════
+
+
+class TestCleanHtmlAndTruncate:
+    def test_strips_html_tags(self) -> None:
+        result = ConfluenceMcpClient._clean_html_and_truncate("<h1>Title</h1><p>Body text</p>")
+        assert "<h1>" not in result
+        assert "<p>" not in result
+        assert "Title" in result
+        assert "Body text" in result
+
+    def test_normalizes_whitespace(self) -> None:
+        result = ConfluenceMcpClient._clean_html_and_truncate("word1   word2\t\tword3")
+        assert result == "word1 word2 word3"
+
+    def test_collapses_multiple_newlines(self) -> None:
+        result = ConfluenceMcpClient._clean_html_and_truncate("line1\n\n\n\nline2")
+        assert result == "line1\nline2"
+
+    def test_truncates_at_max_chars(self) -> None:
+        long_text = "A" * 25000
+        result = ConfluenceMcpClient._clean_html_and_truncate(long_text, max_chars=100)
+        assert len(result) > 100  # includes suffix
+        assert result.startswith("A" * 100)
+        assert "CONTENIDO TRUNCADO" in result
+
+    def test_does_not_truncate_within_limit(self) -> None:
+        text = "Short content"
+        result = ConfluenceMcpClient._clean_html_and_truncate(text, max_chars=20000)
+        assert result == text
+        assert "TRUNCADO" not in result
+
+    def test_handles_empty_string(self) -> None:
+        assert ConfluenceMcpClient._clean_html_and_truncate("") == ""
+
+    def test_complex_confluence_html(self) -> None:
+        html = (
+            '<ac:structured-macro ac:name="toc"/>'
+            "<h2>Overview</h2>"
+            '<div class="panel"><p>Architecture <strong>rules</strong>:</p></div>'
+            "<ul><li>Rule 1</li><li>Rule 2</li></ul>"
+        )
+        result = ConfluenceMcpClient._clean_html_and_truncate(html)
+        assert "Overview" in result
+        assert "Architecture" in result
+        assert "rules" in result
+        assert "<" not in result
 
 
 # ══════════════════════════════════════════════════════════════════════

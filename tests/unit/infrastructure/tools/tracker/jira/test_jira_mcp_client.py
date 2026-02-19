@@ -82,6 +82,18 @@ def _error_result(text: str) -> FakeCallToolResult:
     return FakeCallToolResult(content=[FakeTextContent(text=text)], isError=True)
 
 
+def _transitions_json(*transitions: tuple[str, str, str]) -> str:
+    """Build Jira transitions JSON. Each tuple: (id, name, to_name)."""
+    return json.dumps(
+        {
+            "transitions": [
+                {"id": tid, "name": name, "to": {"name": to_name}}
+                for tid, name, to_name in transitions
+            ]
+        }
+    )
+
+
 def _jira_issue_json(
     *,
     key: str = "PROJ-1",
@@ -355,16 +367,50 @@ class TestAddComment:
 
 
 class TestUpdateStatus:
-    async def test_calls_jira_transition_issue(self, mock_mcp: AsyncMock) -> None:
-        mock_mcp.call_tool.return_value = _text_result("ok")
+    async def test_resolves_transition_by_name(self, mock_mcp: AsyncMock) -> None:
+        mock_mcp.call_tool.side_effect = [
+            _text_result(_transitions_json(("21", "In Progress", "In Progress"))),
+            _text_result("ok"),
+        ]
         client = _build_client()
-
         await client.update_status("PROJ-1", "In Progress")
 
-        mock_mcp.call_tool.assert_called_once_with(
-            "jira_transition_issue",
-            arguments={"issue_key": "PROJ-1", "transition_name": "In Progress"},
+        calls = mock_mcp.call_tool.call_args_list
+        assert len(calls) == 2
+        assert calls[0][0][0] == "jira_get_transitions"
+        assert calls[1][0][0] == "jira_transition_issue"
+        assert calls[1][1]["arguments"]["transition_id"] == "21"
+
+    async def test_resolves_transition_by_to_name(self, mock_mcp: AsyncMock) -> None:
+        mock_mcp.call_tool.side_effect = [
+            _text_result(_transitions_json(("11", "Start Review", "In Review"))),
+            _text_result("ok"),
+        ]
+        client = _build_client()
+        await client.update_status("PROJ-1", "In Review")
+
+        calls = mock_mcp.call_tool.call_args_list
+        assert calls[1][1]["arguments"]["transition_id"] == "11"
+
+    async def test_case_insensitive_match(self, mock_mcp: AsyncMock) -> None:
+        mock_mcp.call_tool.side_effect = [
+            _text_result(_transitions_json(("21", "In Progress", "In Progress"))),
+            _text_result("ok"),
+        ]
+        client = _build_client()
+        await client.update_status("PROJ-1", "in progress")
+
+        calls = mock_mcp.call_tool.call_args_list
+        assert calls[1][1]["arguments"]["transition_id"] == "21"
+
+    async def test_no_match_raises_provider_error(self, mock_mcp: AsyncMock) -> None:
+        mock_mcp.call_tool.return_value = _text_result(
+            _transitions_json(("21", "In Progress", "In Progress"))
         )
+        client = _build_client()
+
+        with pytest.raises(ProviderError, match="Transition not found"):
+            await client.update_status("PROJ-1", "Nonexistent Status")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -509,52 +555,62 @@ class TestAppendToAdf:
 
 
 class TestPostReviewSummary:
+    """post_review_summary makes 3 MCP calls: get_transitions, transition_issue, add_comment."""
+
+    _TRANSITIONS = _transitions_json(
+        ("11", "Start Review", "In Review"),
+        ("41", "Back to Todo", "To Do"),
+    )
+
+    def _side_effect(self) -> list[FakeCallToolResult]:
+        return [_text_result(self._TRANSITIONS), _text_result("ok"), _text_result("ok")]
+
     async def test_approved_transitions_to_success_state(self, mock_mcp: AsyncMock) -> None:
-        mock_mcp.call_tool.return_value = _text_result("ok")
+        mock_mcp.call_tool.side_effect = self._side_effect()
         client = _build_client()
 
         report = CodeReviewReport(is_approved=True, summary="Looks good", comments=[])
         await client.post_review_summary("PROJ-1", report)
 
         calls = mock_mcp.call_tool.call_args_list
-        # 1. transition + 2. add_comment = 2 calls
-        assert len(calls) == 2
-        assert calls[0][0][0] == "jira_transition_issue"
-        assert calls[0][1]["arguments"]["transition_name"] == "In Review"
-        assert calls[1][0][0] == "jira_add_comment"
+        assert len(calls) == 3
+        assert calls[0][0][0] == "jira_get_transitions"
+        assert calls[1][0][0] == "jira_transition_issue"
+        assert calls[1][1]["arguments"]["transition_id"] == "11"
+        assert calls[2][0][0] == "jira_add_comment"
 
     async def test_rejected_transitions_to_initial_state(self, mock_mcp: AsyncMock) -> None:
-        mock_mcp.call_tool.return_value = _text_result("ok")
+        mock_mcp.call_tool.side_effect = self._side_effect()
         client = _build_client()
 
         report = CodeReviewReport(is_approved=False, summary="Needs work", comments=[])
         await client.post_review_summary("PROJ-2", report)
 
         calls = mock_mcp.call_tool.call_args_list
-        assert calls[0][1]["arguments"]["transition_name"] == "To Do"
+        assert calls[1][1]["arguments"]["transition_id"] == "41"
 
     async def test_approved_comment_contains_approved_label(self, mock_mcp: AsyncMock) -> None:
-        mock_mcp.call_tool.return_value = _text_result("ok")
+        mock_mcp.call_tool.side_effect = self._side_effect()
         client = _build_client()
 
         report = CodeReviewReport(is_approved=True, summary="All clear", comments=[])
         await client.post_review_summary("PROJ-1", report)
 
-        comment_arg = mock_mcp.call_tool.call_args_list[1][1]["arguments"]["comment"]
+        comment_arg = mock_mcp.call_tool.call_args_list[2][1]["arguments"]["comment"]
         assert "APPROVED" in comment_arg
 
     async def test_rejected_comment_contains_changes_requested(self, mock_mcp: AsyncMock) -> None:
-        mock_mcp.call_tool.return_value = _text_result("ok")
+        mock_mcp.call_tool.side_effect = self._side_effect()
         client = _build_client()
 
         report = CodeReviewReport(is_approved=False, summary="Issues found", comments=[])
         await client.post_review_summary("PROJ-1", report)
 
-        comment_arg = mock_mcp.call_tool.call_args_list[1][1]["arguments"]["comment"]
+        comment_arg = mock_mcp.call_tool.call_args_list[2][1]["arguments"]["comment"]
         assert "CHANGES REQUESTED" in comment_arg
 
     async def test_findings_table_in_comment(self, mock_mcp: AsyncMock) -> None:
-        mock_mcp.call_tool.return_value = _text_result("ok")
+        mock_mcp.call_tool.side_effect = self._side_effect()
         client = _build_client()
 
         comment = ReviewComment(
@@ -567,14 +623,21 @@ class TestPostReviewSummary:
         report = CodeReviewReport(is_approved=False, summary="Security issues", comments=[comment])
         await client.post_review_summary("PROJ-1", report)
 
-        comment_md = mock_mcp.call_tool.call_args_list[1][1]["arguments"]["comment"]
+        comment_md = mock_mcp.call_tool.call_args_list[2][1]["arguments"]["comment"]
         assert "### Findings" in comment_md
         assert "**WARNING**" in comment_md
         assert "`src/main.py:42`" in comment_md
         assert "SQL injection risk" in comment_md
 
     async def test_uses_custom_workflow_states(self, mock_mcp: AsyncMock) -> None:
-        mock_mcp.call_tool.return_value = _text_result("ok")
+        transitions = _transitions_json(
+            ("51", "Mark Done", "Done"), ("61", "Move to Backlog", "Backlog")
+        )
+        mock_mcp.call_tool.side_effect = [
+            _text_result(transitions),
+            _text_result("ok"),
+            _text_result("ok"),
+        ]
         settings = _make_settings(
             WORKFLOW_STATE_SUCCESS="Done",
             WORKFLOW_STATE_INITIAL="Backlog",
@@ -585,7 +648,7 @@ class TestPostReviewSummary:
         await client.post_review_summary("PROJ-1", report)
 
         calls = mock_mcp.call_tool.call_args_list
-        assert calls[0][1]["arguments"]["transition_name"] == "Done"
+        assert calls[1][1]["arguments"]["transition_id"] == "51"
 
 
 # ══════════════════════════════════════════════════════════════════════

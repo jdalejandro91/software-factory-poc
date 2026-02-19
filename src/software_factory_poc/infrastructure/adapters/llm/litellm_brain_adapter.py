@@ -195,6 +195,20 @@ class LiteLlmBrainAdapter(BrainPort):
                 os.environ[env_var] = secret.get_secret_value()
 
     @staticmethod
+    def _strip_markdown_fences(text: str) -> str:
+        """Remove Markdown code fences (```json ... ```) that LLMs sometimes wrap around JSON."""
+        stripped = text.strip()
+        if stripped.startswith("```"):
+            first_newline = stripped.find("\n")
+            if first_newline != -1:
+                stripped = stripped[first_newline + 1 :]
+            else:
+                stripped = stripped[3:]
+        if stripped.endswith("```"):
+            stripped = stripped[:-3]
+        return stripped.strip()
+
+    @staticmethod
     def _parse_structured_response(
         raw_content: str | None,
         schema: type[T],
@@ -206,8 +220,9 @@ class LiteLlmBrainAdapter(BrainPort):
                 provider=model_id,
                 message="LLM returned empty content for structured request",
             )
+        clean = LiteLlmBrainAdapter._strip_markdown_fences(raw_content)
         try:
-            data = json.loads(raw_content)
+            data = json.loads(clean)
         except json.JSONDecodeError as exc:
             raise ProviderError(
                 provider=model_id,

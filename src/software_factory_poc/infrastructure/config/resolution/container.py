@@ -37,6 +37,7 @@ from software_factory_poc.infrastructure.adapters.llm.litellm_brain_adapter impo
     LiteLlmBrainAdapter,
 )
 from software_factory_poc.infrastructure.config.app_config import AppConfig
+from software_factory_poc.infrastructure.observability.redaction_service import redact_text
 from software_factory_poc.infrastructure.tools.docs.confluence.confluence_mcp_client import (
     ConfluenceMcpClient,
 )
@@ -100,6 +101,7 @@ async def build_scaffolding_agent(mcp_manager: McpConnectionManager) -> Scaffold
         priority_models=priority_models,
         architecture_doc_page_id=config.confluence.architecture_doc_page_id,
         workflow_state_success=config.jira.workflow_state_success,
+        redact_error=redact_text,
     )
 
     return ScaffolderAgent(
@@ -129,6 +131,7 @@ async def build_code_review_agent(mcp_manager: McpConnectionManager) -> CodeRevi
         analyze=analyze,
         priority_models=priority_models,
         architecture_doc_page_id=config.confluence.architecture_doc_page_id,
+        redact_error=redact_text,
     )
 
     return CodeReviewerAgent(

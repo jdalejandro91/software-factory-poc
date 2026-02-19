@@ -1,6 +1,7 @@
 """Deterministic scaffolding pipeline — extracted from ScaffolderAgent."""
 
 import re
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 import structlog
@@ -37,6 +38,7 @@ class ScaffoldingDeterministicWorkflow(BaseWorkflow):
         priority_models: list[str],
         architecture_doc_page_id: str,
         workflow_state_success: str = "In Review",
+        redact_error: Callable[[str], str] | None = None,
     ) -> None:
         self._vcs = vcs
         self._tracker = tracker
@@ -45,11 +47,13 @@ class ScaffoldingDeterministicWorkflow(BaseWorkflow):
         self._priority_models = priority_models
         self._architecture_doc_page_id = architecture_doc_page_id
         self._workflow_state_success = workflow_state_success
+        self._redact_error = redact_error or str
 
     async def execute(self, mission: Mission) -> None:
         """Orchestrate the full scaffolding pipeline."""
         bind_contextvars(mission_id=mission.id, event_type="workflow.scaffold")
         logger.info("Scaffold workflow started", mission_key=mission.key)
+        await self._connect_tools()
         try:
             parsed = self._parse_mission(mission)
             await self._step_1_report_start(mission)
@@ -67,6 +71,8 @@ class ScaffoldingDeterministicWorkflow(BaseWorkflow):
         except Exception as exc:
             await self._handle_error(mission, exc)
             raise WorkflowExecutionError(str(exc), context={"mission_key": mission.key}) from exc
+        finally:
+            await self._disconnect_tools()
 
     # ── Step Methods (max 14 lines each) ─────────────────────────────
 
@@ -180,6 +186,22 @@ class ScaffoldingDeterministicWorkflow(BaseWorkflow):
         )
         await self._tracker.update_status(mission.key, self._workflow_state_success)
 
+    # ── MCP Lifecycle ──────────────────────────────────────────────────
+
+    async def _connect_tools(self) -> None:
+        """Open persistent MCP sessions for all tools."""
+        await self._vcs.connect()
+        await self._tracker.connect()
+        await self._docs.connect()
+
+    async def _disconnect_tools(self) -> None:
+        """Close all MCP sessions; swallow errors to avoid masking the original exception."""
+        for tool in (self._vcs, self._tracker, self._docs):
+            try:
+                await tool.disconnect()
+            except Exception:  # noqa: BLE001
+                logger.warning("Failed to disconnect tool", tool_type=type(tool).__name__)
+
     # ── Private Helpers (max 14 lines each) ──────────────────────────
 
     async def _update_task_description(
@@ -219,9 +241,8 @@ class ScaffoldingDeterministicWorkflow(BaseWorkflow):
             error_details=str(error),
             error_retryable=False,
         )
-        await self._tracker.add_comment(
-            mission.key, f"Scaffolding failed: {type(error).__name__}: {error}"
-        )
+        msg = f"Scaffolding failed: {type(error).__name__}: {error}"
+        await self._tracker.add_comment(mission.key, self._redact_error(msg))
 
     @staticmethod
     def _build_branch_name(mission_key: str, service_name: str = "") -> str:

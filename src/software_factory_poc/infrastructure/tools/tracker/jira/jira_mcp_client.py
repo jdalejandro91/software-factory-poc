@@ -1,3 +1,4 @@
+import contextlib
 import copy
 import json
 import os
@@ -38,6 +39,28 @@ class JiraMcpClient(TrackerTool):
     def __init__(self, settings: JiraSettings) -> None:
         self._settings = settings
         self._redactor = RedactionService()
+        self._exit_stack: contextlib.AsyncExitStack | None = None
+        self._session: ClientSession | None = None
+
+    # ── MCP lifecycle ──
+
+    async def connect(self) -> None:
+        """Open a persistent MCP session via AsyncExitStack."""
+        if self._session is not None:
+            return
+        self._exit_stack = contextlib.AsyncExitStack()
+        transport = await self._exit_stack.enter_async_context(stdio_client(self._server_params()))
+        self._session = await self._exit_stack.enter_async_context(ClientSession(*transport))
+        await self._session.initialize()
+        logger.info("Persistent MCP session opened", source_system="JiraMCP")
+
+    async def disconnect(self) -> None:
+        """Close the persistent MCP session and release subprocess resources."""
+        if self._exit_stack is not None:
+            await self._exit_stack.aclose()
+            self._exit_stack = None
+            self._session = None
+            logger.info("Persistent MCP session closed", source_system="JiraMCP")
 
     # ── MCP connection internals ──
 
@@ -62,10 +85,13 @@ class JiraMcpClient(TrackerTool):
             span.set_attribute("mcp.tool_name", tool_name)
             logger.info("Invoking MCP tool", tool_name=tool_name, source_system="JiraMCP")
             try:
-                async with stdio_client(self._server_params()) as (read, write):
-                    async with ClientSession(read, write) as session:
-                        await session.initialize()
-                        result = await session.call_tool(tool_name, arguments=arguments)
+                if self._session is not None:
+                    result = await self._session.call_tool(tool_name, arguments=arguments)
+                else:
+                    async with stdio_client(self._server_params()) as (read, write):
+                        async with ClientSession(read, write) as session:
+                            await session.initialize()
+                            result = await session.call_tool(tool_name, arguments=arguments)
             except McpError as exc:
                 span.set_attribute("error", True)
                 MCP_CALLS_TOTAL.labels(provider="jira", tool=tool_name, outcome="error").inc()
@@ -198,9 +224,25 @@ class JiraMcpClient(TrackerTool):
             target_status=status,
             source_system="JiraMCP",
         )
+        transition_id = await self._resolve_transition_id(ticket_id, status)
         await self._invoke_tool(
             "jira_transition_issue",
-            {"issue_key": ticket_id, "transition_name": status},
+            {"issue_key": ticket_id, "transition_id": transition_id},
+        )
+
+    async def _resolve_transition_id(self, ticket_id: str, target_status: str) -> str:
+        """Fetch available transitions and resolve the numeric ID for *target_status*."""
+        result = await self._invoke_tool("jira_get_transitions", {"issue_key": ticket_id})
+        data = self._parse_json(self._extract_text(result), context=f"get_transitions({ticket_id})")
+        target_lower = target_status.lower()
+        for t in data.get("transitions", []):
+            name = (t.get("name") or "").lower()
+            to_name = ((t.get("to") or {}).get("name") or "").lower()
+            if target_lower in (name, to_name):
+                return str(t["id"])
+        raise ProviderError(
+            provider="JiraMCP",
+            message=f"Transition not found for status '{target_status}' on issue {ticket_id}.",
         )
 
     async def update_task_description(self, ticket_id: str, appended_text: str) -> None:
@@ -276,10 +318,13 @@ class JiraMcpClient(TrackerTool):
 
     async def get_mcp_tools(self) -> list[dict[str, Any]]:
         try:
-            async with stdio_client(self._server_params()) as (read, write):
-                async with ClientSession(read, write) as session:
-                    await session.initialize()
-                    response = await session.list_tools()
+            if self._session is not None:
+                response = await self._session.list_tools()
+            else:
+                async with stdio_client(self._server_params()) as (read, write):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        response = await session.list_tools()
         except McpError as exc:
             raise ProviderError(
                 provider="JiraMCP",

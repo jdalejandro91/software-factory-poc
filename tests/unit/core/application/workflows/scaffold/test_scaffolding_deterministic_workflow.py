@@ -400,3 +400,134 @@ class TestStepMethods:
         assert "arch ctx" in result
         mock_docs.get_project_context.assert_awaited_once_with("my-service")
         mock_docs.get_architecture_context.assert_awaited_once_with(page_id="3571713")
+
+
+# ══════════════════════════════════════════════════════════════════════
+# MCP Lifecycle (connect / disconnect)
+# ══════════════════════════════════════════════════════════════════════
+
+
+class TestErrorRedaction:
+    """Verify error messages are redacted before being sent to Jira."""
+
+    @pytest.mark.asyncio
+    async def test_error_message_is_redacted_before_jira_comment(
+        self,
+        mock_vcs: AsyncMock,
+        mock_tracker: AsyncMock,
+        mock_docs: AsyncMock,
+        mock_generate_plan: AsyncMock,
+        mission: Mission,
+    ) -> None:
+        redactor = lambda text: text.replace("glpat-SECRET", "[REDACTED]")  # noqa: E731
+        wf = ScaffoldingDeterministicWorkflow(
+            vcs=mock_vcs,
+            tracker=mock_tracker,
+            docs=mock_docs,
+            generate_plan=mock_generate_plan,
+            priority_models=["openai:gpt-4o"],
+            architecture_doc_page_id="3571713",
+            redact_error=redactor,
+        )
+        mock_vcs.validate_branch_existence.return_value = False
+        mock_docs.get_project_context.side_effect = RuntimeError("Bearer glpat-SECRET token leaked")
+
+        with pytest.raises(WorkflowExecutionError):
+            await wf.execute(mission)
+
+        error_comment = mock_tracker.add_comment.call_args_list[-1][0][1]
+        assert "glpat-SECRET" not in error_comment
+        assert "[REDACTED]" in error_comment
+
+    @pytest.mark.asyncio
+    async def test_default_redactor_passes_message_through(
+        self,
+        mock_vcs: AsyncMock,
+        mock_tracker: AsyncMock,
+        mock_docs: AsyncMock,
+        mock_generate_plan: AsyncMock,
+        mission: Mission,
+    ) -> None:
+        wf = ScaffoldingDeterministicWorkflow(
+            vcs=mock_vcs,
+            tracker=mock_tracker,
+            docs=mock_docs,
+            generate_plan=mock_generate_plan,
+            priority_models=["openai:gpt-4o"],
+            architecture_doc_page_id="3571713",
+        )
+        mock_vcs.validate_branch_existence.return_value = False
+        mock_docs.get_project_context.side_effect = RuntimeError("safe error")
+
+        with pytest.raises(WorkflowExecutionError):
+            await wf.execute(mission)
+
+        error_comment = mock_tracker.add_comment.call_args_list[-1][0][1]
+        assert "safe error" in error_comment
+
+
+class TestMcpLifecycle:
+    """Verify connect/disconnect are called correctly during workflow execution."""
+
+    @pytest.mark.asyncio
+    async def test_disconnect_called_on_success(
+        self,
+        workflow: ScaffoldingDeterministicWorkflow,
+        mock_vcs: AsyncMock,
+        mock_tracker: AsyncMock,
+        mock_docs: AsyncMock,
+        mock_generate_plan: AsyncMock,
+        mission: Mission,
+        scaffold_plan: ScaffoldingResponseSchema,
+    ) -> None:
+        mock_vcs.validate_branch_existence.return_value = False
+        mock_docs.get_project_context.return_value = "ctx"
+        mock_docs.get_architecture_context.return_value = "arch"
+        mock_generate_plan.execute.return_value = scaffold_plan
+        mock_vcs.commit_changes.return_value = "abc123"
+        mock_vcs.create_merge_request.return_value = "https://gitlab.com/mr/1"
+
+        await workflow.execute(mission)
+
+        mock_vcs.connect.assert_awaited_once()
+        mock_tracker.connect.assert_awaited_once()
+        mock_docs.connect.assert_awaited_once()
+        mock_vcs.disconnect.assert_awaited_once()
+        mock_tracker.disconnect.assert_awaited_once()
+        mock_docs.disconnect.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_disconnect_called_on_error(
+        self,
+        workflow: ScaffoldingDeterministicWorkflow,
+        mock_vcs: AsyncMock,
+        mock_tracker: AsyncMock,
+        mock_docs: AsyncMock,
+        mission: Mission,
+    ) -> None:
+        mock_vcs.validate_branch_existence.return_value = False
+        mock_docs.get_project_context.side_effect = RuntimeError("boom")
+
+        with pytest.raises(WorkflowExecutionError):
+            await workflow.execute(mission)
+
+        mock_vcs.disconnect.assert_awaited_once()
+        mock_tracker.disconnect.assert_awaited_once()
+        mock_docs.disconnect.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_disconnect_called_on_halt(
+        self,
+        workflow: ScaffoldingDeterministicWorkflow,
+        mock_vcs: AsyncMock,
+        mock_tracker: AsyncMock,
+        mock_docs: AsyncMock,
+        mission: Mission,
+    ) -> None:
+        mock_vcs.validate_branch_existence.return_value = True
+
+        await workflow.execute(mission)
+
+        mock_vcs.disconnect.assert_awaited_once()
+        mock_tracker.disconnect.assert_awaited_once()
+        mock_docs.disconnect.assert_awaited_once()

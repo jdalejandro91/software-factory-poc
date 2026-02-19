@@ -488,3 +488,130 @@ class TestPublishReviewTolerance:
 
         with pytest.raises(WorkflowExecutionError):
             await workflow.execute(mission)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# MCP Lifecycle (connect / disconnect)
+# ══════════════════════════════════════════════════════════════════════
+
+
+class TestErrorRedaction:
+    """Verify error messages are redacted before being sent to Jira."""
+
+    @pytest.mark.asyncio
+    async def test_error_message_is_redacted_before_jira_comment(
+        self,
+        mock_vcs: AsyncMock,
+        mock_tracker: AsyncMock,
+        mock_docs: AsyncMock,
+        mock_analyze: AsyncMock,
+        mission: Mission,
+    ) -> None:
+        redactor = lambda text: text.replace("glpat-SECRET", "[REDACTED]")  # noqa: E731
+        wf = CodeReviewDeterministicWorkflow(
+            vcs=mock_vcs,
+            tracker=mock_tracker,
+            docs=mock_docs,
+            analyze=mock_analyze,
+            priority_models=["openai:gpt-4o"],
+            architecture_doc_page_id="3571713",
+            redact_error=redactor,
+        )
+        mock_vcs.validate_branch_existence.side_effect = RuntimeError(
+            "Bearer glpat-SECRET token leaked"
+        )
+
+        with pytest.raises(WorkflowExecutionError):
+            await wf.execute(mission)
+
+        error_comment = mock_tracker.add_comment.call_args_list[-1][0][1]
+        assert "glpat-SECRET" not in error_comment
+        assert "[REDACTED]" in error_comment
+
+    @pytest.mark.asyncio
+    async def test_default_redactor_passes_message_through(
+        self,
+        mock_vcs: AsyncMock,
+        mock_tracker: AsyncMock,
+        mock_docs: AsyncMock,
+        mock_analyze: AsyncMock,
+        mission: Mission,
+    ) -> None:
+        wf = CodeReviewDeterministicWorkflow(
+            vcs=mock_vcs,
+            tracker=mock_tracker,
+            docs=mock_docs,
+            analyze=mock_analyze,
+            priority_models=["openai:gpt-4o"],
+            architecture_doc_page_id="3571713",
+        )
+        mock_vcs.validate_branch_existence.side_effect = RuntimeError("safe error")
+
+        with pytest.raises(WorkflowExecutionError):
+            await wf.execute(mission)
+
+        error_comment = mock_tracker.add_comment.call_args_list[-1][0][1]
+        assert "safe error" in error_comment
+
+
+class TestMcpLifecycle:
+    """Verify connect/disconnect are called correctly during workflow execution."""
+
+    @pytest.mark.asyncio
+    async def test_disconnect_called_on_success(
+        self,
+        workflow: CodeReviewDeterministicWorkflow,
+        mock_vcs: AsyncMock,
+        mock_tracker: AsyncMock,
+        mock_docs: AsyncMock,
+        mock_analyze: AsyncMock,
+        mission: Mission,
+        approved_report: CodeReviewReport,
+        sample_file_changes: list[FileChangesDTO],
+    ) -> None:
+        _setup_happy_path(mock_vcs, mock_docs, mock_analyze, approved_report, sample_file_changes)
+
+        await workflow.execute(mission)
+
+        mock_vcs.connect.assert_awaited_once()
+        mock_tracker.connect.assert_awaited_once()
+        mock_docs.connect.assert_awaited_once()
+        mock_vcs.disconnect.assert_awaited_once()
+        mock_tracker.disconnect.assert_awaited_once()
+        mock_docs.disconnect.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_disconnect_called_on_error(
+        self,
+        workflow: CodeReviewDeterministicWorkflow,
+        mock_vcs: AsyncMock,
+        mock_tracker: AsyncMock,
+        mock_docs: AsyncMock,
+        mission: Mission,
+    ) -> None:
+        mock_vcs.validate_branch_existence.side_effect = RuntimeError("VCS down")
+
+        with pytest.raises(WorkflowExecutionError):
+            await workflow.execute(mission)
+
+        mock_vcs.disconnect.assert_awaited_once()
+        mock_tracker.disconnect.assert_awaited_once()
+        mock_docs.disconnect.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_disconnect_called_on_halt(
+        self,
+        workflow: CodeReviewDeterministicWorkflow,
+        mock_vcs: AsyncMock,
+        mock_tracker: AsyncMock,
+        mock_docs: AsyncMock,
+        mission: Mission,
+    ) -> None:
+        mock_vcs.validate_branch_existence.return_value = True
+        mock_vcs.validate_merge_request_existence.return_value = False
+
+        await workflow.execute(mission)
+
+        mock_vcs.disconnect.assert_awaited_once()
+        mock_tracker.disconnect.assert_awaited_once()
+        mock_docs.disconnect.assert_awaited_once()

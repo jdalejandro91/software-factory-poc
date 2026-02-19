@@ -11,6 +11,14 @@ class BaseTool(ABC):
     @abstractmethod
     def tool_type(self) -> ToolType: ...
 
+    async def connect(self) -> None:
+        """Open a persistent connection (no-op by default; MCP clients override)."""
+        return
+
+    async def disconnect(self) -> None:
+        """Close the persistent connection (no-op by default; MCP clients override)."""
+        return
+
     async def get_mcp_tools(self) -> list[dict[str, Any]]:
         return []
 

@@ -397,6 +397,126 @@ class TestPublishReview:
         assert discussion_args["line"] == 42
 
 
+class TestInlineCommentFallback:
+    """Verify per-comment try-except + consolidated fallback note behaviour."""
+
+    @staticmethod
+    def _make_comment(
+        path: str = "src/main.py",
+        line: int = 10,
+        severity: ReviewSeverity = ReviewSeverity.WARNING,
+    ) -> ReviewComment:
+        return ReviewComment(
+            file_path=path,
+            description="Issue found",
+            suggestion="Fix it",
+            severity=severity,
+            line_number=line,
+        )
+
+    async def test_fallback_note_posted_when_inline_fails(self, mock_mcp: AsyncMock) -> None:
+        """When an inline discussion raises ProviderError, a fallback note is published."""
+        comment = self._make_comment()
+        report = CodeReviewReport(is_approved=False, summary="Review", comments=[comment])
+
+        call_count = 0
+
+        async def _side_effect(tool_name: str, *, arguments: Any) -> FakeCallToolResult:
+            nonlocal call_count
+            call_count += 1
+            if tool_name == "gitlab_create_merge_request_discussion":
+                raise ProviderError(provider="GitLabMCP", message="line not in diff")
+            return _text_result("ok")
+
+        mock_mcp.call_tool.side_effect = _side_effect
+        client = _build_client()
+
+        await client.publish_review("10", report)
+
+        tool_names = [c[0][0] for c in mock_mcp.call_tool.call_args_list]
+        # summary note → inline attempt (fails) → fallback note
+        assert tool_names == [
+            "gitlab_create_merge_request_note",
+            "gitlab_create_merge_request_discussion",
+            "gitlab_create_merge_request_note",
+        ]
+        # Verify fallback body contains the failed comment info
+        fallback_body = mock_mcp.call_tool.call_args_list[2][1]["arguments"]["body"]
+        assert "Inline Comments (fallback)" in fallback_body
+        assert "src/main.py" in fallback_body
+        assert "WARNING" in fallback_body
+
+    async def test_no_fallback_when_all_inline_succeed(self, mock_mcp: AsyncMock) -> None:
+        """When all inline comments succeed, no fallback note is posted."""
+        comment = self._make_comment()
+        report = CodeReviewReport(is_approved=False, summary="Review", comments=[comment])
+        mock_mcp.call_tool.return_value = _text_result("ok")
+        client = _build_client()
+
+        await client.publish_review("10", report)
+
+        tool_names = [c[0][0] for c in mock_mcp.call_tool.call_args_list]
+        # summary note → inline comment (no fallback, no approve)
+        assert tool_names == [
+            "gitlab_create_merge_request_note",
+            "gitlab_create_merge_request_discussion",
+        ]
+
+    async def test_mixed_success_and_failure(self, mock_mcp: AsyncMock) -> None:
+        """Only failed inline comments appear in the fallback note."""
+        ok_comment = self._make_comment(path="src/good.py", line=5)
+        fail_comment = self._make_comment(path="src/bad.py", line=99)
+        report = CodeReviewReport(
+            is_approved=False, summary="Review", comments=[ok_comment, fail_comment]
+        )
+
+        call_index = 0
+
+        async def _side_effect(tool_name: str, *, arguments: Any) -> FakeCallToolResult:
+            nonlocal call_index
+            call_index += 1
+            if tool_name == "gitlab_create_merge_request_discussion":
+                # First inline (good.py) succeeds, second (bad.py) fails
+                if arguments.get("file_path") == "src/bad.py":
+                    raise ProviderError(provider="GitLabMCP", message="line not in diff")
+            return _text_result("ok")
+
+        mock_mcp.call_tool.side_effect = _side_effect
+        client = _build_client()
+
+        await client.publish_review("10", report)
+
+        tool_names = [c[0][0] for c in mock_mcp.call_tool.call_args_list]
+        # summary → inline good.py → inline bad.py (fails) → fallback note
+        assert tool_names == [
+            "gitlab_create_merge_request_note",
+            "gitlab_create_merge_request_discussion",
+            "gitlab_create_merge_request_discussion",
+            "gitlab_create_merge_request_note",
+        ]
+        fallback_body = mock_mcp.call_tool.call_args_list[3][1]["arguments"]["body"]
+        assert "src/bad.py" in fallback_body
+        assert "src/good.py" not in fallback_body
+
+    async def test_fallback_includes_line_number(self, mock_mcp: AsyncMock) -> None:
+        """Fallback note includes file path and line number for each failed comment."""
+        comment = self._make_comment(path="lib/utils.py", line=42)
+        report = CodeReviewReport(is_approved=False, summary="Review", comments=[comment])
+
+        async def _side_effect(tool_name: str, *, arguments: Any) -> FakeCallToolResult:
+            if tool_name == "gitlab_create_merge_request_discussion":
+                raise ProviderError(provider="GitLabMCP", message="line not in diff")
+            return _text_result("ok")
+
+        mock_mcp.call_tool.side_effect = _side_effect
+        client = _build_client()
+
+        await client.publish_review("10", report)
+
+        fallback_body = mock_mcp.call_tool.call_args_list[2][1]["arguments"]["body"]
+        assert "`lib/utils.py:42`" in fallback_body
+
+
 class TestReviewSummaryFormatting:
     """Verify severity-grouped Markdown in the main note."""
 
@@ -588,3 +708,52 @@ class TestErrorHandling:
 
         assert exc_info.value.provider == "GitLabMCP"
         assert exc_info.value.retryable is True
+
+
+# ══════════════════════════════════════════════════════════════════════
+# MCP Lifecycle (connect / disconnect)
+# ══════════════════════════════════════════════════════════════════════
+
+
+class TestMcpLifecycle:
+    async def test_connect_opens_persistent_session(self, mock_mcp: AsyncMock) -> None:
+        client = _build_client()
+        assert client._session is None
+
+        await client.connect()
+
+        assert client._session is not None
+        assert client._exit_stack is not None
+
+    async def test_disconnect_clears_session(self, mock_mcp: AsyncMock) -> None:
+        client = _build_client()
+        await client.connect()
+        assert client._session is not None
+
+        await client.disconnect()
+
+        assert client._session is None
+        assert client._exit_stack is None
+
+    async def test_disconnect_is_idempotent(self) -> None:
+        client = _build_client()
+        await client.disconnect()  # Should not raise even without connect
+
+    async def test_connect_is_idempotent(self, mock_mcp: AsyncMock) -> None:
+        client = _build_client()
+        await client.connect()
+        session_1 = client._session
+
+        await client.connect()  # Second connect should be a no-op
+
+        assert client._session is session_1
+
+    async def test_invoke_tool_uses_persistent_session(self, mock_mcp: AsyncMock) -> None:
+        mock_mcp.call_tool.return_value = _text_result("ok")
+        client = _build_client()
+        await client.connect()
+
+        await client.validate_branch_existence("feature/x")
+
+        # The persistent session's call_tool should be invoked
+        mock_mcp.call_tool.assert_awaited()

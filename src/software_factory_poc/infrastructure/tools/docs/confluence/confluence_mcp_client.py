@@ -1,5 +1,7 @@
+import contextlib
 import json
 import os
+import re
 from typing import Any
 
 import structlog
@@ -28,6 +30,28 @@ class ConfluenceMcpClient(DocsTool):
     def __init__(self, settings: ConfluenceSettings) -> None:
         self._settings = settings
         self._redactor = RedactionService()
+        self._exit_stack: contextlib.AsyncExitStack | None = None
+        self._session: ClientSession | None = None
+
+    # ── MCP lifecycle ──
+
+    async def connect(self) -> None:
+        """Open a persistent MCP session via AsyncExitStack."""
+        if self._session is not None:
+            return
+        self._exit_stack = contextlib.AsyncExitStack()
+        transport = await self._exit_stack.enter_async_context(stdio_client(self._server_params()))
+        self._session = await self._exit_stack.enter_async_context(ClientSession(*transport))
+        await self._session.initialize()
+        logger.info("Persistent MCP session opened", source_system="ConfluenceMCP")
+
+    async def disconnect(self) -> None:
+        """Close the persistent MCP session and release subprocess resources."""
+        if self._exit_stack is not None:
+            await self._exit_stack.aclose()
+            self._exit_stack = None
+            self._session = None
+            logger.info("Persistent MCP session closed", source_system="ConfluenceMCP")
 
     # ── MCP connection internals ──
 
@@ -52,10 +76,13 @@ class ConfluenceMcpClient(DocsTool):
             span.set_attribute("mcp.tool_name", tool_name)
             logger.info("Invoking MCP tool", tool_name=tool_name, source_system="ConfluenceMCP")
             try:
-                async with stdio_client(self._server_params()) as (read, write):
-                    async with ClientSession(read, write) as session:
-                        await session.initialize()
-                        result = await session.call_tool(tool_name, arguments=arguments)
+                if self._session is not None:
+                    result = await self._session.call_tool(tool_name, arguments=arguments)
+                else:
+                    async with stdio_client(self._server_params()) as (read, write):
+                        async with ClientSession(read, write) as session:
+                            await session.initialize()
+                            result = await session.call_tool(tool_name, arguments=arguments)
             except McpError as exc:
                 span.set_attribute("error", True)
                 MCP_CALLS_TOTAL.labels(provider="confluence", tool=tool_name, outcome="error").inc()
@@ -128,7 +155,7 @@ class ConfluenceMcpClient(DocsTool):
         """Fetch architecture standards page by explicit ID."""
         logger.info("Fetching architecture page", page_id=page_id, source_system="ConfluenceMCP")
         result = await self._invoke_tool("confluence_get_page", {"page_id": page_id})
-        return self._extract_text(result)
+        return self._clean_html_and_truncate(self._extract_text(result))
 
     async def get_project_context(self, service_name: str) -> str:
         """Hierarchical CQL search: find parent page by title, then fetch all children."""
@@ -138,7 +165,8 @@ class ConfluenceMcpClient(DocsTool):
         parent_id = await self._search_parent_page(service_name)
         if not parent_id:
             return f"No project documentation found for '{service_name}'."
-        return await self._fetch_children_content(parent_id)
+        content = await self._fetch_children_content(parent_id)
+        return self._clean_html_and_truncate(content)
 
     # ── Hierarchical Search Helpers ──
 
@@ -197,15 +225,28 @@ class ConfluenceMcpClient(DocsTool):
             if isinstance(r, dict) and r.get("id")
         ]
 
+    @staticmethod
+    def _clean_html_and_truncate(html_content: str, max_chars: int = 20000) -> str:
+        """Strip HTML tags, normalize whitespace, and truncate to save LLM context tokens."""
+        text = re.sub(r"<[^>]+>", " ", html_content)
+        text = re.sub(r"[ \t]+", " ", text)
+        text = re.sub(r"\n{2,}", "\n", text).strip()
+        if len(text) > max_chars:
+            return text[:max_chars] + "... [CONTENIDO TRUNCADO POR LÍMITE DE CONTEXTO]"
+        return text
+
     # ── Agentic Operations ──
 
     async def get_mcp_tools(self) -> list[dict[str, Any]]:
         """List available Confluence MCP tools for agentic mode."""
         try:
-            async with stdio_client(self._server_params()) as (read, write):
-                async with ClientSession(read, write) as session:
-                    await session.initialize()
-                    response = await session.list_tools()
+            if self._session is not None:
+                response = await self._session.list_tools()
+            else:
+                async with stdio_client(self._server_params()) as (read, write):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        response = await session.list_tools()
         except McpError as exc:
             raise ProviderError(
                 provider="ConfluenceMCP",
