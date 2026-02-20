@@ -1,9 +1,10 @@
 """Functional DI container — builds fully-wired agents using MCP adapters.
 
 Convenient free-function API for FastAPI dependency injection.
+Every call to a public builder produces a **fresh** dependency tree
+(zero shared state) so concurrent requests never collide.
 """
 
-import logging
 from typing import Any
 
 from software_factory_poc.core.application.agents.code_reviewer.code_reviewer_agent import (
@@ -44,17 +45,10 @@ from software_factory_poc.infrastructure.tools.docs.confluence.confluence_mcp_cl
 from software_factory_poc.infrastructure.tools.tracker.jira.jira_mcp_client import JiraMcpClient
 from software_factory_poc.infrastructure.tools.vcs.gitlab.gitlab_mcp_client import GitlabMcpClient
 
-logger = logging.getLogger(__name__)
 
-
-class McpConnectionManager:
-    """Gestiona conexiones stdio a los servidores MCP."""
-
-    async def get_session(self, _server_name: str):
-        pass
-
-
-async def _build_drivers(mcp_manager: McpConnectionManager, config: AppConfig):
+async def _build_drivers(
+    config: AppConfig,
+) -> tuple[GitlabMcpClient, JiraMcpClient, ConfluenceMcpClient, LiteLlmBrainAdapter]:
     """Factory interno que ensambla los 4 drivers MCP del Tooling Plane."""
     vcs = GitlabMcpClient(settings=config.gitlab)
     tracker = JiraMcpClient(settings=config.jira)
@@ -80,10 +74,10 @@ def _build_tools(
 # === PUBLIC BUILDERS ===
 
 
-async def build_scaffolding_agent(mcp_manager: McpConnectionManager) -> ScaffolderAgent:
-    """Ensambla el ScaffolderAgent con drivers 100% MCP + LiteLLM."""
+async def build_scaffolding_agent() -> ScaffolderAgent:
+    """Assemble a **fresh** ScaffolderAgent with isolated MCP drivers + LiteLLM."""
     config = AppConfig()
-    vcs, tracker, docs, brain = await _build_drivers(mcp_manager, config)
+    vcs, tracker, docs, brain = await _build_drivers(config)
     tools = _build_tools(vcs, tracker, docs)
     priority_models = config.llm.scaffolding_llm_model_priority
 
@@ -113,10 +107,10 @@ async def build_scaffolding_agent(mcp_manager: McpConnectionManager) -> Scaffold
     )
 
 
-async def build_code_review_agent(mcp_manager: McpConnectionManager) -> CodeReviewerAgent:
-    """Ensambla el CodeReviewerAgent con drivers 100% MCP + Skills."""
+async def build_code_review_agent() -> CodeReviewerAgent:
+    """Assemble a **fresh** CodeReviewerAgent with isolated MCP drivers + Skills."""
     config = AppConfig()
-    vcs, tracker, docs, brain = await _build_drivers(mcp_manager, config)
+    vcs, tracker, docs, brain = await _build_drivers(config)
     tools = _build_tools(vcs, tracker, docs)
     priority_models = config.llm.code_review_llm_model_priority
 

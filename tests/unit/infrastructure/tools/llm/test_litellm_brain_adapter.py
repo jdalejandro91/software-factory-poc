@@ -12,6 +12,7 @@ from software_factory_poc.core.application.tools.common.exceptions import Provid
 from software_factory_poc.infrastructure.adapters.llm.config.llm_settings import LlmSettings
 from software_factory_poc.infrastructure.adapters.llm.litellm_brain_adapter import (
     LiteLlmBrainAdapter,
+    _normalize_model_id,
 )
 
 # ── Dummy schema for structured output tests ─────────────────
@@ -349,13 +350,13 @@ class TestGenerateWithToolsFallback:
 
 class TestNormalizeModelId:
     def test_replaces_colon_with_slash(self) -> None:
-        assert LiteLlmBrainAdapter._normalize_model_id("openai:gpt-4o") == "openai/gpt-4o"
+        assert _normalize_model_id("openai:gpt-4o") == "openai/gpt-4o"
 
     def test_only_first_colon_replaced(self) -> None:
-        assert LiteLlmBrainAdapter._normalize_model_id("a:b:c") == "a/b:c"
+        assert _normalize_model_id("a:b:c") == "a/b:c"
 
     def test_no_colon_unchanged(self) -> None:
-        assert LiteLlmBrainAdapter._normalize_model_id("gpt-4o") == "gpt-4o"
+        assert _normalize_model_id("gpt-4o") == "gpt-4o"
 
 
 # ══════════════════════════════════════════════════════════════

@@ -5,12 +5,14 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from software_factory_poc.core.application.exceptions import SkillExecutionError
+from software_factory_poc.core.application.skills.scaffold.contracts.generate_scaffold_plan_input import (
+    GenerateScaffoldPlanInput,
+)
 from software_factory_poc.core.application.skills.scaffold.contracts.scaffolder_contracts import (
     FileSchemaDTO,
     ScaffoldingResponseSchema,
 )
 from software_factory_poc.core.application.skills.scaffold.generate_scaffold_plan_skill import (
-    GenerateScaffoldPlanInput,
     GenerateScaffoldPlanSkill,
 )
 from software_factory_poc.core.domain.mission import Mission, TaskDescription

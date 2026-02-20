@@ -1,6 +1,7 @@
-import logging
 from collections.abc import Mapping
 from typing import Any
+
+import structlog
 
 from software_factory_poc.core.application.agents.common.base_agent import BaseAgent
 from software_factory_poc.core.application.agents.loops.agentic_loop_runner import (
@@ -20,7 +21,7 @@ from software_factory_poc.core.domain.shared.base_tool import BaseTool
 from software_factory_poc.core.domain.shared.skill_type import SkillType
 from software_factory_poc.core.domain.shared.tool_type import ToolType
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ScaffolderAgent(BaseAgent):
@@ -60,7 +61,7 @@ class ScaffolderAgent(BaseAgent):
         await self._deterministic_workflow.execute(mission)
 
     async def _run_agentic_loop(self, mission: Mission) -> None:
-        logger.info("[Scaffolder] Starting agentic loop for %s", mission.key)
+        logger.info("Starting agentic loop", issue_key=mission.key, agent="ScaffolderAgent")
         system_prompt = (
             "You are a scaffolding agent for BrahMAS.\n"
             "Your goal: create the project scaffolding, commit it to a branch, "

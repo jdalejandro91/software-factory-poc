@@ -8,7 +8,7 @@ from software_factory_poc.infrastructure.tools.tracker.jira.config.jira_settings
 api_key_header = APIKeyHeader(name="X-API-KEY", auto_error=False)
 
 
-async def validate_api_key(api_key_header: str = Security(api_key_header)):
+async def validate_api_key(api_key_header: str = Security(api_key_header)) -> str:
     settings = JiraSettings()
     if not api_key_header:
         raise HTTPException(

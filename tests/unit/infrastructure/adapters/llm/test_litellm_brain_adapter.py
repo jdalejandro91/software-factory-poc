@@ -10,6 +10,10 @@ from software_factory_poc.core.application.tools.common.exceptions import Provid
 from software_factory_poc.infrastructure.adapters.llm.litellm_brain_adapter import (
     LiteLlmBrainAdapter,
 )
+from software_factory_poc.infrastructure.adapters.llm.llm_response_parser import (
+    parse_structured_response,
+    strip_markdown_fences,
+)
 
 MODULE = "software_factory_poc.infrastructure.adapters.llm.litellm_brain_adapter"
 
@@ -55,30 +59,30 @@ class FakeResponse:
 class TestStripMarkdownFences:
     def test_strips_json_fences(self) -> None:
         text = '```json\n{"name": "a", "value": 1}\n```'
-        result = LiteLlmBrainAdapter._strip_markdown_fences(text)
+        result = strip_markdown_fences(text)
         assert result == '{"name": "a", "value": 1}'
 
     def test_strips_plain_fences(self) -> None:
         text = '```\n{"key": "val"}\n```'
-        result = LiteLlmBrainAdapter._strip_markdown_fences(text)
+        result = strip_markdown_fences(text)
         assert result == '{"key": "val"}'
 
     def test_leaves_clean_json_untouched(self) -> None:
         text = '{"name": "b", "value": 2}'
-        result = LiteLlmBrainAdapter._strip_markdown_fences(text)
+        result = strip_markdown_fences(text)
         assert result == text
 
     def test_handles_extra_whitespace(self) -> None:
         text = '  \n```json\n{"x": 1}\n```  \n'
-        result = LiteLlmBrainAdapter._strip_markdown_fences(text)
+        result = strip_markdown_fences(text)
         assert result == '{"x": 1}'
 
     def test_handles_empty_string(self) -> None:
-        assert LiteLlmBrainAdapter._strip_markdown_fences("") == ""
+        assert strip_markdown_fences("") == ""
 
     def test_handles_fences_without_newline(self) -> None:
         text = "```json```"
-        result = LiteLlmBrainAdapter._strip_markdown_fences(text)
+        result = strip_markdown_fences(text)
         assert "```" not in result
 
 
@@ -90,28 +94,28 @@ class TestStripMarkdownFences:
 class TestParseStructuredResponse:
     def test_parses_clean_json(self) -> None:
         raw = '{"name": "test", "value": 42}'
-        result = LiteLlmBrainAdapter._parse_structured_response(raw, DummySchema, "model-x")
+        result = parse_structured_response(raw, DummySchema, "model-x")
         assert result.name == "test"
         assert result.value == 42
 
     def test_parses_json_wrapped_in_markdown_fences(self) -> None:
         raw = '```json\n{"name": "fenced", "value": 7}\n```'
-        result = LiteLlmBrainAdapter._parse_structured_response(raw, DummySchema, "model-x")
+        result = parse_structured_response(raw, DummySchema, "model-x")
         assert result.name == "fenced"
         assert result.value == 7
 
     def test_raises_on_empty_content(self) -> None:
         with pytest.raises(ProviderError, match="empty content"):
-            LiteLlmBrainAdapter._parse_structured_response(None, DummySchema, "model-x")
+            parse_structured_response(None, DummySchema, "model-x")
 
     def test_raises_on_invalid_json(self) -> None:
         with pytest.raises(ProviderError, match="invalid JSON"):
-            LiteLlmBrainAdapter._parse_structured_response("not json", DummySchema, "model-x")
+            parse_structured_response("not json", DummySchema, "model-x")
 
     def test_raises_on_schema_validation_failure(self) -> None:
         raw = '{"name": "test", "value": "not_int"}'
         with pytest.raises(ProviderError, match="schema validation"):
-            LiteLlmBrainAdapter._parse_structured_response(raw, DummySchema, "model-x")
+            parse_structured_response(raw, DummySchema, "model-x")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -129,7 +133,7 @@ class TestGenerateStructured:
         patcher.stop()
 
     def _build_adapter(self) -> LiteLlmBrainAdapter:
-        with patch(f"{MODULE}.LiteLlmBrainAdapter._inject_api_keys"):
+        with patch(f"{MODULE}._inject_api_keys"):
             from software_factory_poc.infrastructure.adapters.llm.config.llm_settings import (
                 LlmSettings,
             )

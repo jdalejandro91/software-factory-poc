@@ -64,7 +64,7 @@ def redact_dict(obj: dict[str, Any]) -> dict[str, Any]:
 
 
 class RedactionService:
-    def sanitize(self, payload: dict) -> dict:
+    def sanitize(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Firewall que evita la fuga de contraseñas y tokens hacia los logs o MCP."""
         safe_payload = payload.copy()
         for k, v in safe_payload.items():

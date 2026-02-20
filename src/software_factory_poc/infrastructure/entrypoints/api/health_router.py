@@ -8,7 +8,7 @@ router = APIRouter()
 
 
 @router.get("/health")
-def health_check():
+def health_check() -> dict[str, str]:
     try:
         app_version = version("software-factory-poc")
     except Exception:

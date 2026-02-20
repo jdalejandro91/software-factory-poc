@@ -8,12 +8,12 @@ from software_factory_poc.core.application.exceptions import (
     WorkflowExecutionError,
     WorkflowHaltedException,
 )
+from software_factory_poc.core.application.skills.scaffold.contracts.generate_scaffold_plan_input import (
+    GenerateScaffoldPlanInput,
+)
 from software_factory_poc.core.application.skills.scaffold.contracts.scaffolder_contracts import (
     FileSchemaDTO,
     ScaffoldingResponseSchema,
-)
-from software_factory_poc.core.application.skills.scaffold.generate_scaffold_plan_skill import (
-    GenerateScaffoldPlanInput,
 )
 from software_factory_poc.core.application.workflows.scaffold.scaffolding_deterministic_workflow import (
     ScaffoldingDeterministicWorkflow,

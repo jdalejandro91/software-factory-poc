@@ -57,10 +57,6 @@ class VcsTool(BaseTool):
         """Retrieve structured diff for a Merge Request with hunks and line numbers."""
 
     @abstractmethod
-    async def get_merge_request_diff(self, mr_id: str) -> str:
-        """Retrieve raw unified diff text for agentic/legacy use."""
-
-    @abstractmethod
     async def publish_review(self, mr_id: str, report: CodeReviewReport) -> None:
         """Posts comments online and approves/rejects the MR via MCP."""
 

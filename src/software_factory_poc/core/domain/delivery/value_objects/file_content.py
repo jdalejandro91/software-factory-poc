@@ -7,7 +7,7 @@ class FileContent:
     content: str
     is_new: bool = True
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.path.strip() or self.path.startswith("/") or ".." in self.path:
             raise ValueError(
                 f"Alucinación de IA: Ruta de archivo inválida o insegura '{self.path}'"

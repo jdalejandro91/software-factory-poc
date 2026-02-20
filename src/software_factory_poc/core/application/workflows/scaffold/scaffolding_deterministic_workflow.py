@@ -11,11 +11,13 @@ from software_factory_poc.core.application.exceptions import (
     WorkflowExecutionError,
     WorkflowHaltedException,
 )
+from software_factory_poc.core.application.skills.scaffold.contracts.generate_scaffold_plan_input import (
+    GenerateScaffoldPlanInput,
+)
 from software_factory_poc.core.application.skills.scaffold.contracts.scaffolder_contracts import (
     ScaffoldingResponseSchema,
 )
 from software_factory_poc.core.application.skills.scaffold.generate_scaffold_plan_skill import (
-    GenerateScaffoldPlanInput,
     GenerateScaffoldPlanSkill,
 )
 from software_factory_poc.core.application.tools import DocsTool, TrackerTool, VcsTool
@@ -55,14 +57,7 @@ class ScaffoldingDeterministicWorkflow(BaseWorkflow):
         logger.info("Scaffold workflow started", mission_key=mission.key)
         await self._connect_tools()
         try:
-            parsed = self._parse_mission(mission)
-            await self._step_1_report_start(mission)
-            await self._step_2_check_idempotency(mission, parsed["branch_name"])
-            context = await self._step_3_fetch_context(parsed["service_name"])
-            plan = await self._step_4_generate_plan(mission, context)
-            commit_hash, mr_url = await self._step_5_create_and_commit(mission, parsed, plan)
-            await self._step_6_report_success(mission, parsed, commit_hash, mr_url, len(plan.files))
-            logger.info("Scaffold workflow completed", mission_key=mission.key)
+            await self._run_scaffold_pipeline(mission)
         except WorkflowHaltedException:
             logger.info("Scaffold workflow halted gracefully", mission_key=mission.key)
         except WorkflowExecutionError as wfe:
@@ -73,6 +68,17 @@ class ScaffoldingDeterministicWorkflow(BaseWorkflow):
             raise WorkflowExecutionError(str(exc), context={"mission_key": mission.key}) from exc
         finally:
             await self._disconnect_tools()
+
+    async def _run_scaffold_pipeline(self, mission: Mission) -> None:
+        """Execute the full scaffolding step sequence (happy path only)."""
+        parsed = self._parse_mission(mission)
+        await self._step_1_report_start(mission)
+        await self._step_2_check_idempotency(mission, parsed["branch_name"])
+        context = await self._step_3_fetch_context(parsed["service_name"])
+        plan = await self._step_4_generate_plan(mission, context)
+        commit_hash, mr_url = await self._step_5_create_and_commit(mission, parsed, plan)
+        await self._step_6_report_success(mission, parsed, commit_hash, mr_url, len(plan.files))
+        logger.info("Scaffold workflow completed", mission_key=mission.key)
 
     # ── Step Methods (max 14 lines each) ─────────────────────────────
 

@@ -32,41 +32,49 @@ logger = get_logger(__name__)
 
 def boot_diagnostics() -> None:
     try:
-        logger.info(">>> BOOT DIAGNOSTICS START <<<")
-        critical_vars = [
-            "OPENAI_API_KEY",
-            "DEEPSEEK_API_KEY",
-            "GEMINI_API_KEY",
-            "ANTHROPIC_API_KEY",
-            "ARCHITECTURE_DOC_PAGE_ID",
-            "CONFLUENCE_BASE_URL",
-        ]
-        for k in critical_vars:
-            val = os.getenv(k)
-            env_status = "PRESENT" if val else "MISSING"
-            logger.info("ENV check", env_var=k, env_status=env_status)
-        logger.info(">>> BOOT DIAGNOSTICS END <<<")
-    except Exception as e:
+        _log_env_diagnostics()
+    except Exception as exc:
         logger.error(
-            "Error during boot diagnostics", error_type=type(e).__name__, error_details=str(e)
+            "Error during boot diagnostics", error_type=type(exc).__name__, error_details=str(exc)
         )
+
+
+def _log_env_diagnostics() -> None:
+    """Check and log the presence of critical environment variables."""
+    logger.info(">>> BOOT DIAGNOSTICS START <<<")
+    critical_vars = [
+        "OPENAI_API_KEY",
+        "DEEPSEEK_API_KEY",
+        "GEMINI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "ARCHITECTURE_DOC_PAGE_ID",
+        "CONFLUENCE_BASE_URL",
+    ]
+    for var_name in critical_vars:
+        env_status = "PRESENT" if os.getenv(var_name) else "MISSING"
+        logger.info("ENV check", env_var=var_name, env_status=env_status)
+    logger.info(">>> BOOT DIAGNOSTICS END <<<")
 
 
 def create_app(settings: Settings) -> FastAPI:
     configure_logging()
     configure_tracing()
-
     boot_diagnostics()
-
     logger.info("APP INITIALIZATION", app_name=settings.app_name)
-
     app = FastAPI(title=settings.app_name)
-
     app.add_middleware(CorrelationMiddleware)
+    _register_exception_handlers(app)
+    FastAPIInstrumentor.instrument_app(app)
+    _register_routers(app)
+    return app
+
+
+def _register_exception_handlers(app: FastAPI) -> None:
+    """Wire up custom exception handlers for the FastAPI application."""
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(
-        request: Request, exc: RequestValidationError
+        _request: Request, exc: RequestValidationError
     ) -> JSONResponse:
         error_details = exc.errors()
         logger.error(
@@ -79,10 +87,9 @@ def create_app(settings: Settings) -> FastAPI:
             content={"detail": error_details, "body": str(exc.body)},
         )
 
-    FastAPIInstrumentor.instrument_app(app)
 
+def _register_routers(app: FastAPI) -> None:
+    """Register all API routers with their prefixes."""
     app.include_router(health_router)
     app.include_router(scaffolding_router, prefix="/api/v1")
     app.include_router(code_review_router, prefix="/api/v1")
-
-    return app

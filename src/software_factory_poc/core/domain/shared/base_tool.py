@@ -22,5 +22,5 @@ class BaseTool(ABC):
     async def get_mcp_tools(self) -> list[dict[str, Any]]:
         return []
 
-    async def execute_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+    async def execute_tool(self, name: str, arguments: dict[str, Any]) -> Any:  # noqa: ARG002
         return None

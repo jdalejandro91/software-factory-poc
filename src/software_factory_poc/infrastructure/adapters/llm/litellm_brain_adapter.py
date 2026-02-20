@@ -3,7 +3,6 @@
 Includes full prompt visibility (redacted) and token usage tracking for SRE.
 """
 
-import json
 import os
 import time
 from typing import Any, NoReturn
@@ -15,30 +14,26 @@ from pydantic import ValidationError
 from software_factory_poc.core.application.ports import BrainPort, T
 from software_factory_poc.core.application.tools.common.exceptions import ProviderError
 from software_factory_poc.infrastructure.adapters.llm.config.llm_settings import LlmSettings
-from software_factory_poc.infrastructure.observability.metrics_service import (
-    LLM_LATENCY_SECONDS,
-    LLM_TOKENS_TOTAL,
+from software_factory_poc.infrastructure.adapters.llm.llm_observability_logger import (
+    log_llm_request,
+    log_llm_response,
 )
-from software_factory_poc.infrastructure.observability.redaction_service import redact_text
+from software_factory_poc.infrastructure.adapters.llm.llm_response_parser import (
+    extract_tool_response,
+    parse_structured_response,
+)
 from software_factory_poc.infrastructure.observability.tracing_setup import get_tracer
 
 logger = structlog.get_logger()
 
-_MAX_LOG_PROMPT_LENGTH = 10_000
-
 
 class LiteLlmBrainAdapter(BrainPort):
-    """Implements BrainPort via ``litellm.acompletion`` with priority-based model fallback.
-
-    API keys are extracted from the injected ``LlmSettings`` and pushed into
-    ``os.environ`` so that litellm's internal provider auto-detection picks
-    them up transparently.
-    """
+    """Implements BrainPort via ``litellm.acompletion`` with priority-based model fallback."""
 
     def __init__(self, settings: LlmSettings) -> None:
-        self._inject_api_keys(settings)
+        _inject_api_keys(settings)
 
-    # ── Public contract ──────────────────────────────────────────
+    # ── Public contract ──
 
     async def generate_structured(
         self,
@@ -47,46 +42,17 @@ class LiteLlmBrainAdapter(BrainPort):
         priority_models: list[str],
         system_prompt: str = "",
     ) -> T:
+        messages = _build_messages(prompt, system_prompt)
         last_error: Exception | None = None
-        tracer = get_tracer()
-
         for model_id in priority_models:
             try:
-                messages = self._build_messages(prompt, system_prompt)
-                self._log_outgoing_payload(messages, model_id, "generate_structured")
-
-                with tracer.start_as_current_span("llm.completion") as span:
-                    span.set_attribute("llm.model", model_id)
-                    span.set_attribute("llm.method", "generate_structured")
-
-                    start = time.perf_counter()
-                    response = await litellm.acompletion(
-                        model=self._normalize_model_id(model_id),
-                        messages=messages,
-                        response_format=schema,
-                    )
-                    duration_ms = round((time.perf_counter() - start) * 1000, 2)
-
-                    self._log_inference_success(
-                        response, model_id, duration_ms, "generate_structured"
-                    )
-
-                raw_content: str | None = response.choices[0].message.content
-                return self._parse_structured_response(raw_content, schema, model_id)
-
+                return await self._structured_call(model_id, messages, schema)
             except (ProviderError, ValidationError):
                 raise
             except Exception as exc:
                 last_error = exc
-                logger.warning(
-                    "Model failed",
-                    llm_model=model_id,
-                    method="generate_structured",
-                    error_type=type(exc).__name__,
-                    error_details=str(exc),
-                )
-
-        self._raise_all_failed("generate_structured", priority_models, last_error)
+                _log_model_failure(model_id, "generate_structured", exc)
+        _raise_all_failed("generate_structured", priority_models, last_error)
 
     async def generate_with_tools(
         self,
@@ -95,190 +61,103 @@ class LiteLlmBrainAdapter(BrainPort):
         priority_models: list[str],
     ) -> dict[str, Any]:
         last_error: Exception | None = None
-        tracer = get_tracer()
-
         for model_id in priority_models:
             try:
-                self._log_outgoing_payload(messages, model_id, "generate_with_tools")
-
-                with tracer.start_as_current_span("llm.completion") as span:
-                    span.set_attribute("llm.model", model_id)
-                    span.set_attribute("llm.method", "generate_with_tools")
-
-                    start = time.perf_counter()
-                    response = await litellm.acompletion(
-                        model=self._normalize_model_id(model_id),
-                        messages=messages,
-                        tools=tools,
-                    )
-                    duration_ms = round((time.perf_counter() - start) * 1000, 2)
-
-                    self._log_inference_success(
-                        response, model_id, duration_ms, "generate_with_tools"
-                    )
-
-                return self._extract_tool_response(response)
-
+                return await self._tools_call(model_id, messages, tools)
             except ProviderError:
                 raise
             except Exception as exc:
                 last_error = exc
-                logger.warning(
-                    "Model failed",
-                    llm_model=model_id,
-                    method="generate_with_tools",
-                    error_type=type(exc).__name__,
-                    error_details=str(exc),
-                )
+                _log_model_failure(model_id, "generate_with_tools", exc)
+        _raise_all_failed("generate_with_tools", priority_models, last_error)
 
-        self._raise_all_failed("generate_with_tools", priority_models, last_error)
+    # ── Single-model call helpers ──
 
-    # ── Observability helpers ─────────────────────────────────────
-
-    @staticmethod
-    def _log_outgoing_payload(messages: list[dict[str, Any]], model_id: str, method: str) -> None:
-        """Log the redacted prompt payload before sending to LLM."""
-        raw_prompt = json.dumps(messages, ensure_ascii=False, default=str)
-        redacted_prompt = redact_text(raw_prompt)
-        if len(redacted_prompt) > _MAX_LOG_PROMPT_LENGTH:
-            redacted_prompt = redacted_prompt[:_MAX_LOG_PROMPT_LENGTH] + "... [TRUNCATED]"
-        logger.info(
-            "Sending payload to LLM",
-            prompt_text=redacted_prompt,
-            llm_model=model_id,
-            method=method,
-            tags=["llm-prompt"],
-        )
-
-    @staticmethod
-    def _log_inference_success(
-        response: Any, model_id: str, duration_ms: float, method: str
-    ) -> None:
-        """Log successful inference with token usage and duration, and record Prometheus metrics."""
-        usage = getattr(response, "usage", None)
-        tokens_in = getattr(usage, "prompt_tokens", 0) if usage else 0
-        tokens_out = getattr(usage, "completion_tokens", 0) if usage else 0
-
-        LLM_TOKENS_TOTAL.labels(model=model_id, type="prompt").inc(tokens_in)
-        LLM_TOKENS_TOTAL.labels(model=model_id, type="completion").inc(tokens_out)
-        LLM_LATENCY_SECONDS.labels(model=model_id).observe(duration_ms / 1000)
-
-        logger.info(
-            "LLM inference completed",
-            llm_model=model_id,
-            method=method,
-            tokens_in=tokens_in,
-            tokens_out=tokens_out,
-            processing_status="SUCCESS",
-            processing_duration_ms=duration_ms,
-            tags=["llm-response"],
-        )
-
-    # ── Private helpers ──────────────────────────────────────────
-
-    @staticmethod
-    def _normalize_model_id(model_id: str) -> str:
-        """Convert ``provider:model`` to ``provider/model`` for litellm routing."""
-        return model_id.replace(":", "/", 1)
-
-    @staticmethod
-    def _inject_api_keys(settings: LlmSettings) -> None:
-        """Push non-null SecretStr keys into ``os.environ`` for litellm auto-detection."""
-        mapping = {
-            "OPENAI_API_KEY": settings.openai_api_key,
-            "GEMINI_API_KEY": settings.gemini_api_key,
-            "DEEPSEEK_API_KEY": settings.deepseek_api_key,
-            "ANTHROPIC_API_KEY": settings.anthropic_api_key,
-        }
-        for env_var, secret in mapping.items():
-            if secret is not None:
-                os.environ[env_var] = secret.get_secret_value()
-
-    @staticmethod
-    def _strip_markdown_fences(text: str) -> str:
-        """Remove Markdown code fences (```json ... ```) that LLMs sometimes wrap around JSON."""
-        stripped = text.strip()
-        if stripped.startswith("```"):
-            first_newline = stripped.find("\n")
-            if first_newline != -1:
-                stripped = stripped[first_newline + 1 :]
-            else:
-                stripped = stripped[3:]
-        if stripped.endswith("```"):
-            stripped = stripped[:-3]
-        return stripped.strip()
-
-    @staticmethod
-    def _parse_structured_response(
-        raw_content: str | None,
-        schema: type[T],
-        model_id: str,
+    async def _structured_call(
+        self, model_id: str, messages: list[dict[str, str]], schema: type[T]
     ) -> T:
-        """Deserialize JSON content and validate it against the Pydantic *schema*."""
-        if not raw_content:
-            raise ProviderError(
-                provider=model_id,
-                message="LLM returned empty content for structured request",
+        response = await self._traced_completion(
+            model_id, "generate_structured", messages=messages, response_format=schema
+        )
+        raw_content: str | None = response.choices[0].message.content
+        return parse_structured_response(raw_content, schema, model_id)
+
+    async def _tools_call(
+        self,
+        model_id: str,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        response = await self._traced_completion(
+            model_id, "generate_with_tools", messages=messages, tools=tools
+        )
+        return extract_tool_response(response)
+
+    async def _traced_completion(self, model_id: str, method: str, **litellm_kwargs: Any) -> Any:
+        """Execute a litellm.acompletion call with tracing, timing, and success logging."""
+        log_llm_request(litellm_kwargs.get("messages", []), model_id, method)
+        tracer = get_tracer()
+        with tracer.start_as_current_span("llm.completion") as span:
+            span.set_attribute("llm.model", model_id)
+            span.set_attribute("llm.method", method)
+            start = time.perf_counter()
+            response = await litellm.acompletion(
+                model=_normalize_model_id(model_id), **litellm_kwargs
             )
-        clean = LiteLlmBrainAdapter._strip_markdown_fences(raw_content)
-        try:
-            data = json.loads(clean)
-        except json.JSONDecodeError as exc:
-            raise ProviderError(
-                provider=model_id,
-                message=f"LLM returned invalid JSON: {exc}",
-            ) from exc
+            duration_ms = round((time.perf_counter() - start) * 1000, 2)
+            log_llm_response(response, model_id, duration_ms, method)
+            return response
 
-        try:
-            return schema.model_validate(data)
-        except ValidationError as exc:
-            raise ProviderError(
-                provider=model_id,
-                message=f"Structured response failed schema validation: {exc}",
-            ) from exc
 
-    @staticmethod
-    def _extract_tool_response(response: Any) -> dict[str, Any]:
-        """Normalize litellm's response into the dict shape expected by the Application layer."""
-        message = response.choices[0].message
-        result: dict[str, Any] = {"content": message.content or ""}
+# ── Module-level pure functions ──
 
-        if message.tool_calls:
-            result["tool_calls"] = [
-                {
-                    "id": tc.id,
-                    "type": tc.type,
-                    "function": {
-                        "name": tc.function.name,
-                        "arguments": (
-                            json.loads(tc.function.arguments)
-                            if isinstance(tc.function.arguments, str)
-                            else tc.function.arguments
-                        ),
-                    },
-                }
-                for tc in message.tool_calls
-            ]
-        return result
 
-    @staticmethod
-    def _build_messages(user_prompt: str, system_prompt: str = "") -> list[dict[str, str]]:
-        """Construct the messages array, optionally prepending a system message."""
-        messages: list[dict[str, str]] = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": user_prompt})
-        return messages
+def _normalize_model_id(model_id: str) -> str:
+    """Convert ``provider:model`` to ``provider/model`` for litellm routing."""
+    return model_id.replace(":", "/", 1)
 
-    @staticmethod
-    def _raise_all_failed(
-        method: str,
-        priority_models: list[str],
-        last_error: Exception | None,
-    ) -> NoReturn:
-        """Raise ``ProviderError`` after every model in the priority chain has failed."""
-        raise ProviderError(
-            provider="litellm",
-            message=f"All {len(priority_models)} model(s) failed for {method}",
-            retryable=True,
-        ) from last_error
+
+def _inject_api_keys(settings: LlmSettings) -> None:
+    """Push non-null SecretStr keys into ``os.environ`` for litellm auto-detection."""
+    mapping = {
+        "OPENAI_API_KEY": settings.openai_api_key,
+        "GEMINI_API_KEY": settings.gemini_api_key,
+        "DEEPSEEK_API_KEY": settings.deepseek_api_key,
+        "ANTHROPIC_API_KEY": settings.anthropic_api_key,
+    }
+    for env_var, secret in mapping.items():
+        if secret is not None:
+            os.environ[env_var] = secret.get_secret_value()
+
+
+def _build_messages(user_prompt: str, system_prompt: str = "") -> list[dict[str, str]]:
+    """Construct the messages array, optionally prepending a system message."""
+    messages: list[dict[str, str]] = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": user_prompt})
+    return messages
+
+
+def _log_model_failure(model_id: str, method: str, exc: Exception) -> None:
+    """Log a warning when a single model attempt fails during fallback iteration."""
+    logger.warning(
+        "Model failed",
+        llm_model=model_id,
+        method=method,
+        error_type=type(exc).__name__,
+        error_details=str(exc),
+    )
+
+
+def _raise_all_failed(
+    method: str,
+    priority_models: list[str],
+    last_error: Exception | None,
+) -> NoReturn:
+    """Raise ``ProviderError`` after every model in the priority chain has failed."""
+    raise ProviderError(
+        provider="litellm",
+        message=f"All {len(priority_models)} model(s) failed for {method}",
+        retryable=True,
+    ) from last_error

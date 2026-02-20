@@ -11,8 +11,7 @@ from .metrics_service import (
     MISSIONS_INFLIGHT,
     MISSIONS_TOTAL,
 )
-from .redaction_service import redact_dict, redact_text
-from .tracing_setup import configure_tracing, get_tracer, trace_operation
+from .tracing_setup import configure_tracing, get_tracer
 
 __all__ = [
     "LLM_LATENCY_SECONDS",
@@ -26,7 +25,4 @@ __all__ = [
     "configure_tracing",
     "get_logger",
     "get_tracer",
-    "redact_dict",
-    "redact_text",
-    "trace_operation",
 ]

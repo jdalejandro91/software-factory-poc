@@ -1,6 +1,7 @@
-import logging
 from collections.abc import Mapping
 from typing import Any
+
+import structlog
 
 from software_factory_poc.core.application.policies.tool_safety_policy import ToolSafetyPolicy
 from software_factory_poc.core.application.ports import BrainPort
@@ -8,7 +9,7 @@ from software_factory_poc.core.domain.mission import Mission
 from software_factory_poc.core.domain.shared.base_tool import BaseTool
 from software_factory_poc.core.domain.shared.tool_type import ToolType
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class AgenticLoopRunner:
@@ -31,71 +32,63 @@ class AgenticLoopRunner:
         priority_models: list[str],
         max_iterations: int = 5,
     ) -> str:
-        """Execute a ReAct loop until the LLM stops calling tools or the limit is reached.
-
-        Args:
-            mission: The domain mission driving this loop.
-            system_prompt: System-level instructions for the LLM.
-            tools_registry: Map of ToolType -> BaseTool; MCP schemas are auto-gathered.
-            priority_models: Ordered model identifiers for fallback.
-            max_iterations: Safety cap to prevent runaway loops.
-
-        Returns:
-            The final textual response from the LLM.
-        """
-        all_schemas, name_to_tool = await self._gather_tools(tools_registry)
-        safe_tools = self._policy.filter_allowed_tools(all_schemas, agent_role="default")
-
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": self._build_user_message(mission)},
-        ]
-
+        """Execute a ReAct loop until the LLM stops calling tools or the limit is reached."""
+        safe_tools, name_to_tool = await self._prepare_tool_schemas(tools_registry)
+        messages = self._build_initial_messages(system_prompt, mission)
         for iteration in range(1, max_iterations + 1):
             logger.info(
-                "[AgenticLoop] Iteration %d/%d for %s", iteration, max_iterations, mission.key
+                "Agentic loop iteration",
+                iteration=iteration,
+                max_iterations=max_iterations,
+                issue_key=mission.key,
             )
-
             response = await self._brain.generate_with_tools(
-                messages=messages,
-                tools=safe_tools,
-                priority_models=priority_models,
+                messages=messages, tools=safe_tools, priority_models=priority_models
             )
-
             tool_calls: list[dict[str, Any]] = response.get("tool_calls", [])
-
             if not tool_calls:
                 return str(response.get("content", ""))
-
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": response.get("content", ""),
-                    "tool_calls": tool_calls,
-                },
-            )
-
-            for tool_call in tool_calls:
-                fn = tool_call.get("function", {})
-                tool_name: str = fn.get("name", "")
-                tool_args: dict[str, Any] = fn.get("arguments", {})
-                call_id: str = tool_call.get("id", "")
-
-                result = await self._execute_tool_safely(
-                    name_to_tool,
-                    tool_name,
-                    tool_args,
-                )
-                messages.append(
-                    {"role": "tool", "tool_call_id": call_id, "content": result},
-                )
-
+            await self._process_tool_calls(messages, response, tool_calls, name_to_tool)
         logger.warning(
-            "[AgenticLoop] Max iterations (%d) reached for %s",
-            max_iterations,
-            mission.key,
+            "Max iterations reached", max_iterations=max_iterations, issue_key=mission.key
         )
         return str(messages[-1].get("content", ""))
+
+    async def _prepare_tool_schemas(
+        self, tools_registry: Mapping[ToolType, BaseTool]
+    ) -> tuple[list[dict[str, Any]], dict[str, BaseTool]]:
+        """Gather MCP schemas and apply safety policy filtering."""
+        all_schemas, name_to_tool = await self._gather_tools(tools_registry)
+        safe_tools = self._policy.filter_allowed_tools(all_schemas, agent_role="default")
+        return safe_tools, name_to_tool
+
+    @staticmethod
+    def _build_initial_messages(system_prompt: str, mission: Mission) -> list[dict[str, Any]]:
+        """Construct the initial messages array for the ReAct loop."""
+        return [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": AgenticLoopRunner._build_user_message(mission)},
+        ]
+
+    @staticmethod
+    async def _process_tool_calls(
+        messages: list[dict[str, Any]],
+        response: dict[str, Any],
+        tool_calls: list[dict[str, Any]],
+        name_to_tool: dict[str, BaseTool],
+    ) -> None:
+        """Append the assistant message and execute each tool call."""
+        messages.append(
+            {"role": "assistant", "content": response.get("content", ""), "tool_calls": tool_calls}
+        )
+        for tool_call in tool_calls:
+            fn = tool_call.get("function", {})
+            result = await AgenticLoopRunner._execute_tool_safely(
+                name_to_tool, fn.get("name", ""), fn.get("arguments", {})
+            )
+            messages.append(
+                {"role": "tool", "tool_call_id": tool_call.get("id", ""), "content": result}
+            )
 
     @staticmethod
     def _build_user_message(mission: Mission) -> str:
@@ -133,14 +126,17 @@ class AgenticLoopRunner:
             tool = name_to_tool.get(tool_name)
             if tool is None:
                 logger.warning(
-                    "[AgenticLoop] Unknown tool requested: '%s' (available: %s)",
-                    tool_name,
-                    list(name_to_tool.keys()),
+                    "Unknown tool requested",
+                    tool_name=tool_name,
+                    available_tools=list(name_to_tool.keys()),
                 )
                 return f"Error: unknown tool '{tool_name}'"
             return str(await tool.execute_tool(tool_name, tool_args))
         except Exception as exc:
             logger.exception(
-                "[AgenticLoop] Tool '%s' failed: %s (args=%s)", tool_name, exc, tool_args
+                "Tool execution failed",
+                tool_name=tool_name,
+                error_type=type(exc).__name__,
+                error_details=str(exc),
             )
             return f"Error: Tool execution failed — {type(exc).__name__}: {exc}"

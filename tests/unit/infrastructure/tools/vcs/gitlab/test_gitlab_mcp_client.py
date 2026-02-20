@@ -18,11 +18,25 @@ from software_factory_poc.core.domain.quality import CodeReviewReport, ReviewCom
 from software_factory_poc.infrastructure.tools.vcs.gitlab.config.gitlab_settings import (
     GitLabSettings,
 )
+from software_factory_poc.infrastructure.tools.vcs.gitlab.gitlab_diff_parser import (
+    parse_changes_from_diff,
+)
 from software_factory_poc.infrastructure.tools.vcs.gitlab.gitlab_mcp_client import (
     GitlabMcpClient,
+    _extract_iid,
+    _truncate_content,
+)
+from software_factory_poc.infrastructure.tools.vcs.gitlab.gitlab_review_formatter import (
+    build_review_summary,
+    format_inline_comment,
+)
+from software_factory_poc.infrastructure.tools.vcs.gitlab.gitlab_tree_helpers import (
+    EXCLUDED_DIRS,
+    build_tree_string,
+    filter_relevant_paths,
 )
 
-MODULE = "software_factory_poc.infrastructure.tools.vcs.gitlab.gitlab_mcp_client"
+BASE_MODULE = "software_factory_poc.infrastructure.tools.common.base_mcp_client"
 
 
 # ── Fakes for MCP response structures ──
@@ -101,8 +115,8 @@ def mock_mcp():
         yield mock_session
 
     with (
-        patch(f"{MODULE}.stdio_client", side_effect=fake_stdio_client),
-        patch(f"{MODULE}.ClientSession", side_effect=fake_client_session),
+        patch(f"{BASE_MODULE}.stdio_client", side_effect=fake_stdio_client),
+        patch(f"{BASE_MODULE}.ClientSession", side_effect=fake_client_session),
     ):
         yield mock_session
 
@@ -248,7 +262,8 @@ class TestCommitChanges:
         assert payload["actions"][0]["action"] == "create"
         assert payload["actions"][0]["file_path"] == "src/main.py"
 
-    async def test_empty_commit_raises_value_error(self, mock_mcp: AsyncMock) -> None:
+    @pytest.mark.usefixtures("mock_mcp")
+    async def test_empty_commit_raises_value_error(self) -> None:
         client = _build_client()
         intent = CommitIntent(
             branch=BranchName("feature/empty"),
@@ -311,14 +326,14 @@ class TestGetRepositoryTree:
 class TestFormatTree:
     def test_formats_flat_paths_into_indented_tree(self) -> None:
         paths = ["README.md", "src/main.py", "src/utils/helper.py"]
-        result = GitlabMcpClient._format_tree(paths)
+        result = build_tree_string(paths)
 
         assert "README.md" in result
         assert "  main.py" in result
         assert "    helper.py" in result
 
     def test_empty_list_returns_fallback(self) -> None:
-        assert GitlabMcpClient._format_tree([]) == "(empty repository)"
+        assert build_tree_string([]) == "(empty repository)"
 
 
 class TestDiffParsingResilience:
@@ -332,30 +347,17 @@ class TestDiffParsingResilience:
                 ]
             }
         )
-        results = GitlabMcpClient._parse_mr_changes(raw)
+        results = parse_changes_from_diff(raw)
 
         assert len(results) == 2
         assert results[0].new_path == "good.py"
         assert results[1].new_path == "bad.py"
 
     def test_invalid_json_returns_empty(self) -> None:
-        assert GitlabMcpClient._parse_mr_changes("not json") == []
+        assert parse_changes_from_diff("not json") == []
 
     def test_non_list_changes_returns_empty(self) -> None:
-        assert GitlabMcpClient._parse_mr_changes(json.dumps({"changes": "oops"})) == []
-
-
-class TestGetMergeRequestDiff:
-    async def test_returns_diff_text(self, mock_mcp: AsyncMock) -> None:
-        mock_mcp.call_tool.return_value = _text_result("diff --git a/f.py b/f.py")
-        client = _build_client()
-
-        diff = await client.get_merge_request_diff("7")
-        assert diff == "diff --git a/f.py b/f.py"
-        mock_mcp.call_tool.assert_called_once_with(
-            "gitlab_get_merge_request_changes",
-            arguments={"project_id": "42", "merge_request_iid": "7"},
-        )
+        assert parse_changes_from_diff(json.dumps({"changes": "oops"})) == []
 
 
 class TestPublishReview:
@@ -421,7 +423,7 @@ class TestInlineCommentFallback:
 
         call_count = 0
 
-        async def _side_effect(tool_name: str, *, arguments: Any) -> FakeCallToolResult:
+        async def _side_effect(tool_name: str, *, arguments: Any = None) -> FakeCallToolResult:  # noqa: ARG001
             nonlocal call_count
             call_count += 1
             if tool_name == "gitlab_create_merge_request_discussion":
@@ -503,7 +505,7 @@ class TestInlineCommentFallback:
         comment = self._make_comment(path="lib/utils.py", line=42)
         report = CodeReviewReport(is_approved=False, summary="Review", comments=[comment])
 
-        async def _side_effect(tool_name: str, *, arguments: Any) -> FakeCallToolResult:
+        async def _side_effect(tool_name: str, *, arguments: Any = None) -> FakeCallToolResult:  # noqa: ARG001
             if tool_name == "gitlab_create_merge_request_discussion":
                 raise ProviderError(provider="GitLabMCP", message="line not in diff")
             return _text_result("ok")
@@ -522,7 +524,7 @@ class TestReviewSummaryFormatting:
 
     def test_summary_contains_verdict(self) -> None:
         report = CodeReviewReport(is_approved=True, summary="LGTM", comments=[])
-        body = GitlabMcpClient._build_review_summary(report)
+        body = build_review_summary(report)
         assert "APPROVED" in body
         assert "LGTM" in body
 
@@ -544,7 +546,7 @@ class TestReviewSummaryFormatting:
             ),
         ]
         report = CodeReviewReport(is_approved=False, summary="Issues", comments=comments)
-        body = GitlabMcpClient._build_review_summary(report)
+        body = build_review_summary(report)
         assert "### CRITICAL (1)" in body
         assert "### WARNING (1)" in body
         assert "a.py" in body
@@ -552,7 +554,7 @@ class TestReviewSummaryFormatting:
 
     def test_summary_shows_no_issues_for_clean_report(self) -> None:
         report = CodeReviewReport(is_approved=True, summary="Clean", comments=[])
-        body = GitlabMcpClient._build_review_summary(report)
+        body = build_review_summary(report)
         assert "No issues found" in body
 
     def test_inline_comment_format(self) -> None:
@@ -563,7 +565,7 @@ class TestReviewSummaryFormatting:
             severity=ReviewSeverity.SUGGESTION,
             line_number=5,
         )
-        body = GitlabMcpClient._format_inline_comment(comment)
+        body = format_inline_comment(comment)
         assert "[SUGGESTION]" in body
         assert "Bad pattern" in body
         assert "Use factory" in body
@@ -615,17 +617,17 @@ class TestExtractIid:
 
     def test_extracts_iid_from_full_url(self) -> None:
         url = "https://gitlab.com/grupo/repo/-/merge_requests/25"
-        assert GitlabMcpClient._extract_iid(url) == "25"
+        assert _extract_iid(url) == "25"
 
     def test_extracts_iid_from_url_with_query_params(self) -> None:
         url = "https://gitlab.com/repo/-/merge_requests/99?tab=overview"
-        assert GitlabMcpClient._extract_iid(url) == "99"
+        assert _extract_iid(url) == "99"
 
     def test_returns_plain_number_unchanged(self) -> None:
-        assert GitlabMcpClient._extract_iid("42") == "42"
+        assert _extract_iid("42") == "42"
 
     def test_strips_whitespace_from_plain_number(self) -> None:
-        assert GitlabMcpClient._extract_iid("  7  ") == "7"
+        assert _extract_iid("  7  ") == "7"
 
 
 class TestContentTruncation:
@@ -633,29 +635,29 @@ class TestContentTruncation:
 
     def test_short_content_passes_through(self) -> None:
         content = "x" * 100
-        result = GitlabMcpClient._truncate_content(content, "short.py")
+        result = _truncate_content(content, "short.py")
         assert result == content
 
     def test_content_at_limit_passes_through(self) -> None:
-        content = "x" * GitlabMcpClient._MAX_FILE_CHARS
-        result = GitlabMcpClient._truncate_content(content, "exact.py")
+        content = "x" * 25_000
+        result = _truncate_content(content, "exact.py")
         assert result == content
 
     def test_oversized_content_is_truncated(self) -> None:
         content = "x" * 30_000
-        result = GitlabMcpClient._truncate_content(content, "big.py")
+        result = _truncate_content(content, "big.py")
         assert len(result) < 30_000
         assert result.startswith("x" * 100)
         assert "CONTENIDO TRUNCADO" in result
 
     def test_excluded_dirs_include_coverage_and_ide(self) -> None:
-        assert "coverage" in GitlabMcpClient.EXCLUDED_DIRS
-        assert ".idea" in GitlabMcpClient.EXCLUDED_DIRS
-        assert ".vscode" in GitlabMcpClient.EXCLUDED_DIRS
+        assert "coverage" in EXCLUDED_DIRS
+        assert ".idea" in EXCLUDED_DIRS
+        assert ".vscode" in EXCLUDED_DIRS
 
 
 class TestFilterRelevantPaths:
-    """Verify _filter_relevant_paths uses class-level exclusion constants."""
+    """Verify filter_relevant_paths uses module-level exclusion constants."""
 
     def test_filters_excluded_dirs(self) -> None:
         entries = [
@@ -664,7 +666,7 @@ class TestFilterRelevantPaths:
             {"path": ".idea/workspace.xml", "type": "blob"},
             {"path": ".vscode/settings.json", "type": "blob"},
         ]
-        paths = GitlabMcpClient._filter_relevant_paths(entries)
+        paths = filter_relevant_paths(entries)
         assert paths == ["src/main.py"]
 
     def test_filters_excluded_extensions(self) -> None:
@@ -673,7 +675,7 @@ class TestFilterRelevantPaths:
             {"path": "assets/logo.png", "type": "blob"},
             {"path": "vendor/lib.so", "type": "blob"},
         ]
-        paths = GitlabMcpClient._filter_relevant_paths(entries)
+        paths = filter_relevant_paths(entries)
         assert paths == ["src/app.py"]
 
 
@@ -689,7 +691,7 @@ class TestErrorHandling:
         mock_mcp.call_tool.side_effect = ConnectionError("stdio pipe broken")
         client = _build_client()
 
-        with pytest.raises(ProviderError, match="Connection failure"):
+        with pytest.raises(ProviderError, match="connection failure"):
             await client.create_branch("feature/broken")
 
     async def test_tool_is_error_becomes_provider_error(self, mock_mcp: AsyncMock) -> None:
@@ -715,8 +717,9 @@ class TestErrorHandling:
 # ══════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.usefixtures("mock_mcp")
 class TestMcpLifecycle:
-    async def test_connect_opens_persistent_session(self, mock_mcp: AsyncMock) -> None:
+    async def test_connect_opens_persistent_session(self) -> None:
         client = _build_client()
         assert client._session is None
 
@@ -725,7 +728,7 @@ class TestMcpLifecycle:
         assert client._session is not None
         assert client._exit_stack is not None
 
-    async def test_disconnect_clears_session(self, mock_mcp: AsyncMock) -> None:
+    async def test_disconnect_clears_session(self) -> None:
         client = _build_client()
         await client.connect()
         assert client._session is not None
@@ -739,7 +742,7 @@ class TestMcpLifecycle:
         client = _build_client()
         await client.disconnect()  # Should not raise even without connect
 
-    async def test_connect_is_idempotent(self, mock_mcp: AsyncMock) -> None:
+    async def test_connect_is_idempotent(self) -> None:
         client = _build_client()
         await client.connect()
         session_1 = client._session
@@ -747,6 +750,18 @@ class TestMcpLifecycle:
         await client.connect()  # Second connect should be a no-op
 
         assert client._session is session_1
+
+    async def test_disconnect_swallows_exit_stack_error(self) -> None:
+        """disconnect() must never propagate exceptions from _exit_stack.aclose()."""
+        client = _build_client()
+        await client.connect()
+        assert client._exit_stack is not None
+        client._exit_stack.aclose = AsyncMock(side_effect=RuntimeError("npx zombie"))
+
+        await client.disconnect()  # Must NOT raise
+
+        assert client._session is None
+        assert client._exit_stack is None
 
     async def test_invoke_tool_uses_persistent_session(self, mock_mcp: AsyncMock) -> None:
         mock_mcp.call_tool.return_value = _text_result("ok")

@@ -5,162 +5,154 @@ import structlog
 import yaml
 
 from software_factory_poc.core.domain.mission import Mission, TaskDescription, TaskUser
-from software_factory_poc.infrastructure.entrypoints.api.dtos.jira_webhook_dto import JiraWebhookDTO
+from software_factory_poc.infrastructure.entrypoints.api.dtos.jira_webhook_dto import (
+    JiraUserDTO,
+    JiraWebhookDTO,
+)
 
 logger = structlog.get_logger()
 
 
 class JiraPayloadMapper:
-    """
-    Transforms Raw Jira Webhook Payloads into Domain Entities (Task).
+    """Transforms Raw Jira Webhook Payloads into Domain Entities (Mission).
+
     Handles Parsing of embedded configurations (YAML/Markdown/JiraMarkup).
     """
 
-    # Combined Regex for Markdown (```) and Jira ({code})
-    # Supports:
-    # - ```yaml, ```scaffolder, ```
-    # - {code:yaml}, {code:scaffolder}, {code}  # noqa: ERA001
-    # - {code:yaml|borderStyle=solid} (Attributes)
-    # Robust Pattern: Handles attributes by matching any char until closing brace logic
     CODE_BLOCK_PATTERN = re.compile(
         r"(?:```(?:scaffolder|yaml|yml)?|\{code(?:[:|][^\}]*)?\})\s*([\s\S]*?)\s*(?:```|\{code\})",
         re.IGNORECASE | re.DOTALL,
     )
 
+    # ── Public entry point ────────────────────────────────────────
+
     @classmethod
-    def to_domain(cls, payload: dict | JiraWebhookDTO) -> Mission:
-        """
-        Maps a Jira Payload to a Task Domain Entity.
-        Performs one-pass parsing of the description.
-        """
-        # 1. Normalize Input to Dict for safe access if needed, or use DTO fields
+    def to_domain(cls, payload: dict[str, Any] | JiraWebhookDTO) -> Mission:
+        """Map a Jira Payload to a Mission domain entity."""
         if isinstance(payload, JiraWebhookDTO):
-            # Extract fields from DTO
-            issue = payload.issue
-            fields = issue.fields or object()  # Safe access fallback
+            return cls._from_dto(payload)
+        return cls._from_dict(payload)
 
-            key = issue.key
-            summary = getattr(fields, "summary", "No Summary")
-            description_text = getattr(fields, "description", "") or ""
+    # ── DTO-based extraction ──────────────────────────────────────
 
-            # Resolve Project
-            project = getattr(fields, "project", None) or getattr(issue, "project", None)
-            project_key = project.key if project else "UNKNOWN"
-
-            # Resolve User
-            user_dto = payload.user
-            if user_dto is not None:
-                reporter = TaskUser(
-                    name=user_dto.name or "unknown",
-                    display_name=user_dto.display_name or "Unknown User",
-                    active=user_dto.active if user_dto.active is not None else True,
-                    # email is not always present in webhook, depends on privacy settings
-                )
-            else:
-                reporter = TaskUser(
-                    name="unknown",
-                    display_name="Unknown User",
-                    active=True,
-                )
-
-            event_type = payload.webhook_event or "unknown"
-            timestamp = payload.timestamp or 0
-            obj_id = issue.id or "0"
-            status = "unknown"  # Status might be nested, keeping simple for now
-            issue_type = "Task"  # Default
-
-        else:
-            # Fallback for Dict input
-            issue = payload.get("issue", {})
-            fields = issue.get("fields", {})
-
-            key = issue.get("key", "UNKNOWN")
-            summary = fields.get("summary", "No Summary")
-            description_text = fields.get("description", "") or ""
-
-            project = fields.get("project") or issue.get("project") or {}
-            project_key = project.get("key", "UNKNOWN")
-
-            user_data = payload.get("user", {})
-            reporter = TaskUser(
-                name=user_data.get("name", "unknown"),
-                display_name=user_data.get("displayName", "Unknown User"),
-                active=user_data.get("active", True),
-            )
-
-            event_type = payload.get("webhookEvent", "unknown")
-            timestamp = payload.get("timestamp", 0)
-            obj_id = issue.get("id", "0")
-            status = fields.get("status", {}).get("name", "unknown")
-            issue_type = fields.get("issuetype", {}).get("name", "Task")
-
+    @classmethod
+    def _from_dto(cls, payload: JiraWebhookDTO) -> Mission:
+        """Build a Mission from a validated JiraWebhookDTO."""
+        issue = payload.issue
+        fields = issue.fields or object()
+        description_text = getattr(fields, "description", "") or ""
         logger.info(
             "Parsing issue description",
-            issue_key=key,
+            issue_key=issue.key,
             description_length=len(description_text),
         )
-
-        # 2. Parse Description (Regex + YAML)
-        parsing_result = cls._parse_description_config(description_text)
-
-        # 3. Construct Domain Entity
-        task = Mission(
-            id=obj_id,
-            key=key,
-            event_type=event_type,
-            status=status,
-            summary=summary,
-            project_key=project_key,
-            issue_type=issue_type,
-            created_at=timestamp,
-            reporter=reporter,
-            description=parsing_result,
+        mission = Mission(
+            id=issue.id or "0",
+            key=issue.key,
+            event_type=payload.webhook_event or "unknown",
+            status="unknown",
+            summary=getattr(fields, "summary", "No Summary"),
+            project_key=cls._resolve_dto_project_key(fields, issue),
+            issue_type="Task",
+            created_at=payload.timestamp or 0,
+            reporter=cls._build_dto_reporter(payload.user),
+            description=cls._parse_description_config(description_text),
         )
-
         logger.info(
             "Domain Mission created",
-            mission_key=task.key,
-            config_found=len(task.description.config) > 0,
+            mission_key=mission.key,
+            config_found=bool(mission.description.config),
         )
-        return task
+        return mission
+
+    @staticmethod
+    def _resolve_dto_project_key(fields: Any, issue: Any) -> str:
+        """Resolve project key from DTO fields or issue fallback."""
+        project = getattr(fields, "project", None) or getattr(issue, "project", None)
+        return project.key if project else "UNKNOWN"
+
+    @staticmethod
+    def _build_dto_reporter(user_dto: JiraUserDTO | None) -> TaskUser:
+        """Build a TaskUser from the DTO's user field."""
+        if user_dto is None:
+            return TaskUser(name="unknown", display_name="Unknown User", active=True)
+        return TaskUser(
+            name=user_dto.name or "unknown",
+            display_name=user_dto.display_name or "Unknown User",
+            active=user_dto.active if user_dto.active is not None else True,
+        )
+
+    # ── Dict-based extraction (legacy fallback) ───────────────────
+
+    @classmethod
+    def _from_dict(cls, payload: dict[str, Any]) -> Mission:
+        """Build a Mission from a raw dict payload."""
+        issue_data = payload.get("issue", {})
+        fields = issue_data.get("fields", {})
+        description_text = fields.get("description", "") or ""
+        logger.info(
+            "Parsing issue description",
+            issue_key=issue_data.get("key", "UNKNOWN"),
+            description_length=len(description_text),
+        )
+        mission = Mission(
+            id=issue_data.get("id", "0"),
+            key=issue_data.get("key", "UNKNOWN"),
+            event_type=payload.get("webhookEvent", "unknown"),
+            status=fields.get("status", {}).get("name", "unknown"),
+            summary=fields.get("summary", "No Summary"),
+            project_key=cls._resolve_dict_project_key(fields, issue_data),
+            issue_type=fields.get("issuetype", {}).get("name", "Task"),
+            created_at=payload.get("timestamp", 0),
+            reporter=cls._build_dict_reporter(payload.get("user", {})),
+            description=cls._parse_description_config(description_text),
+        )
+        logger.info(
+            "Domain Mission created",
+            mission_key=mission.key,
+            config_found=bool(mission.description.config),
+        )
+        return mission
+
+    @staticmethod
+    def _resolve_dict_project_key(fields: dict[str, Any], issue_data: dict[str, Any]) -> str:
+        """Resolve project key from nested dict structures."""
+        project = fields.get("project") or issue_data.get("project") or {}
+        return str(project.get("key", "UNKNOWN"))
+
+    @staticmethod
+    def _build_dict_reporter(user_data: dict[str, Any]) -> TaskUser:
+        """Build a TaskUser from a raw dict."""
+        return TaskUser(
+            name=user_data.get("name", "unknown"),
+            display_name=user_data.get("displayName", "Unknown User"),
+            active=user_data.get("active", True),
+        )
+
+    # ── Description parsing ───────────────────────────────────────
 
     @classmethod
     def _parse_description_config(cls, text: str) -> TaskDescription:
-        """
-        Extracts YAML config from text using robust Regex.
-        Separates the config block from the human-readable text.
-        """
-        logger.info("Scanning description for config block", text_length=len(text))
+        """Extract YAML config from text, separating config block from human text."""
         match = cls.CODE_BLOCK_PATTERN.search(text)
-        logger.info("Config block search result", match_found=bool(match))
-
-        config: dict[str, Any] = {}
-        clean_text = text
-
-        if match:
-            # Extract content
-            raw_yaml = match.group(1)
-
-            # Sanitize Invisible Characters (Jira Artifacts)
-            clean_yaml = raw_yaml.replace("\xa0", " ").strip()
-
-            try:
-                parsed = yaml.safe_load(clean_yaml)
-                if isinstance(parsed, dict):
-                    config = parsed
-                else:
-                    logger.warning("Parsed YAML is not a dictionary — ignoring")
-            except yaml.YAMLError as e:
-                logger.warning(
-                    "Failed to parse YAML block",
-                    error_type="YAMLError",
-                    error_details=str(e),
-                )
-
-            # Remove the config block from the raw text
-            clean_text = text.replace(match.group(0), "").strip()
-            logger.info("Config block stripped successfully")
-        else:
-            logger.debug("No config block found in description")
-
+        if not match:
+            return TaskDescription(raw_content=text, config={})
+        config = cls._try_parse_yaml(match.group(1))
+        clean_text = text.replace(match.group(0), "").strip()
         return TaskDescription(raw_content=clean_text, config=config)
+
+    @staticmethod
+    def _try_parse_yaml(raw_yaml: str) -> dict[str, Any]:
+        """Attempt YAML parsing with sanitization, returning empty dict on failure."""
+        clean_yaml = raw_yaml.replace("\xa0", " ").strip()
+        try:
+            parsed = yaml.safe_load(clean_yaml)
+            if isinstance(parsed, dict):
+                return parsed
+            logger.warning("Parsed YAML is not a dictionary — ignoring")
+            return {}
+        except yaml.YAMLError as exc:
+            logger.warning(
+                "Failed to parse YAML block", error_type="YAMLError", error_details=str(exc)
+            )
+            return {}

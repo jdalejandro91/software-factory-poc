@@ -1,7 +1,8 @@
-import logging
 from typing import Any
 
-logger = logging.getLogger(__name__)
+import structlog
+
+logger = structlog.get_logger()
 
 # Actions blocked per agent role.
 # Any tool whose function name contains a blocked substring is removed.
@@ -47,11 +48,7 @@ class ToolSafetyPolicy:
         for tool in tools:
             tool_name = tool.get("function", {}).get("name", "")
             if self._is_blocked(tool_name, combined_blocklist):
-                logger.info(
-                    "[ToolSafetyPolicy] Blocked tool '%s' for role '%s'",
-                    tool_name,
-                    agent_role,
-                )
+                logger.info("Blocked tool", tool_name=tool_name, agent_role=agent_role)
                 continue
             allowed.append(tool)
 

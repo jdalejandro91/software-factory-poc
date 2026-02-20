@@ -1,10 +1,11 @@
 import json
-import logging
 from typing import Any
+
+import structlog
 
 from software_factory_poc.core.domain.mission import Mission
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ScaffoldingPromptBuilder:
@@ -25,7 +26,7 @@ class ScaffoldingPromptBuilder:
         system_prompt = self._build_system_prompt(tech_stack)
         user_prompt = self._build_user_prompt(mission, knowledge_context, tech_stack)
 
-        logger.info("Prompt generated for mission %s, stack: %s", mission.key, tech_stack)
+        logger.info("Prompt generated", issue_key=mission.key, tech_stack=tech_stack)
         return system_prompt, user_prompt
 
     # ── System Prompt Sections (each <=14 lines) ──────────────────

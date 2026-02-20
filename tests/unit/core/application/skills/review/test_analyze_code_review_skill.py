@@ -3,8 +3,10 @@
 from unittest.mock import AsyncMock, MagicMock
 
 from software_factory_poc.core.application.skills.review.analyze_code_review_skill import (
-    AnalyzeCodeReviewInput,
     AnalyzeCodeReviewSkill,
+)
+from software_factory_poc.core.application.skills.review.contracts.analyze_code_review_input import (
+    AnalyzeCodeReviewInput,
 )
 from software_factory_poc.core.application.skills.review.contracts.code_reviewer_contracts import (
     CodeIssueSchema,

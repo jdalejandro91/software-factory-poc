@@ -11,8 +11,10 @@ from software_factory_poc.core.application.exceptions import (
     WorkflowHaltedException,
 )
 from software_factory_poc.core.application.skills.review.analyze_code_review_skill import (
-    AnalyzeCodeReviewInput,
     AnalyzeCodeReviewSkill,
+)
+from software_factory_poc.core.application.skills.review.contracts.analyze_code_review_input import (
+    AnalyzeCodeReviewInput,
 )
 from software_factory_poc.core.application.tools import DocsTool, TrackerTool, VcsTool
 from software_factory_poc.core.application.tools.common.exceptions import ProviderError
@@ -51,17 +53,7 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
         logger.info("Code review workflow started", mission_key=mission.key)
         await self._connect_tools()
         try:
-            parsed = self._step_1_validate_metadata(mission)
-            await self._step_2_report_start(mission)
-            await self._step_3_validate_mr(mission, parsed)
-            repo_tree, file_changes, original_code = await self._step_4_fetch_tree_and_diffs(parsed)
-            context = await self._step_5_fetch_context(mission)
-            diffs_text = self._file_changes_to_diff_text(file_changes)
-            report = await self._step_6_analyze(
-                mission, diffs_text, context, parsed, repo_tree, original_code
-            )
-            await self._step_7_publish_and_report(mission, parsed, report)
-            logger.info("Code review workflow completed", mission_key=mission.key)
+            await self._run_review_pipeline(mission)
         except WorkflowHaltedException:
             logger.info("Code review workflow halted gracefully", mission_key=mission.key)
         except WorkflowExecutionError as wfe:
@@ -72,6 +64,20 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
             raise WorkflowExecutionError(str(exc), context={"mission_key": mission.key}) from exc
         finally:
             await self._disconnect_tools()
+
+    async def _run_review_pipeline(self, mission: Mission) -> None:
+        """Execute the full review step sequence (happy path only)."""
+        parsed = self._step_1_validate_metadata(mission)
+        await self._step_2_report_start(mission)
+        await self._step_3_validate_mr(mission, parsed)
+        repo_tree, file_changes, original_code = await self._step_4_fetch_tree_and_diffs(parsed)
+        context = await self._step_5_fetch_context(mission)
+        diffs_text = self._file_changes_to_diff_text(file_changes)
+        report = await self._step_6_analyze(
+            mission, diffs_text, context, parsed, repo_tree, original_code
+        )
+        await self._step_7_publish_and_report(mission, parsed, report)
+        logger.info("Code review workflow completed", mission_key=mission.key)
 
     # ── Step Methods (max 14 lines each) ─────────────────────────────
 

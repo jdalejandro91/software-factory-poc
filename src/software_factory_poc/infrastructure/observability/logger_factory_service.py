@@ -67,7 +67,7 @@ def configure_logging() -> None:
 
 def get_logger(component: str) -> structlog.stdlib.BoundLogger:
     """Return a structlog logger pre-bound with context_component."""
-    return structlog.get_logger().bind(context_component=component)
+    return structlog.get_logger().bind(context_component=component)  # type: ignore[no-any-return]
 
 
 def _select_renderer() -> Any:

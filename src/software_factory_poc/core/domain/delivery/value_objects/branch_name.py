@@ -5,7 +5,7 @@ from dataclasses import dataclass
 class BranchName:
     value: str
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         val = self.value.strip()
         if not val or " " in val:
             raise ValueError("El nombre de la rama no puede estar vacío ni contener espacios.")

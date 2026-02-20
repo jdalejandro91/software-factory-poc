@@ -5,13 +5,15 @@ Every agent, workflow, and skill raises from this hierarchy,
 enabling fine-grained error handling without string-matching.
 """
 
+from typing import Any
+
 
 class ApplicationError(Exception):
     """Base exception for all application-layer errors in BrahMAS."""
 
-    def __init__(self, message: str = "", *, context: dict | None = None) -> None:
+    def __init__(self, message: str = "", *, context: dict[str, Any] | None = None) -> None:
         super().__init__(message)
-        self.context: dict = context or {}
+        self.context: dict[str, Any] = context or {}
 
 
 class WorkflowExecutionError(ApplicationError):

@@ -1,8 +1,12 @@
-import logging
-from dataclasses import dataclass, field
+"""Skill that builds the review prompt, calls the LLM, and converts the response to a domain report."""
+
+import structlog
 
 from software_factory_poc.core.application.exceptions import SkillExecutionError
 from software_factory_poc.core.application.ports import BrainPort
+from software_factory_poc.core.application.skills.review.contracts.analyze_code_review_input import (
+    AnalyzeCodeReviewInput,
+)
 from software_factory_poc.core.application.skills.review.contracts.code_reviewer_contracts import (
     CodeReviewResponseSchema,
 )
@@ -10,25 +14,10 @@ from software_factory_poc.core.application.skills.review.prompt_templates.code_r
     CodeReviewPromptBuilder,
 )
 from software_factory_poc.core.application.skills.skill import BaseSkill
-from software_factory_poc.core.domain.delivery import FileContent
-from software_factory_poc.core.domain.mission import Mission
 from software_factory_poc.core.domain.quality import CodeReviewReport, ReviewComment, ReviewSeverity
 from software_factory_poc.core.domain.shared.skill_type import SkillType
 
-logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class AnalyzeCodeReviewInput:
-    """Input contract for the LLM code analysis step."""
-
-    mission: Mission
-    mr_diff: str
-    conventions: str
-    priority_models: list[str]
-    repository_tree: str = ""
-    code_review_params: dict[str, str] = field(default_factory=dict)
-    original_branch_code: list[FileContent] = field(default_factory=list)
+logger = structlog.get_logger()
 
 
 class AnalyzeCodeReviewSkill(BaseSkill[AnalyzeCodeReviewInput, CodeReviewReport]):
@@ -47,39 +36,36 @@ class AnalyzeCodeReviewSkill(BaseSkill[AnalyzeCodeReviewInput, CodeReviewReport]
         self._prompt_builder = prompt_builder
 
     async def execute(self, input_data: AnalyzeCodeReviewInput) -> CodeReviewReport:
-        logger.info("[AnalyzeCodeReview] Building prompt and calling LLM")
         ctx = {"skill": "analyze_code_review"}
         try:
-            system_prompt = self._prompt_builder.build_system_prompt()
-            user_prompt = self._prompt_builder.build_analysis_prompt(
-                mission=input_data.mission,
-                mr_diff=input_data.mr_diff,
-                conventions=input_data.conventions,
-                code_review_params=input_data.code_review_params or None,
-                repository_tree=input_data.repository_tree,
-                original_branch_code=input_data.original_branch_code,
-            )
-
-            review_schema: CodeReviewResponseSchema = await self._brain.generate_structured(
-                prompt=user_prompt,
-                schema=CodeReviewResponseSchema,
-                priority_models=input_data.priority_models,
-                system_prompt=system_prompt,
-            )
-
-            report = self._to_domain_report(review_schema)
-
-            verdict = "APPROVED" if report.is_approved else "REJECTED"
-            logger.info(
-                "[AnalyzeCodeReview] Verdict: %s — %d issues found",
-                verdict,
-                len(report.comments),
-            )
-            return report
+            return await self._analyze_and_report(input_data)
         except SkillExecutionError:
             raise
         except Exception as exc:
             raise SkillExecutionError(f"Code review analysis failed: {exc}", context=ctx) from exc
+
+    async def _analyze_and_report(self, input_data: AnalyzeCodeReviewInput) -> CodeReviewReport:
+        """Build prompts, invoke LLM, and convert response to domain report."""
+        logger.info("Building prompt and calling LLM", skill="analyze_code_review")
+        system_prompt = self._prompt_builder.build_system_prompt()
+        user_prompt = self._prompt_builder.build_analysis_prompt(
+            mission=input_data.mission,
+            mr_diff=input_data.mr_diff,
+            conventions=input_data.conventions,
+            code_review_params=input_data.code_review_params or None,
+            repository_tree=input_data.repository_tree,
+            original_branch_code=input_data.original_branch_code,
+        )
+        review_schema: CodeReviewResponseSchema = await self._brain.generate_structured(
+            prompt=user_prompt,
+            schema=CodeReviewResponseSchema,
+            priority_models=input_data.priority_models,
+            system_prompt=system_prompt,
+        )
+        report = self._to_domain_report(review_schema)
+        verdict = "APPROVED" if report.is_approved else "REJECTED"
+        logger.info("Code review verdict", verdict=verdict, issues_count=len(report.comments))
+        return report
 
     @staticmethod
     def _to_domain_report(schema: CodeReviewResponseSchema) -> CodeReviewReport:
@@ -94,10 +80,8 @@ class AnalyzeCodeReviewSkill(BaseSkill[AnalyzeCodeReviewInput, CodeReviewReport]
             )
             for issue in schema.issues
         ]
-
         has_critical = any(c.severity == ReviewSeverity.CRITICAL for c in domain_comments)
         is_approved = schema.is_approved and not has_critical
-
         return CodeReviewReport(
             is_approved=is_approved,
             summary=schema.summary,

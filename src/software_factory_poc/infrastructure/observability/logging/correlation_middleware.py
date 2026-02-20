@@ -30,38 +30,50 @@ class CorrelationMiddleware:
 
     async def _handle_request(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
         clear_contextvars()
-
-        correlation_id = _extract_header(scope, b"x-correlation-id") or str(uuid4())
-        trace_id = str(uuid4())
-        endpoint = _extract_path(scope)
-        method = _extract_method(scope)
-
-        bind_contextvars(
-            correlation_id=correlation_id,
-            trace_id=trace_id,
-            context_endpoint=endpoint,
-            context_method=method,
-        )
-
+        self._bind_request_context(scope)
         http_status = 500
         start = time.perf_counter()
         try:
-
-            async def _send_wrapper(message: dict[str, Any]) -> None:
-                nonlocal http_status
-                if message.get("type") == "http.response.start":
-                    http_status = message.get("status", 500)
-                await send(message)
-
-            await self.app(scope, receive, _send_wrapper)
+            http_status = await self._dispatch_and_capture_status(scope, receive, send)
         finally:
-            duration_ms = round((time.perf_counter() - start) * 1000, 2)
-            status_label = "SUCCESS" if http_status < 400 else "ERROR"
-            await logger.ainfo(
-                "Request processed",
-                processing_status=status_label,
-                processing_duration_ms=duration_ms,
-            )
+            await self._log_request_completion(http_status, start)
+
+    @staticmethod
+    def _bind_request_context(scope: dict[str, Any]) -> None:
+        """Bind correlation, trace, endpoint, and method into structlog contextvars."""
+        correlation_id = _extract_header(scope, b"x-correlation-id") or str(uuid4())
+        bind_contextvars(
+            correlation_id=correlation_id,
+            trace_id=str(uuid4()),
+            context_endpoint=_extract_path(scope),
+            context_method=_extract_method(scope),
+        )
+
+    async def _dispatch_and_capture_status(
+        self, scope: dict[str, Any], receive: Any, send: Any
+    ) -> int:
+        """Dispatch the ASGI app and capture the HTTP response status code."""
+        http_status = 500
+
+        async def _capture_status(message: dict[str, Any]) -> None:
+            nonlocal http_status
+            if message.get("type") == "http.response.start":
+                http_status = message.get("status", 500)
+            await send(message)
+
+        await self.app(scope, receive, _capture_status)
+        return http_status
+
+    @staticmethod
+    async def _log_request_completion(http_status: int, start: float) -> None:
+        """Log request duration and outcome after the response is sent."""
+        duration_ms = round((time.perf_counter() - start) * 1000, 2)
+        status_label = "SUCCESS" if http_status < 400 else "ERROR"
+        await logger.ainfo(
+            "Request processed",
+            processing_status=status_label,
+            processing_duration_ms=duration_ms,
+        )
 
 
 def _extract_header(scope: dict[str, Any], name: bytes) -> str | None:
@@ -76,9 +88,9 @@ def _extract_header(scope: dict[str, Any], name: bytes) -> str | None:
 
 def _extract_path(scope: dict[str, Any]) -> str:
     """Extract request path from ASGI scope."""
-    return scope.get("path", "/")
+    return str(scope.get("path", "/"))
 
 
 def _extract_method(scope: dict[str, Any]) -> str:
     """Extract HTTP method from ASGI scope."""
-    return scope.get("method", "UNKNOWN")
+    return str(scope.get("method", "UNKNOWN"))

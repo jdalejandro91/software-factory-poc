@@ -13,16 +13,18 @@ from pydantic import SecretStr
 
 from software_factory_poc.core.application.tools import TrackerTool
 from software_factory_poc.core.application.tools.common.exceptions import ProviderError
-from software_factory_poc.core.domain.mission import Mission, TaskDescription
-from software_factory_poc.core.domain.quality import CodeReviewReport, ReviewComment, ReviewSeverity
 from software_factory_poc.infrastructure.tools.tracker.jira.config.jira_settings import (
     JiraSettings,
+)
+from software_factory_poc.infrastructure.tools.tracker.jira.jira_description_builder import (
+    _append_to_adf,
+    build_updated_description,
 )
 from software_factory_poc.infrastructure.tools.tracker.jira.jira_mcp_client import (
     JiraMcpClient,
 )
 
-MODULE = "software_factory_poc.infrastructure.tools.tracker.jira.jira_mcp_client"
+BASE_MODULE = "software_factory_poc.infrastructure.tools.common.base_mcp_client"
 
 
 # ── Fakes for MCP response structures ──
@@ -139,8 +141,8 @@ def mock_mcp():
         yield mock_session
 
     with (
-        patch(f"{MODULE}.stdio_client", side_effect=fake_stdio_client),
-        patch(f"{MODULE}.ClientSession", side_effect=fake_client_session),
+        patch(f"{BASE_MODULE}.stdio_client", side_effect=fake_stdio_client),
+        patch(f"{BASE_MODULE}.ClientSession", side_effect=fake_client_session),
     ):
         yield mock_session
 
@@ -195,152 +197,6 @@ class TestServerParams:
 
         assert params.env is not None
         assert "ATLASSIAN_API_TOKEN" not in params.env
-
-
-# ══════════════════════════════════════════════════════════════════════
-# _parse_description — YAML config extraction
-# ══════════════════════════════════════════════════════════════════════
-
-
-class TestParseDescription:
-    def test_empty_text_returns_empty_task_description(self) -> None:
-        result = JiraMcpClient._parse_description("")
-        assert result == TaskDescription(raw_content="", config={})
-
-    def test_none_text_returns_empty_task_description(self) -> None:
-        result = JiraMcpClient._parse_description("")
-        assert result.raw_content == ""
-        assert result.config == {}
-
-    def test_plain_text_without_config_block(self) -> None:
-        text = "Implement REST API for user management."
-        result = JiraMcpClient._parse_description(text)
-        assert result.raw_content == text
-        assert result.config == {}
-
-    def test_extracts_scaffolder_yaml_block(self) -> None:
-        text = (
-            "Build microservice.\n\n"
-            "```scaffolder\n"
-            "language: python\n"
-            "framework: fastapi\n"
-            "```\n\n"
-            "Additional notes here."
-        )
-        result = JiraMcpClient._parse_description(text)
-        assert result.config == {"language": "python", "framework": "fastapi"}
-        assert "Build microservice." in result.raw_content
-        assert "Additional notes here." in result.raw_content
-        assert "```scaffolder" not in result.raw_content
-
-    def test_extracts_yaml_block(self) -> None:
-        text = "Description.\n\n```yaml\nmerge_request_iid: 42\n```"
-        result = JiraMcpClient._parse_description(text)
-        assert result.config == {"merge_request_iid": 42}
-        assert "```yaml" not in result.raw_content
-
-    def test_extracts_yml_block(self) -> None:
-        text = "Some text.\n\n```yml\nkey: value\n```"
-        result = JiraMcpClient._parse_description(text)
-        assert result.config == {"key": "value"}
-
-    def test_invalid_yaml_falls_back_to_empty_config(self) -> None:
-        text = "Desc.\n\n```yaml\n: invalid: yaml: {{{\n```"
-        result = JiraMcpClient._parse_description(text)
-        assert result.config == {}
-        assert "Desc." in result.raw_content
-
-    def test_non_dict_yaml_ignored(self) -> None:
-        text = "Desc.\n\n```yaml\n- item1\n- item2\n```"
-        result = JiraMcpClient._parse_description(text)
-        assert result.config == {}
-
-
-# ══════════════════════════════════════════════════════════════════════
-# get_task — JSON-RPC to Mission mapping
-# ══════════════════════════════════════════════════════════════════════
-
-
-class TestGetTask:
-    async def test_maps_jira_issue_to_mission(self, mock_mcp: AsyncMock) -> None:
-        mock_mcp.call_tool.return_value = _text_result(_jira_issue_json())
-        client = _build_client()
-
-        mission = await client.get_task("PROJ-1")
-
-        assert isinstance(mission, Mission)
-        assert mission.id == "10001"
-        assert mission.key == "PROJ-1"
-        assert mission.summary == "Implement feature X"
-        assert mission.status == "To Do"
-        assert mission.project_key == "PROJ"
-        assert mission.issue_type == "Story"
-        assert mission.description.raw_content == "Build the scaffolding for service Y."
-        assert mission.description.config == {}
-
-        mock_mcp.call_tool.assert_called_once_with(
-            "jira_get_issue",
-            arguments={"issue_key": "PROJ-1"},
-        )
-
-    async def test_maps_description_with_yaml_config(self, mock_mcp: AsyncMock) -> None:
-        desc = "Task text.\n\n```scaffolder\nlanguage: java\n```"
-        mock_mcp.call_tool.return_value = _text_result(_jira_issue_json(description=desc))
-        client = _build_client()
-
-        mission = await client.get_task("PROJ-2")
-
-        assert mission.description.config == {"language": "java"}
-        assert "Task text." in mission.description.raw_content
-        assert "```scaffolder" not in mission.description.raw_content
-
-    async def test_handles_empty_description(self, mock_mcp: AsyncMock) -> None:
-        mock_mcp.call_tool.return_value = _text_result(_jira_issue_json(description=""))
-        client = _build_client()
-
-        mission = await client.get_task("PROJ-3")
-
-        assert mission.description.raw_content == ""
-        assert mission.description.config == {}
-
-    async def test_handles_null_description(self, mock_mcp: AsyncMock) -> None:
-        raw = json.dumps(
-            {
-                "id": "1",
-                "key": "X-1",
-                "fields": {
-                    "summary": "s",
-                    "status": {"name": "Open"},
-                    "project": {"key": "X"},
-                    "issuetype": {"name": "Bug"},
-                    "description": None,
-                },
-            }
-        )
-        mock_mcp.call_tool.return_value = _text_result(raw)
-        client = _build_client()
-
-        mission = await client.get_task("X-1")
-        assert mission.description == TaskDescription(raw_content="", config={})
-
-    async def test_defaults_when_fields_missing(self, mock_mcp: AsyncMock) -> None:
-        raw = json.dumps({"id": "1", "key": "M-1"})
-        mock_mcp.call_tool.return_value = _text_result(raw)
-        client = _build_client()
-
-        mission = await client.get_task("M-1")
-
-        assert mission.summary == ""
-        assert mission.status == "OPEN"
-        assert mission.project_key == ""
-        assert mission.issue_type == "Task"
-
-    async def test_non_json_response_raises_provider_error(self, mock_mcp: AsyncMock) -> None:
-        mock_mcp.call_tool.return_value = _text_result("not json at all")
-        client = _build_client()
-
-        with pytest.raises(ProviderError, match="Non-JSON response"):
-            await client.get_task("BAD-1")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -499,23 +355,23 @@ class TestUpdateTaskDescription:
 
 class TestBuildUpdatedDescription:
     def test_plain_string_wraps_in_yaml_block(self) -> None:
-        result = JiraMcpClient._build_updated_description("Existing.", "key: val")
+        result = build_updated_description("Existing.", "key: val")
         assert result == "Existing.\n\n```yaml\nkey: val\n```"
 
     def test_none_produces_yaml_block(self) -> None:
-        result = JiraMcpClient._build_updated_description(None, "text")
+        result = build_updated_description(None, "text")
         assert result == "\n\n```yaml\ntext\n```"
 
     def test_adf_dict_returns_dict_with_code_block(self) -> None:
         adf: dict[str, Any] = {"type": "doc", "content": []}
-        result = JiraMcpClient._build_updated_description(adf, "hello")
+        result = build_updated_description(adf, "hello")
         assert isinstance(result, dict)
         assert result["content"][-1]["type"] == "codeBlock"
 
     def test_adf_dict_is_not_mutated(self) -> None:
         adf: dict[str, Any] = {"type": "doc", "content": [{"type": "paragraph"}]}
         original_len = len(adf["content"])
-        JiraMcpClient._build_updated_description(adf, "text")
+        build_updated_description(adf, "text")
         assert len(adf["content"]) == original_len
 
 
@@ -525,7 +381,7 @@ class TestAppendToAdf:
             "type": "doc",
             "content": [{"type": "paragraph", "content": []}],
         }
-        result = JiraMcpClient._append_to_adf(adf, "service: x")
+        result = _append_to_adf(adf, "service: x")
         assert len(result["content"]) == 2
         block = result["content"][1]
         assert block["type"] == "codeBlock"
@@ -534,7 +390,7 @@ class TestAppendToAdf:
 
     def test_creates_content_list_when_missing(self) -> None:
         adf: dict[str, Any] = {"type": "doc", "version": 1}
-        result = JiraMcpClient._append_to_adf(adf, "data")
+        result = _append_to_adf(adf, "data")
         assert len(result["content"]) == 1
         assert result["content"][0]["type"] == "codeBlock"
 
@@ -544,111 +400,9 @@ class TestAppendToAdf:
             "type": "doc",
             "content": [{"type": "paragraph", "content": [inner]}],
         }
-        result = JiraMcpClient._append_to_adf(adf, "new")
+        result = _append_to_adf(adf, "new")
         result["content"][0]["content"][0]["text"] = "mutated"
         assert inner["text"] == "original"
-
-
-# ══════════════════════════════════════════════════════════════════════
-# post_review_summary
-# ══════════════════════════════════════════════════════════════════════
-
-
-class TestPostReviewSummary:
-    """post_review_summary makes 3 MCP calls: get_transitions, transition_issue, add_comment."""
-
-    _TRANSITIONS = _transitions_json(
-        ("11", "Start Review", "In Review"),
-        ("41", "Back to Todo", "To Do"),
-    )
-
-    def _side_effect(self) -> list[FakeCallToolResult]:
-        return [_text_result(self._TRANSITIONS), _text_result("ok"), _text_result("ok")]
-
-    async def test_approved_transitions_to_success_state(self, mock_mcp: AsyncMock) -> None:
-        mock_mcp.call_tool.side_effect = self._side_effect()
-        client = _build_client()
-
-        report = CodeReviewReport(is_approved=True, summary="Looks good", comments=[])
-        await client.post_review_summary("PROJ-1", report)
-
-        calls = mock_mcp.call_tool.call_args_list
-        assert len(calls) == 3
-        assert calls[0][0][0] == "jira_get_transitions"
-        assert calls[1][0][0] == "jira_transition_issue"
-        assert calls[1][1]["arguments"]["transition_id"] == "11"
-        assert calls[2][0][0] == "jira_add_comment"
-
-    async def test_rejected_transitions_to_initial_state(self, mock_mcp: AsyncMock) -> None:
-        mock_mcp.call_tool.side_effect = self._side_effect()
-        client = _build_client()
-
-        report = CodeReviewReport(is_approved=False, summary="Needs work", comments=[])
-        await client.post_review_summary("PROJ-2", report)
-
-        calls = mock_mcp.call_tool.call_args_list
-        assert calls[1][1]["arguments"]["transition_id"] == "41"
-
-    async def test_approved_comment_contains_approved_label(self, mock_mcp: AsyncMock) -> None:
-        mock_mcp.call_tool.side_effect = self._side_effect()
-        client = _build_client()
-
-        report = CodeReviewReport(is_approved=True, summary="All clear", comments=[])
-        await client.post_review_summary("PROJ-1", report)
-
-        comment_arg = mock_mcp.call_tool.call_args_list[2][1]["arguments"]["comment"]
-        assert "APPROVED" in comment_arg
-
-    async def test_rejected_comment_contains_changes_requested(self, mock_mcp: AsyncMock) -> None:
-        mock_mcp.call_tool.side_effect = self._side_effect()
-        client = _build_client()
-
-        report = CodeReviewReport(is_approved=False, summary="Issues found", comments=[])
-        await client.post_review_summary("PROJ-1", report)
-
-        comment_arg = mock_mcp.call_tool.call_args_list[2][1]["arguments"]["comment"]
-        assert "CHANGES REQUESTED" in comment_arg
-
-    async def test_findings_table_in_comment(self, mock_mcp: AsyncMock) -> None:
-        mock_mcp.call_tool.side_effect = self._side_effect()
-        client = _build_client()
-
-        comment = ReviewComment(
-            file_path="src/main.py",
-            description="SQL injection risk",
-            suggestion="Use parameterized queries",
-            severity=ReviewSeverity.WARNING,
-            line_number=42,
-        )
-        report = CodeReviewReport(is_approved=False, summary="Security issues", comments=[comment])
-        await client.post_review_summary("PROJ-1", report)
-
-        comment_md = mock_mcp.call_tool.call_args_list[2][1]["arguments"]["comment"]
-        assert "### Findings" in comment_md
-        assert "**WARNING**" in comment_md
-        assert "`src/main.py:42`" in comment_md
-        assert "SQL injection risk" in comment_md
-
-    async def test_uses_custom_workflow_states(self, mock_mcp: AsyncMock) -> None:
-        transitions = _transitions_json(
-            ("51", "Mark Done", "Done"), ("61", "Move to Backlog", "Backlog")
-        )
-        mock_mcp.call_tool.side_effect = [
-            _text_result(transitions),
-            _text_result("ok"),
-            _text_result("ok"),
-        ]
-        settings = _make_settings(
-            WORKFLOW_STATE_SUCCESS="Done",
-            WORKFLOW_STATE_INITIAL="Backlog",
-        )
-        client = _build_client(settings)
-
-        report = CodeReviewReport(is_approved=True, summary="OK", comments=[])
-        await client.post_review_summary("PROJ-1", report)
-
-        calls = mock_mcp.call_tool.call_args_list
-        assert calls[1][1]["arguments"]["transition_id"] == "51"
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -726,13 +480,13 @@ class TestErrorHandling:
         client = _build_client()
 
         with pytest.raises(ProviderError, match="MCP protocol error"):
-            await client.get_task("FAIL-1")
+            await client.add_comment("FAIL-1", "text")
 
     async def test_connection_failure_becomes_provider_error(self, mock_mcp: AsyncMock) -> None:
         mock_mcp.call_tool.side_effect = ConnectionError("stdio pipe broken")
         client = _build_client()
 
-        with pytest.raises(ProviderError, match="Connection failure"):
+        with pytest.raises(ProviderError, match="connection failure"):
             await client.add_comment("FAIL-2", "text")
 
     async def test_tool_is_error_becomes_provider_error(self, mock_mcp: AsyncMock) -> None:
@@ -740,14 +494,14 @@ class TestErrorHandling:
         client = _build_client()
 
         with pytest.raises(ProviderError, match="Tool .* returned error"):
-            await client.get_task("404-1")
+            await client.add_comment("404-1", "text")
 
     async def test_provider_error_includes_provider_name(self, mock_mcp: AsyncMock) -> None:
         mock_mcp.call_tool.side_effect = RuntimeError("boom")
         client = _build_client()
 
         with pytest.raises(ProviderError) as exc_info:
-            await client.get_task("CRASH-1")
+            await client.add_comment("CRASH-1", "text")
 
         assert exc_info.value.provider == "JiraMCP"
         assert exc_info.value.retryable is True
@@ -769,3 +523,45 @@ class TestErrorHandling:
             await client.update_task_description("X-1", "new desc")
 
         assert exc_info.value.retryable is False
+
+
+# ══════════════════════════════════════════════════════════════════════
+# MCP Lifecycle (connect / disconnect)
+# ══════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.usefixtures("mock_mcp")
+class TestMcpLifecycle:
+    async def test_connect_opens_persistent_session(self) -> None:
+        client = _build_client()
+        assert client._session is None
+
+        await client.connect()
+
+        assert client._session is not None
+        assert client._exit_stack is not None
+
+    async def test_disconnect_clears_session(self) -> None:
+        client = _build_client()
+        await client.connect()
+
+        await client.disconnect()
+
+        assert client._session is None
+        assert client._exit_stack is None
+
+    async def test_disconnect_is_idempotent(self) -> None:
+        client = _build_client()
+        await client.disconnect()  # Must not raise without prior connect
+
+    async def test_disconnect_swallows_exit_stack_error(self) -> None:
+        """disconnect() must never propagate exceptions from _exit_stack.aclose()."""
+        client = _build_client()
+        await client.connect()
+        assert client._exit_stack is not None
+        client._exit_stack.aclose = AsyncMock(side_effect=RuntimeError("npx zombie"))
+
+        await client.disconnect()  # Must NOT raise
+
+        assert client._session is None
+        assert client._exit_stack is None

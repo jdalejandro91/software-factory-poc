@@ -16,11 +16,18 @@ from software_factory_poc.core.application.tools.common.exceptions import Provid
 from software_factory_poc.infrastructure.tools.docs.confluence.config.confluence_settings import (
     ConfluenceSettings,
 )
+from software_factory_poc.infrastructure.tools.docs.confluence.confluence_html_cleaner import (
+    clean_html_and_truncate,
+)
 from software_factory_poc.infrastructure.tools.docs.confluence.confluence_mcp_client import (
     ConfluenceMcpClient,
 )
+from software_factory_poc.infrastructure.tools.docs.confluence.confluence_search_parser import (
+    extract_first_page_id,
+    extract_page_list,
+)
 
-MODULE = "software_factory_poc.infrastructure.tools.docs.confluence.confluence_mcp_client"
+BASE_MODULE = "software_factory_poc.infrastructure.tools.common.base_mcp_client"
 
 
 # ── Fakes for MCP response structures ──
@@ -103,8 +110,8 @@ def mock_mcp():
         yield mock_session
 
     with (
-        patch(f"{MODULE}.stdio_client", side_effect=fake_stdio_client),
-        patch(f"{MODULE}.ClientSession", side_effect=fake_client_session),
+        patch(f"{BASE_MODULE}.stdio_client", side_effect=fake_stdio_client),
+        patch(f"{BASE_MODULE}.ClientSession", side_effect=fake_client_session),
     ):
         yield mock_session
 
@@ -266,18 +273,18 @@ class TestGetProjectContext:
 class TestExtractFirstPageId:
     def test_extracts_id_from_results_list(self) -> None:
         raw = json.dumps({"results": [{"id": "42", "title": "Page"}]})
-        assert ConfluenceMcpClient._extract_first_page_id(raw) == "42"
+        assert extract_first_page_id(raw) == "42"
 
     def test_returns_none_on_empty_results(self) -> None:
         raw = json.dumps({"results": []})
-        assert ConfluenceMcpClient._extract_first_page_id(raw) is None
+        assert extract_first_page_id(raw) is None
 
     def test_returns_none_on_invalid_json(self) -> None:
-        assert ConfluenceMcpClient._extract_first_page_id("not json") is None
+        assert extract_first_page_id("not json") is None
 
     def test_handles_flat_list_format(self) -> None:
         raw = json.dumps([{"id": "99", "title": "Flat"}])
-        assert ConfluenceMcpClient._extract_first_page_id(raw) == "99"
+        assert extract_first_page_id(raw) == "99"
 
 
 class TestExtractPageList:
@@ -290,16 +297,16 @@ class TestExtractPageList:
                 ]
             }
         )
-        pages = ConfluenceMcpClient._extract_page_list(raw)
+        pages = extract_page_list(raw)
         assert len(pages) == 2
         assert pages[0] == {"id": "1", "title": "A"}
 
     def test_returns_empty_on_invalid_json(self) -> None:
-        assert ConfluenceMcpClient._extract_page_list("not json") == []
+        assert extract_page_list("not json") == []
 
     def test_skips_entries_without_id(self) -> None:
         raw = json.dumps({"results": [{"title": "No ID"}, {"id": "5", "title": "Has ID"}]})
-        pages = ConfluenceMcpClient._extract_page_list(raw)
+        pages = extract_page_list(raw)
         assert len(pages) == 1
         assert pages[0]["id"] == "5"
 
@@ -311,35 +318,35 @@ class TestExtractPageList:
 
 class TestCleanHtmlAndTruncate:
     def test_strips_html_tags(self) -> None:
-        result = ConfluenceMcpClient._clean_html_and_truncate("<h1>Title</h1><p>Body text</p>")
+        result = clean_html_and_truncate("<h1>Title</h1><p>Body text</p>")
         assert "<h1>" not in result
         assert "<p>" not in result
         assert "Title" in result
         assert "Body text" in result
 
     def test_normalizes_whitespace(self) -> None:
-        result = ConfluenceMcpClient._clean_html_and_truncate("word1   word2\t\tword3")
+        result = clean_html_and_truncate("word1   word2\t\tword3")
         assert result == "word1 word2 word3"
 
     def test_collapses_multiple_newlines(self) -> None:
-        result = ConfluenceMcpClient._clean_html_and_truncate("line1\n\n\n\nline2")
+        result = clean_html_and_truncate("line1\n\n\n\nline2")
         assert result == "line1\nline2"
 
     def test_truncates_at_max_chars(self) -> None:
         long_text = "A" * 25000
-        result = ConfluenceMcpClient._clean_html_and_truncate(long_text, max_chars=100)
+        result = clean_html_and_truncate(long_text, max_chars=100)
         assert len(result) > 100  # includes suffix
         assert result.startswith("A" * 100)
         assert "CONTENIDO TRUNCADO" in result
 
     def test_does_not_truncate_within_limit(self) -> None:
         text = "Short content"
-        result = ConfluenceMcpClient._clean_html_and_truncate(text, max_chars=20000)
+        result = clean_html_and_truncate(text, max_chars=20000)
         assert result == text
         assert "TRUNCADO" not in result
 
     def test_handles_empty_string(self) -> None:
-        assert ConfluenceMcpClient._clean_html_and_truncate("") == ""
+        assert clean_html_and_truncate("") == ""
 
     def test_complex_confluence_html(self) -> None:
         html = (
@@ -348,7 +355,7 @@ class TestCleanHtmlAndTruncate:
             '<div class="panel"><p>Architecture <strong>rules</strong>:</p></div>'
             "<ul><li>Rule 1</li><li>Rule 2</li></ul>"
         )
-        result = ConfluenceMcpClient._clean_html_and_truncate(html)
+        result = clean_html_and_truncate(html)
         assert "Overview" in result
         assert "Architecture" in result
         assert "rules" in result
@@ -372,7 +379,7 @@ class TestErrorHandling:
         mock_mcp.call_tool.side_effect = ConnectionError("stdio pipe broken")
         client = _build_client()
 
-        with pytest.raises(ProviderError, match="Connection failure"):
+        with pytest.raises(ProviderError, match="connection failure"):
             await client.get_architecture_context("broken-page")
 
     async def test_tool_is_error_becomes_provider_error(self, mock_mcp: AsyncMock) -> None:
@@ -455,3 +462,45 @@ class TestExecuteTool:
         call_args = mock_mcp.call_tool.call_args
         payload = call_args[1]["arguments"]
         assert "page_id" in payload
+
+
+# ══════════════════════════════════════════════════════════════════════
+# MCP Lifecycle (connect / disconnect)
+# ══════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.usefixtures("mock_mcp")
+class TestMcpLifecycle:
+    async def test_connect_opens_persistent_session(self) -> None:
+        client = _build_client()
+        assert client._session is None
+
+        await client.connect()
+
+        assert client._session is not None
+        assert client._exit_stack is not None
+
+    async def test_disconnect_clears_session(self) -> None:
+        client = _build_client()
+        await client.connect()
+
+        await client.disconnect()
+
+        assert client._session is None
+        assert client._exit_stack is None
+
+    async def test_disconnect_is_idempotent(self) -> None:
+        client = _build_client()
+        await client.disconnect()  # Must not raise without prior connect
+
+    async def test_disconnect_swallows_exit_stack_error(self) -> None:
+        """disconnect() must never propagate exceptions from _exit_stack.aclose()."""
+        client = _build_client()
+        await client.connect()
+        assert client._exit_stack is not None
+        client._exit_stack.aclose = AsyncMock(side_effect=RuntimeError("npx zombie"))
+
+        await client.disconnect()  # Must NOT raise
+
+        assert client._session is None
+        assert client._exit_stack is None

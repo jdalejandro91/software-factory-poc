@@ -15,7 +15,7 @@ class CodeReviewReport:
     def has_critical_issues(self) -> bool:
         return any(c.severity == ReviewSeverity.CRITICAL for c in self.comments)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         # INVARIANTE: Rechazo forzoso si hay issues CRITICAL
         if self.has_critical_issues() and self.is_approved:
             raise ValueError("Inconsistencia: No se puede aprobar un MR con fallos CRITICAL.")

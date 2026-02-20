@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from software_factory_poc.core.application.exceptions import WorkflowExecutionError
-from software_factory_poc.core.application.skills.review.analyze_code_review_skill import (
+from software_factory_poc.core.application.skills.review.contracts.analyze_code_review_input import (
     AnalyzeCodeReviewInput,
 )
 from software_factory_poc.core.application.tools.common.exceptions import ProviderError
@@ -261,7 +261,6 @@ class TestMrGuardrail:
         workflow: CodeReviewDeterministicWorkflow,
         mock_vcs: AsyncMock,
         mock_tracker: AsyncMock,
-        mock_docs: AsyncMock,
         mock_analyze: AsyncMock,
         mission: Mission,
     ) -> None:
@@ -476,7 +475,6 @@ class TestPublishReviewTolerance:
         self,
         workflow: CodeReviewDeterministicWorkflow,
         mock_vcs: AsyncMock,
-        mock_tracker: AsyncMock,
         mock_docs: AsyncMock,
         mock_analyze: AsyncMock,
         mission: Mission,
