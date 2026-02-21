@@ -37,9 +37,9 @@ class JiraMcpClient(BaseMcpClient, TrackerTool):
         """Build StdioServerParameters with Atlassian credentials injected into subprocess env."""
         env = os.environ.copy()
         if self._settings.api_token:
-            env["ATLASSIAN_API_TOKEN"] = self._settings.api_token.get_secret_value()
-        env["ATLASSIAN_USER_EMAIL"] = self._settings.user_email
-        env["ATLASSIAN_HOST"] = self._settings.base_url
+            env["JIRA_API_TOKEN"] = self._settings.api_token.get_secret_value()
+        env["JIRA_USERNAME"] = self._settings.user_email
+        env["JIRA_URL"] = self._settings.base_url
         return StdioServerParameters(
             command=self._settings.mcp_atlassian_command,
             args=self._settings.mcp_atlassian_args,

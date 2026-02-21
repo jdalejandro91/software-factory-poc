@@ -18,8 +18,8 @@ class JiraSettings(BaseSettings):
     workflow_state_success: str = Field(default="In Review", alias="WORKFLOW_STATE_SUCCESS")
 
     # ── Shared Atlassian MCP server configuration ──
-    mcp_atlassian_command: str = Field(default="npx", alias="MCP_ATLASSIAN_COMMAND")
-    mcp_atlassian_args: list[str] = Field(default_factory=list, alias="MCP_ATLASSIAN_ARGS")
+    mcp_atlassian_command: str = Field(default="uvx", alias="MCP_ATLASSIAN_COMMAND")
+    mcp_atlassian_args: list[str] = Field(default_factory=lambda: ["mcp-atlassian"], alias="MCP_ATLASSIAN_ARGS")
 
     @field_validator("mcp_atlassian_args", mode="before")
     @classmethod

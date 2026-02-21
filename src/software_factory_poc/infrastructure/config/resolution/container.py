@@ -95,6 +95,7 @@ async def build_scaffolding_agent() -> ScaffolderAgent:
         priority_models=priority_models,
         architecture_doc_page_id=config.confluence.architecture_doc_page_id,
         workflow_state_success=config.jira.workflow_state_success,
+        workflow_state_initial=config.jira.workflow_state_initial,
         redact_error=redact_text,
     )
 

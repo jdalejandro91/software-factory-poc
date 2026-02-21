@@ -40,6 +40,7 @@ class ScaffoldingDeterministicWorkflow(BaseWorkflow):
         priority_models: list[str],
         architecture_doc_page_id: str,
         workflow_state_success: str = "In Review",
+        workflow_state_initial: str = "To Do",
         redact_error: Callable[[str], str] | None = None,
     ) -> None:
         self._vcs = vcs
@@ -49,6 +50,7 @@ class ScaffoldingDeterministicWorkflow(BaseWorkflow):
         self._priority_models = priority_models
         self._architecture_doc_page_id = architecture_doc_page_id
         self._workflow_state_success = workflow_state_success
+        self._workflow_state_initial = workflow_state_initial
         self._redact_error = redact_error or str
 
     async def execute(self, mission: Mission) -> None:
@@ -248,7 +250,18 @@ class ScaffoldingDeterministicWorkflow(BaseWorkflow):
             error_retryable=False,
         )
         msg = f"Scaffolding failed: {type(error).__name__}: {error}"
-        await self._tracker.add_comment(mission.key, self._redact_error(msg))
+
+        # Attempting to add error comment
+        try:
+            await self._tracker.add_comment(mission.key, self._redact_error(msg))
+        except Exception as e:
+            logger.warning("Failed to add error comment to tracker", error=str(e))
+
+        # An attempt is made to roll back the task to its initial state
+        try:
+            await self._tracker.update_status(mission.key, self._workflow_state_initial)
+        except Exception as e:
+            logger.warning("Failed to rollback status to initial state", error=str(e))
 
     @staticmethod
     def _build_branch_name(mission_key: str, service_name: str = "") -> str:
