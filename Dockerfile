@@ -8,8 +8,11 @@ ENV PYTHONUNBUFFERED=1
 # Directorio de trabajo dentro del contenedor
 WORKDIR /app
 
-# Instalamos git y curl (útiles para depurar o si alguna librería lo pide)
-RUN apt-get update && apt-get install -y git curl && rm -rf /var/lib/apt/lists/*
+# Instalamos git, curl, y Node.js (requerido para los servidores MCP vía npx)
+RUN apt-get update && apt-get install -y git curl && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copiamos solo los archivos de dependencias primero (para aprovechar caché de Docker)
 COPY pyproject.toml README.md .
