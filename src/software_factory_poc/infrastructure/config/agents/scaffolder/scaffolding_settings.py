@@ -23,7 +23,10 @@ class ScaffoldingSettings(BaseSettings):
     )
 
     model_config = SettingsConfigDict(
-        env_prefix="SCAFFOLDING_", case_sensitive=True, extra="ignore"
+        env_file=".env",  # <-- CLAVE: Estandariza la lectura con python-dotenv
+        env_prefix="SCAFFOLDING_",
+        case_sensitive=True,
+        extra="ignore"
     )
 
     @field_validator("allowlisted_groups", mode="before")
@@ -38,10 +41,11 @@ class ScaffoldingSettings(BaseSettings):
 
     @classmethod
     def _parse_string_value(cls, value: str) -> list[str]:
+        cleaned_value = value.strip().strip("'").strip('"')
+        if not cleaned_value:
+            return []
         try:
-            parsed = json.loads(value)
+            parsed = json.loads(cleaned_value)
             return parsed if isinstance(parsed, list) else []
         except json.JSONDecodeError:
-            if not value.strip():
-                return []
-            return [v.strip() for v in value.split(",")]
+            return [v.strip() for v in cleaned_value.split(",")]
