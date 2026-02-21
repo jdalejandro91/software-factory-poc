@@ -1,2 +1,2 @@
 #!/bin/bash
-cat vars | base64 -w 0
+cat vars.env | base64 -w 0

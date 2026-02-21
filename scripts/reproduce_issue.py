@@ -13,13 +13,13 @@ from software_factory_poc.configuration.main_settings import Settings
 
 
 def reproduce():
-    # Mock env vars for Settings
+    # Mock env vars.env for Settings
     os.environ["JIRA_BASE_URL"] = "https://mock-jira.com"
     os.environ["JIRA_API_TOKEN"] = "mock-token"
     os.environ["JIRA_USER_EMAIL"] = "mock@example.com"
     os.environ["GITLAB_URL"] = "https://gitlab.com"
     os.environ["GITLAB_TOKEN"] = "mock-token"
-    # Add other potentially required vars if needed
+    # Add other potentially required vars.env if needed
 
     print("🚀 Attempting to reproduce Jira Webhook 422 Error...")
 

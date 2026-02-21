@@ -13,7 +13,7 @@ from software_factory_poc.infrastructure.tools.vcs.gitlab.gitlab_mcp_client impo
 
 
 class TestGitLabSettingsFromEnv:
-    """Verify GitLabSettings loads and parses fields from env vars."""
+    """Verify GitLabSettings loads and parses fields from env vars.env."""
 
     def test_parses_all_fields_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("GITLAB_TOKEN", "glpat-env-test")

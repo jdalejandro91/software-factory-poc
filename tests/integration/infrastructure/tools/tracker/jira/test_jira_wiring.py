@@ -13,7 +13,7 @@ from software_factory_poc.infrastructure.tools.tracker.jira.jira_mcp_client impo
 
 
 class TestJiraSettingsFromEnv:
-    """Verify JiraSettings loads and parses fields from env vars."""
+    """Verify JiraSettings loads and parses fields from env vars.env."""
 
     def test_parses_all_fields_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("JIRA_API_TOKEN", "atlassian-env-test")

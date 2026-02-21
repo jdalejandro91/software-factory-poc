@@ -11,7 +11,7 @@ from software_factory_poc.infrastructure.adapters.llm.litellm_brain_adapter impo
 
 
 class TestLlmSettingsFromEnv:
-    """Verify LlmSettings loads and parses JSON lists from env vars."""
+    """Verify LlmSettings loads and parses JSON lists from env vars.env."""
 
     def test_parses_json_list_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Arrange — simulate .env values injected via monkeypatch
@@ -48,7 +48,7 @@ class TestLlmSettingsFromEnv:
         assert settings.code_review_llm_model_priority == ["openai:gpt-4-turbo"]
 
     def test_defaults_to_empty_lists_when_no_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        # Arrange — clear all LLM env vars AND disable .env file reading
+        # Arrange — clear all LLM env vars.env AND disable .env file reading
         for var in (
             "LLM_ALLOWED_MODELS",
             "SCAFFOLDING_LLM_MODEL_PRIORITY",

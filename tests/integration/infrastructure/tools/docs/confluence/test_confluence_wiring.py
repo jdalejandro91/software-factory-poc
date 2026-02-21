@@ -13,7 +13,7 @@ from software_factory_poc.infrastructure.tools.docs.confluence.confluence_mcp_cl
 
 
 class TestConfluenceSettingsFromEnv:
-    """Verify ConfluenceSettings loads and parses fields from env vars."""
+    """Verify ConfluenceSettings loads and parses fields from env vars.env."""
 
     def test_parses_all_fields_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("CONFLUENCE_API_TOKEN", "tok-env-test")
