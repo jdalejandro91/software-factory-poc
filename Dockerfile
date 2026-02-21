@@ -10,16 +10,14 @@ WORKDIR /app
 
 # Instalamos git, curl, y Node.js (requerido para los servidores MCP vía npx)
 RUN apt-get update && apt-get install -y git curl && \
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | \
+    bash - && \
     apt-get install -y nodejs && \
     rm -rf /var/lib/apt/lists/*
 
-# Copiamos solo los archivos de dependencias primero (para aprovechar caché de Docker)
-COPY pyproject.toml README.md .
-
-# Instalamos las dependencias del proyecto
-# Nota: Al no usar venv dentro del docker, se instalan en el python del sistema (ok para contenedores)
-RUN pip install --no-cache-dir --upgrade pip && \
+COPY pyproject.toml README.md ./
+# Instalamos las dependencias del proyecto y uv para el servidor MCP de Atlassian
+RUN pip install --no-cache-dir --upgrade pip uv && \
     pip install --no-cache-dir -e .
 
 # Copiamos el resto del código
