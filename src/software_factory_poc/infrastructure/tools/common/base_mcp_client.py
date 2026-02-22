@@ -1,14 +1,10 @@
-"""Abstract base for all MCP-stdio clients (GitLab, Jira, Confluence).
-
-Centralises the shared lifecycle (connect / disconnect), tracing, metrics,
-error handling, and ephemeral-session logic so that each concrete client
-only needs to implement ``_server_params()``.
-"""
+"""Abstract base for all MCP-stdio clients (GitLab, Jira, Confluence)."""
 
 import contextlib
 from abc import ABC, abstractmethod
 from typing import Any, NoReturn
 
+import anyio
 import structlog
 from mcp import McpError
 from mcp.client.session import ClientSession
@@ -21,7 +17,6 @@ from software_factory_poc.infrastructure.observability.tracing_setup import get_
 
 logger = structlog.get_logger()
 
-
 class BaseMcpClient(ABC):
     """Template base for MCP-stdio clients with shared lifecycle and error handling."""
 
@@ -33,13 +28,9 @@ class BaseMcpClient(ABC):
         self._exit_stack: contextlib.AsyncExitStack | None = None
         self._session: ClientSession | None = None
 
-    # ── Abstract hook ──
-
     @abstractmethod
     def _server_params(self) -> StdioServerParameters:
         """Return provider-specific StdioServerParameters."""
-
-    # ── MCP lifecycle ──
 
     async def connect(self) -> None:
         """Open a persistent MCP session via AsyncExitStack."""
@@ -52,17 +43,20 @@ class BaseMcpClient(ABC):
         logger.info("Persistent MCP session opened", source_system=self._PROVIDER)
 
     async def disconnect(self) -> None:
-        """Close the persistent MCP session and release subprocess resources."""
+        """Close the persistent MCP session with a strict timeout to prevent hangs."""
         if self._exit_stack is not None:
             try:
-                await self._exit_stack.aclose()
-            except Exception:  # noqa: BLE001
-                logger.debug("Error closing MCP exit stack", source_system=self._PROVIDER)
-            self._exit_stack = None
-            self._session = None
-            logger.info("Persistent MCP session closed", source_system=self._PROVIDER)
-
-    # ── MCP call internals ──
+                # Forcefully close if the subprocess refuses to die (common with npx/uvx)
+                with anyio.fail_after(3.0):
+                    await self._exit_stack.aclose()
+            except TimeoutError:
+                logger.warning("Timeout closing MCP exit stack (force closed)", source_system=self._PROVIDER)
+            except Exception as exc:
+                logger.debug("Error closing MCP exit stack", error=str(exc), source_system=self._PROVIDER)
+            finally:
+                self._exit_stack = None
+                self._session = None
+                logger.info("Persistent MCP session closed", source_system=self._PROVIDER)
 
     async def _invoke_tool(self, tool_name: str, arguments: dict[str, Any]) -> Any:
         """Invoke an MCP tool with tracing, metrics, and error translation."""
@@ -80,7 +74,6 @@ class BaseMcpClient(ABC):
             return result
 
     async def _call_mcp_tool(self, tool_name: str, arguments: dict[str, Any], span: Any) -> Any:
-        """Execute the MCP call via persistent or ephemeral session."""
         try:
             if self._session is not None:
                 return await self._session.call_tool(tool_name, arguments=arguments)
@@ -89,14 +82,12 @@ class BaseMcpClient(ABC):
             self._raise_call_error(tool_name, span, exc)
 
     async def _call_ephemeral(self, tool_name: str, arguments: dict[str, Any]) -> Any:
-        """Open a one-shot stdio session, invoke the tool, and close."""
         async with stdio_client(self._server_params()) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 return await session.call_tool(tool_name, arguments=arguments)
 
     def _raise_call_error(self, tool_name: str, span: Any, exc: Exception) -> NoReturn:
-        """Record metrics and raise ProviderError for MCP call failures."""
         is_protocol = isinstance(exc, McpError)
         label = "MCP protocol error" if is_protocol else "MCP connection failure"
         error_type = "McpError" if is_protocol else type(exc).__name__
@@ -118,7 +109,6 @@ class BaseMcpClient(ABC):
         ) from exc
 
     def _assert_no_tool_error(self, result: Any, tool_name: str, span: Any) -> None:
-        """Raise ProviderError if the MCP tool result indicates failure."""
         if not result.isError:
             return
         error_detail = self._extract_text(result) or "No detail"
@@ -141,16 +131,12 @@ class BaseMcpClient(ABC):
 
     @staticmethod
     def _extract_text(result: Any) -> str:
-        """Extract plain text from an MCP CallToolResult safely."""
         if result.content and len(result.content) > 0:
             first = result.content[0]
             return getattr(first, "text", str(first))
         return ""
 
-    # ── Agentic tool listing ──
-
     async def _list_tools_response(self) -> Any:
-        """Fetch the list of available MCP tools via persistent or ephemeral session."""
         try:
             if self._session is not None:
                 return await self._session.list_tools()

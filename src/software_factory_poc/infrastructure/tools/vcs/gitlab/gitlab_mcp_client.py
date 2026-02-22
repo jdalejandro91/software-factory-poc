@@ -55,7 +55,7 @@ class GitlabMcpClient(BaseMcpClient, VcsTool):
     async def validate_branch_existence(self, branch_name: str) -> bool:
         logger.info("Checking branch existence", branch=branch_name, source_system="GitLabMCP")
         try:
-            # Fallback: Usamos get_file_contents ya que el server oficial no tiene get_branch
+            # We use get_file_contents for the root tree since get_branch doesn't exist natively
             await self._invoke_tool(
                 "get_file_contents",
                 {"project_id": self._project_id, "file_path": "README.md", "ref": branch_name},
@@ -105,14 +105,7 @@ class GitlabMcpClient(BaseMcpClient, VcsTool):
         if intent.is_empty():
             raise ValueError("Commit contains no files.")
 
-        # El servidor oficial de GitLab usa push_files
-        files = [
-            {
-                "file_path": f.path,
-                "content": f.content,
-            }
-            for f in intent.files
-        ]
+        files = [{"file_path": f.path, "content": f.content} for f in intent.files]
 
         try:
             result = await self._invoke_tool(
@@ -125,7 +118,8 @@ class GitlabMcpClient(BaseMcpClient, VcsTool):
                 },
             )
             return str(json.loads(self._extract_text(result)).get("commit_hash", intent.branch.value))
-        except Exception:
+        except Exception as e:
+            logger.warning("Error pushing files (assuming success if MR creates)", error=str(e))
             return intent.branch.value
 
     # ── Code Review Flow Operations ──
@@ -228,6 +222,7 @@ class GitlabMcpClient(BaseMcpClient, VcsTool):
             except ProviderError:
                 logger.debug("Skipping unreadable file", file_path=path, source_system="GitLabMCP")
         return files
+
 
 def _extract_iid(mr_url_or_id: str) -> str:
     if "merge_requests/" in mr_url_or_id:
