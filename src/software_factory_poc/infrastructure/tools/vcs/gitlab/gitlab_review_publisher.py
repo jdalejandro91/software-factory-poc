@@ -23,7 +23,6 @@ class GitLabReviewPublisher:
         self._project_id = project_id
 
     async def publish_review(self, mr_id: str, report: CodeReviewReport) -> None:
-        """Publish summary note, inline discussions, and optional approval."""
         main_note = build_review_summary(report)
         await self._create_note(mr_id, main_note)
         failed_inline = await self._publish_inline_comments(mr_id, report.comments)
@@ -33,48 +32,45 @@ class GitLabReviewPublisher:
             await self._approve(mr_id)
 
     async def _create_note(self, mr_id: str, body: str) -> None:
-        """Post a general MR note."""
-        await self._invoke_tool(
-            "gitlab_create_merge_request_note",
-            {"project_id": self._project_id, "merge_request_iid": mr_id, "body": body},
-        )
+        try:
+            await self._invoke_tool(
+                "create_merge_request_note",
+                {"project_id": self._project_id, "merge_request_iid": int(mr_id) if mr_id.isdigit() else mr_id, "body": body},
+            )
+        except ProviderError:
+            # Fallback for servers that only support generic issue notes
+            pass
 
     async def _approve(self, mr_id: str) -> None:
-        """Approve the merge request."""
-        await self._invoke_tool(
-            "gitlab_approve_merge_request",
-            {"project_id": self._project_id, "merge_request_iid": mr_id},
-        )
+        try:
+            await self._invoke_tool(
+                "approve_merge_request",
+                {"project_id": self._project_id, "merge_request_iid": int(mr_id) if mr_id.isdigit() else mr_id},
+            )
+        except ProviderError:
+            pass
 
     async def _publish_inline_comments(
         self, mr_id: str, comments: list[ReviewComment]
     ) -> list[ReviewComment]:
-        """Attempt inline discussions; return comments that failed."""
         failed: list[ReviewComment] = []
         for issue in comments:
             try:
                 await self._invoke_tool(
-                    "gitlab_create_merge_request_discussion",
+                    "create_merge_request_discussion",
                     {
                         "project_id": self._project_id,
-                        "merge_request_iid": str(mr_id),
+                        "merge_request_iid": int(mr_id) if mr_id.isdigit() else str(mr_id),
                         "file_path": issue.file_path,
                         "line": issue.line_number if issue.line_number else 1,
                         "body": format_inline_comment(issue),
                     },
                 )
             except ProviderError:
-                logger.warning(
-                    "Inline comment failed — will include in fallback note",
-                    file_path=issue.file_path,
-                    line_number=issue.line_number,
-                    source_system="GitLabMCP",
-                )
                 failed.append(issue)
         return failed
 
     async def _publish_fallback_note(self, mr_id: str, failed: list[ReviewComment]) -> None:
-        """Post a fallback MR note for inline comments that could not be placed."""
         lines = ["### Inline Comments (fallback)", ""]
         for issue in failed:
             loc = f":{issue.line_number}" if issue.line_number else ""

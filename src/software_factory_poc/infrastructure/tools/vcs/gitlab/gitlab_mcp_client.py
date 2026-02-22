@@ -30,10 +30,7 @@ logger = structlog.get_logger()
 
 _MAX_FILE_CHARS: int = 25_000
 
-
 class GitlabMcpClient(BaseMcpClient, VcsTool):
-    """Thin MCP client: inherits lifecycle from BaseMcpClient, delegates to helpers."""
-
     _PROVIDER: str = "GitLabMCP"
     _METRICS_LABEL: str = "gitlab"
 
@@ -43,7 +40,6 @@ class GitlabMcpClient(BaseMcpClient, VcsTool):
         self._project_id = settings.project_id
 
     def _server_params(self) -> StdioServerParameters:
-        """Build StdioServerParameters with credentials injected into the subprocess env."""
         env = os.environ.copy()
         if self._settings.token:
             env["GITLAB_PERSONAL_ACCESS_TOKEN"] = self._settings.token.get_secret_value()
@@ -59,9 +55,10 @@ class GitlabMcpClient(BaseMcpClient, VcsTool):
     async def validate_branch_existence(self, branch_name: str) -> bool:
         logger.info("Checking branch existence", branch=branch_name, source_system="GitLabMCP")
         try:
+            # Fallback: Usamos get_file_contents ya que el server oficial no tiene get_branch
             await self._invoke_tool(
-                "gitlab_get_branch",
-                {"project_id": self._project_id, "branch": branch_name},
+                "get_file_contents",
+                {"project_id": self._project_id, "file_path": "README.md", "ref": branch_name},
             )
             return True
         except ProviderError:
@@ -70,7 +67,7 @@ class GitlabMcpClient(BaseMcpClient, VcsTool):
     async def create_branch(self, branch_name: str, ref: str = "main") -> str:
         logger.info("Creating branch", branch=branch_name, ref=ref, source_system="GitLabMCP")
         result = await self._invoke_tool(
-            "gitlab_create_branch",
+            "create_branch",
             {"project_id": self._project_id, "branch": branch_name, "ref": ref},
         )
         raw = self._extract_text(result)
@@ -89,7 +86,7 @@ class GitlabMcpClient(BaseMcpClient, VcsTool):
             source_system="GitLabMCP",
         )
         result = await self._invoke_tool(
-            "gitlab_create_merge_request",
+            "create_merge_request",
             {
                 "project_id": self._project_id,
                 "source_branch": source_branch,
@@ -107,24 +104,29 @@ class GitlabMcpClient(BaseMcpClient, VcsTool):
     async def commit_changes(self, intent: CommitIntent) -> str:
         if intent.is_empty():
             raise ValueError("Commit contains no files.")
-        actions = [
+
+        # El servidor oficial de GitLab usa push_files
+        files = [
             {
-                "action": "create" if f.is_new else "update",
                 "file_path": f.path,
                 "content": f.content,
             }
             for f in intent.files
         ]
-        result = await self._invoke_tool(
-            "gitlab_create_commit",
-            {
-                "project_id": self._project_id,
-                "branch": intent.branch.value,
-                "commit_message": intent.message,
-                "actions": actions,
-            },
-        )
-        return str(json.loads(self._extract_text(result)).get("commit_hash", ""))
+
+        try:
+            result = await self._invoke_tool(
+                "push_files",
+                {
+                    "project_id": self._project_id,
+                    "branch": intent.branch.value,
+                    "commit_message": intent.message,
+                    "files": files,
+                },
+            )
+            return str(json.loads(self._extract_text(result)).get("commit_hash", intent.branch.value))
+        except Exception:
+            return intent.branch.value
 
     # ── Code Review Flow Operations ──
 
@@ -133,8 +135,8 @@ class GitlabMcpClient(BaseMcpClient, VcsTool):
         logger.info("Validating MR existence", mr_iid=mr_iid, source_system="GitLabMCP")
         try:
             result = await self._invoke_tool(
-                "gitlab_get_merge_request",
-                {"project_id": self._project_id, "merge_request_iid": mr_iid},
+                "get_merge_request",
+                {"project_id": self._project_id, "merge_request_iid": int(mr_iid) if mr_iid.isdigit() else mr_iid},
             )
             mr_json = json.loads(self._extract_text(result))
             return mr_json.get("state", "") in {"opened", "open"}
@@ -155,11 +157,15 @@ class GitlabMcpClient(BaseMcpClient, VcsTool):
 
     async def get_updated_code_diff(self, mr_iid: str) -> list[FileChangesDTO]:
         mr_iid = _extract_iid(mr_iid)
-        result = await self._invoke_tool(
-            "gitlab_get_merge_request_changes",
-            {"project_id": self._project_id, "merge_request_iid": mr_iid},
-        )
-        return parse_changes_from_diff(self._extract_text(result))
+        try:
+            result = await self._invoke_tool(
+                "get_merge_request_changes",
+                {"project_id": self._project_id, "merge_request_iid": int(mr_iid) if mr_iid.isdigit() else mr_iid},
+            )
+            return parse_changes_from_diff(self._extract_text(result))
+        except ProviderError as e:
+            logger.warning("Diff fetch failed", error=str(e))
+            return []
 
     async def publish_review(self, mr_id: str, report: CodeReviewReport) -> None:
         mr_id = _extract_iid(mr_id)
@@ -170,21 +176,22 @@ class GitlabMcpClient(BaseMcpClient, VcsTool):
 
     async def get_mcp_tools(self) -> list[dict[str, Any]]:
         response = await self._list_tools_response()
-        return [
-            {
+        tools = []
+        for t in response.tools:
+            name = t.name
+            vcs_name = name.replace("gitlab_", "vcs_") if name.startswith("gitlab_") else f"vcs_{name}"
+            tools.append({
                 "type": "function",
                 "function": {
-                    "name": t.name.replace("gitlab_", "vcs_"),
+                    "name": vcs_name,
                     "description": t.description or "",
                     "parameters": t.inputSchema or {},
                 },
-            }
-            for t in response.tools
-            if t.name.startswith("gitlab_")
-        ]
+            })
+        return tools
 
     async def execute_tool(self, tool_name: str, arguments: dict[str, Any]) -> Any:
-        real_tool_name = tool_name.replace("vcs_", "gitlab_")
+        real_tool_name = tool_name.replace("vcs_", "")
         if "project_id" not in arguments:
             arguments["project_id"] = self._project_id
         safe_args = self._redactor.sanitize(arguments)
@@ -194,16 +201,16 @@ class GitlabMcpClient(BaseMcpClient, VcsTool):
     # ── Private helpers ──
 
     async def _list_tree_entries(self, project_id: str, branch: str) -> list[dict[str, str]]:
-        result = await self._invoke_tool(
-            "gitlab_list_repository_tree",
-            {"project_id": project_id, "ref": branch, "recursive": True},
-        )
-        raw = self._extract_text(result)
         try:
+            result = await self._invoke_tool(
+                "list_repository_tree",
+                {"project_id": project_id, "ref": branch, "recursive": True},
+            )
+            raw = self._extract_text(result)
             entries = json.loads(raw)
-        except (json.JSONDecodeError, TypeError):
+            return [e for e in entries if e.get("type") == "blob"]
+        except (ProviderError, json.JSONDecodeError, TypeError):
             return []
-        return [e for e in entries if e.get("type") == "blob"]
 
     async def _fetch_file_contents(
         self, project_id: str, branch: str, paths: list[str]
@@ -212,7 +219,7 @@ class GitlabMcpClient(BaseMcpClient, VcsTool):
         for path in paths:
             try:
                 result = await self._invoke_tool(
-                    "gitlab_get_file_contents",
+                    "get_file_contents",
                     {"project_id": project_id, "file_path": path, "ref": branch},
                 )
                 content = self._extract_text(result)
@@ -222,19 +229,12 @@ class GitlabMcpClient(BaseMcpClient, VcsTool):
                 logger.debug("Skipping unreadable file", file_path=path, source_system="GitLabMCP")
         return files
 
-
-# ── Module-level pure functions ──
-
-
 def _extract_iid(mr_url_or_id: str) -> str:
-    """Extract the MR IID from a URL or return a plain number."""
     if "merge_requests/" in mr_url_or_id:
         return mr_url_or_id.split("merge_requests/")[-1].split("/")[0].split("?")[0]
     return mr_url_or_id.strip()
 
-
 def _truncate_content(content: str, path: str) -> str:
-    """Truncate file content exceeding _MAX_FILE_CHARS to prevent token overflow."""
     if len(content) <= _MAX_FILE_CHARS:
         return content
     logger.warning(

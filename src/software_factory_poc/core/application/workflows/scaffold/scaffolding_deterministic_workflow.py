@@ -110,9 +110,12 @@ class ScaffoldingDeterministicWorkflow(BaseWorkflow):
     async def _step_1_report_start(self, mission: Mission) -> None:
         """Announce deterministic flow start."""
         logger.info("Step 1: Reporting start to tracker", mission_key=mission.key)
-        await self._tracker.add_comment(
-            mission.key, "Iniciando tarea de Scaffolding (BrahMAS Engine)..."
-        )
+        try:
+            await self._tracker.add_comment(
+                mission.key, "Iniciando tarea de Scaffolding (BrahMAS Engine)..."
+            )
+        except Exception as e:
+            logger.warning("Failed to report start to tracker", error=str(e))
 
     async def _step_2_check_idempotency(self, mission: Mission, branch_name: str) -> None:
         """Fail with WorkflowHaltedException if branch already exists."""
@@ -121,7 +124,10 @@ class ScaffoldingDeterministicWorkflow(BaseWorkflow):
         if branch_exists:
             msg = "La rama ya existe. Deteniendo flujo por idempotencia."
             logger.warning("Branch already exists — halting", branch=branch_name)
-            await self._tracker.add_comment(mission.key, msg)
+            try:
+                await self._tracker.add_comment(mission.key, msg)
+            except Exception as e:
+                logger.warning("Failed to report halt to tracker", error=str(e))
             raise WorkflowHaltedException(msg, context={"branch": branch_name})
         logger.info("Branch does not exist — proceeding", branch=branch_name)
 
@@ -238,7 +244,10 @@ class ScaffoldingDeterministicWorkflow(BaseWorkflow):
             f"- Merge Request: {mr_url}\n- Rama: {branch}\n"
             f"- Commit: {commit_hash}\n- Archivos generados: {files_count}"
         )
-        await self._tracker.add_comment(mission.key, comment)
+        try:
+            await self._tracker.add_comment(mission.key, comment)
+        except Exception as e:
+            logger.warning("Failed to post success comment", error=str(e))
 
     async def _handle_error(self, mission: Mission, error: Exception) -> None:
         logger.error(

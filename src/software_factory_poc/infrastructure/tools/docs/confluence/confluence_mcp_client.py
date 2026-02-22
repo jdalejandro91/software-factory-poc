@@ -1,7 +1,4 @@
-"""MCP-stdio client that translates Domain intent into Confluence tool calls.
-
-Uses the shared Atlassian MCP server (covers both Jira and Confluence).
-"""
+"""MCP-stdio client that translates Domain intent into Confluence tool calls."""
 
 import os
 from typing import Any
@@ -24,10 +21,7 @@ from software_factory_poc.infrastructure.tools.docs.confluence.confluence_search
 
 logger = structlog.get_logger()
 
-
 class ConfluenceMcpClient(BaseMcpClient, DocsTool):
-    """Thin MCP client: inherits lifecycle from BaseMcpClient, delegates parsing to helpers."""
-
     _PROVIDER: str = "ConfluenceMCP"
     _METRICS_LABEL: str = "confluence"
 
@@ -36,7 +30,6 @@ class ConfluenceMcpClient(BaseMcpClient, DocsTool):
         self._settings = settings
 
     def _server_params(self) -> StdioServerParameters:
-        """Build StdioServerParameters with Atlassian credentials injected into subprocess env."""
         env = os.environ.copy()
         if self._settings.api_token:
             env["CONFLUENCE_API_TOKEN"] = self._settings.api_token.get_secret_value()
@@ -47,8 +40,6 @@ class ConfluenceMcpClient(BaseMcpClient, DocsTool):
             args=self._settings.mcp_atlassian_args,
             env=env,
         )
-
-    # ── DocsTool implementation ──
 
     async def get_architecture_context(self, page_id: str) -> str:
         logger.info("Fetching architecture page", page_id=page_id, source_system="ConfluenceMCP")
@@ -64,8 +55,6 @@ class ConfluenceMcpClient(BaseMcpClient, DocsTool):
             return f"No project documentation found for '{service_name}'."
         content = await self._fetch_children_content(parent_id)
         return clean_html_and_truncate(content)
-
-    # ── Agentic Operations ──
 
     async def get_mcp_tools(self) -> list[dict[str, Any]]:
         response = await self._list_tools_response()
@@ -88,16 +77,14 @@ class ConfluenceMcpClient(BaseMcpClient, DocsTool):
         result = await self._invoke_tool(real_tool_name, safe_args)
         return self._extract_text(result)
 
-    # ── Private helpers ──
-
     async def _search_parent_page(self, service_name: str) -> str | None:
-        cql = f'title="{service_name}"'
-        result = await self._invoke_tool("confluence_search", {"cql": cql})
+        query = f'title="{service_name}"'
+        result = await self._invoke_tool("confluence_search", {"query": query})
         return extract_first_page_id(self._extract_text(result))
 
     async def _fetch_children_content(self, parent_id: str) -> str:
-        cql = f'ancestor="{parent_id}"'
-        result = await self._invoke_tool("confluence_search", {"cql": cql})
+        query = f'ancestor="{parent_id}"'
+        result = await self._invoke_tool("confluence_search", {"query": query})
         children = extract_page_list(self._extract_text(result))
         if not children:
             return f"Parent page {parent_id} has no child documents."

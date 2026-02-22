@@ -105,9 +105,12 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
     async def _step_2_report_start(self, mission: Mission) -> None:
         """Announce deterministic review start."""
         logger.info("Step 2: Reporting start to tracker", mission_key=mission.key)
-        await self._tracker.add_comment(
-            mission.key, "Iniciando analisis de codigo (BrahMAS Code Review)..."
-        )
+        try:
+            await self._tracker.add_comment(
+                mission.key, "Iniciando analisis de codigo (BrahMAS Code Review)..."
+            )
+        except Exception as e:
+            logger.warning("Failed to report start to tracker", error=str(e))
 
     async def _step_3_validate_mr(self, mission: Mission, parsed: dict[str, str]) -> None:
         """Guardrail: validate both branch and MR existence before fetching diffs."""
@@ -117,7 +120,10 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
         if not mr_exists:
             msg = f"El MR {parsed['mr_url']} no existe o esta cerrado."
             logger.warning("MR does not exist or is closed", mr_url=parsed["mr_url"])
-            await self._tracker.add_comment(mission.key, msg)
+            try:
+                await self._tracker.add_comment(mission.key, msg)
+            except Exception as e:
+                logger.warning("Failed to report halt to tracker", error=str(e))
             raise WorkflowHaltedException(msg, context={"mr_iid": parsed["mr_iid"]})
         logger.info("Branch and MR validated successfully")
 
@@ -222,11 +228,14 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
                 error_type="ProviderError",
                 error_details=exc.message,
             )
-            await self._tracker.add_comment(
-                mission.key,
-                f"Advertencia: No se pudo publicar el review en GitLab ({exc.message}). "
-                "El analisis se completo correctamente.",
-            )
+            try:
+                await self._tracker.add_comment(
+                    mission.key,
+                    f"Advertencia: No se pudo publicar el review en GitLab ({exc.message}). "
+                    "El analisis se completo correctamente.",
+                )
+            except Exception as e:
+                logger.warning("Failed to post warning comment to tracker", error=str(e))
 
     async def _validate_branch(self, branch: str, mr_url: str) -> None:
         """Fail fast if the source branch does not exist."""
@@ -254,7 +263,10 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
             f"- Issues encontrados: {len(report.comments)} ({breakdown})\n"
             f"- Resumen: {report.summary}"
         )
-        await self._tracker.add_comment(mission.key, comment)
+        try:
+            await self._tracker.add_comment(mission.key, comment)
+        except Exception as e:
+            logger.warning("Failed to post success comment", error=str(e))
 
     @staticmethod
     def _severity_breakdown(report: CodeReviewReport) -> str:
@@ -287,7 +299,10 @@ class CodeReviewDeterministicWorkflow(BaseWorkflow):
             error_details=str(error),
             error_retryable=False,
         )
-        await self._tracker.add_comment(mission.key, self._redact_error(msg))
+        try:
+            await self._tracker.add_comment(mission.key, self._redact_error(msg))
+        except Exception as e:
+            logger.warning("Failed to post error comment to tracker", error=str(e))
 
     @staticmethod
     def _extract_mr_iid(mr_url: str) -> str:
